@@ -1,0 +1,34 @@
+{
+  "name": "ugclab-store",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo dev",
+    "dev:admin": "npm run dev -w @ugclab/merchant-admin",
+    "dev:react": "turbo run dev --filter=@ugclab/api --filter=@ugclab/merchant-web",
+    "dev:platform-admin": "turbo run dev --filter=@ugclab/api --filter=@ugclab/platform-admin",
+    "dev:store": "npm run dev -w @ugclab/storefront",
+    "dev:platform": "npm run dev -w @ugclab/platform",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "db:generate": "npm run db:generate -w @ugclab/database",
+    "db:generate:safe": "node scripts/db-generate-safe.mjs",
+    "db:migrate": "npm run db:migrate -w @ugclab/database",
+    "db:push": "npm run db:push -w @ugclab/database",
+    "db:push:force": "npm run db:push:force -w @ugclab/database",
+    "db:seed": "npm run db:seed -w @ugclab/database",
+    "db:studio": "npm run db:studio -w @ugclab/database",
+    "verify:demo": "node scripts/verify-demo-login.mjs"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.4",
+    "typescript": "^5.8.3"
+  },
+  "packageManager": "npm@10.9.2",
+  "engines": {
+    "node": ">=20"
+  }
+}

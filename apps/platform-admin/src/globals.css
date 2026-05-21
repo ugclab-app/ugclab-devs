@@ -1,0 +1,26 @@
+@import "tailwindcss";
+@import "../../../packages/ui/src/styles.css";
+
+@source "../../../packages/ui/src";
+@source "./";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  @apply bg-slate-100 text-slate-900 antialiased;
+  font-family: var(--font-sans);
+}
+
+.platform-card {
+  @apply rounded-xl border border-slate-200/80 bg-white shadow-sm;
+}
+
+.platform-stat {
+  @apply rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm;
+}
+
+.platform-sidebar {
+  @apply bg-slate-950 text-slate-200;
+}

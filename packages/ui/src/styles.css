@@ -1,0 +1,95 @@
+/* Explicit styles so UI works when Tailwind does not scan @ugclab/ui */
+
+.ugclab-input {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid #d4d4d8;
+  border-radius: 0.5rem;
+  background-color: #fff;
+  padding: 0.625rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: #18181b;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.ugclab-input::placeholder {
+  color: #a1a1aa;
+}
+
+.ugclab-input:hover {
+  border-color: #a1a1aa;
+}
+
+.ugclab-input:focus {
+  border-color: #8b5cf6;
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(139 92 246 / 0.2);
+}
+
+/* Override browser default thick invalid border */
+.ugclab-input:invalid {
+  border-color: #d4d4d8;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+}
+
+.ugclab-input:focus:invalid {
+  border-color: #8b5cf6;
+  box-shadow: 0 0 0 3px rgb(139 92 246 / 0.2);
+}
+
+.ugclab-btn {
+  box-sizing: border-box;
+  display: inline-flex;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+  transition: background-color 0.15s, opacity 0.15s;
+}
+
+.ugclab-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.ugclab-btn-primary {
+  background-color: #7c3aed;
+  color: #ffffff;
+}
+
+.ugclab-btn-primary:hover:not(:disabled) {
+  background-color: #6d28d9;
+}
+
+.ugclab-btn-secondary {
+  background-color: #f4f4f5;
+  color: #18181b;
+}
+
+.ugclab-btn-secondary:hover:not(:disabled) {
+  background-color: #e4e4e7;
+}
+
+.ugclab-btn-ghost {
+  background-color: transparent;
+  color: #3f3f46;
+}
+
+.ugclab-btn-ghost:hover:not(:disabled) {
+  background-color: #f4f4f5;
+}
+
+.ugclab-btn-block {
+  width: 100%;
+  min-height: 3rem;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  box-shadow: 0 10px 15px -3px rgb(124 58 237 / 0.25);
+}

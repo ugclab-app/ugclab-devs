@@ -1,0 +1,19 @@
+{
+  "name": "@ugclab/auth",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@ugclab/database": "*",
+    "bcryptjs": "^3.0.2",
+    "next-auth": "5.0.0-beta.28"
+  },
+  "peerDependencies": {
+    "next": ">=15"
+  },
+  "devDependencies": {
+    "next": "^15.3.3",
+    "typescript": "^5.8.3"
+  }
+}

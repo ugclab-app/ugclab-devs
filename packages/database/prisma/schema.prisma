@@ -1,0 +1,702 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  MERCHANT
+  SUPER_ADMIN
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING
+}
+
+enum ProductType {
+  PHYSICAL
+  DIGITAL
+  SERVICE
+}
+
+enum CollectionRuleType {
+  MANUAL
+  AUTO_TAG
+  AUTO_TYPE
+}
+
+enum ProductStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum OrderStatus {
+  DRAFT
+  PENDING
+  PAID
+  FULFILLED
+  CANCELLED
+  REFUNDED
+}
+
+enum TenantMemberRole {
+  OWNER
+  ADMIN
+  STAFF
+}
+
+enum DiscountType {
+  PERCENT
+  FIXED
+}
+
+enum PromotionType {
+  CART_PERCENT
+  FREE_SHIPPING
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String?
+  name         String?
+  country      String?  @db.Char(2)
+  timezone     String   @default("UTC")
+  role         UserRole @default(MERCHANT)
+  totpSecret   String?
+  totpEnabled  Boolean  @default(false)
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(6)
+
+  tenants       Tenant[]
+  tenantMembers TenantMember[]
+  accounts      Account[]
+  sessions      Session[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime @db.Timestamptz(6)
+
+  @@unique([identifier, token])
+}
+
+model SubscriptionPlan {
+  id           String   @id @default(cuid())
+  slug         String   @unique
+  name         String
+  priceMonthly    Int
+  currency        String   @default("USD") @db.Char(3)
+  productLimit    Int?
+  platformFeeBps  Int      @default(500)
+  stripePriceId   String?
+  trialDays       Int      @default(14)
+  features        Json?
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
+
+  tenants Tenant[]
+}
+
+model Tenant {
+  id                 String       @id @default(cuid())
+  slug               String       @unique
+  name               String
+  status             TenantStatus @default(ACTIVE)
+  ownerId            String
+  subscriptionPlanId       String?
+  stripeBillingCustomerId  String?   @unique
+  stripeSubscriptionId     String?   @unique
+  subscriptionStatus       String?
+  trialEndsAt              DateTime? @db.Timestamptz(6)
+  stripeAccountId          String?   @unique
+  stripeChargesEnabled     Boolean   @default(false)
+  stripeDetailsSubmitted   Boolean   @default(false)
+  platformFeeBpsOverride   Int?
+  createdAt              DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt              DateTime  @updatedAt @db.Timestamptz(6)
+
+  owner            User              @relation(fields: [ownerId], references: [id])
+  subscriptionPlan SubscriptionPlan? @relation(fields: [subscriptionPlanId], references: [id])
+  settings         StoreSettings?
+  products         Product[]
+  collections      Collection[]
+  orders           Order[]
+  customers        Customer[]
+  customDomains    CustomDomain[]
+  shippingZones    ShippingZone[]
+  members          TenantMember[]
+  discountCodes    DiscountCode[]
+  storePages       StorePage[]
+  productReviews   ProductReview[]
+  productQuestions ProductQuestion[]
+  promotions       StorePromotion[]
+  abandonedCarts   AbandonedCart[]
+  activityLogs     ActivityLog[]
+  emailCampaigns   EmailCampaign[]
+  emailAutomations EmailAutomation[]
+  emailSubscribers EmailSubscriber[]
+}
+
+enum EmailCampaignStatus {
+  DRAFT
+  SCHEDULED
+  SENDING
+  SENT
+  FAILED
+}
+
+enum EmailCampaignSegment {
+  ALL
+  VIP
+  REPEAT
+  NEW
+  ACTIVE
+  ABANDONED_CART
+  INACTIVE_90
+  COLLECTION
+  PRODUCT
+}
+
+enum EmailAutomationType {
+  WELCOME
+  POST_PURCHASE
+  WINBACK
+}
+
+model StoreSettings {
+  tenantId        String   @id
+  defaultLocale   String   @default("en")
+  enabledLocales  String[] @default(["en"])
+  currency        String   @default("USD") @db.Char(3)
+  timezone        String   @default("UTC")
+  logoUrl         String?
+  primaryColor    String   @default("#18181b")
+  theme           Json?
+  privacyUrl      String?
+  refundUrl       String?
+  privacyPolicy   String?  @db.Text
+  refundPolicy    String?  @db.Text
+  digitalLinkDays Int      @default(30)
+  notifyNewOrders     Boolean  @default(true)
+  notifyLowStock      Boolean  @default(true)
+  abandonedCartEnabled Boolean @default(true)
+  lowStockLastNotifiedAt DateTime? @db.Timestamptz(6)
+  taxRateBps      Int      @default(0)
+  taxIncluded     Boolean  @default(false)
+  seoTitle        String?
+  seoDescription  String?  @db.Text
+  seoOgImageUrl   String?
+  lowStockThreshold   Int      @default(5)
+  checkoutGuestLookup Boolean  @default(true)
+  checkoutFooterText  String?  @db.Text
+  emailOrderSubject   String?
+  emailOrderBody      String?  @db.Text
+  themeDraft          Json?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model TenantMember {
+  id          String           @id @default(cuid())
+  tenantId    String
+  userId      String?
+  email       String
+  role        TenantMemberRole @default(STAFF)
+  permissions String[]         @default([])
+  inviteToken String?          @unique
+  createdAt   DateTime         @default(now()) @db.Timestamptz(6)
+  acceptedAt  DateTime?        @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([userId])
+}
+
+model CustomDomain {
+  id                String   @id @default(cuid())
+  tenantId          String
+  domain            String   @unique
+  verified          Boolean  @default(false)
+  verificationToken String   @default(cuid())
+  createdAt         DateTime @default(now()) @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model StorePromotion {
+  id             String        @id @default(cuid())
+  tenantId       String
+  type           PromotionType
+  active         Boolean       @default(true)
+  value          Int           @default(0)
+  minOrderAmount Int?
+  startsAt       DateTime? @db.Timestamptz(6)
+  endsAt         DateTime? @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, active])
+}
+
+model DiscountCode {
+  id             String       @id @default(cuid())
+  tenantId       String
+  code           String
+  type           DiscountType
+  value          Int
+  minOrderAmount Int?
+  maxUses        Int?
+  usedCount      Int          @default(0)
+  active         Boolean      @default(true)
+  expiresAt      DateTime?    @db.Timestamptz(6)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(6)
+
+  tenant Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+}
+
+model DigitalDownload {
+  id         String   @id @default(cuid())
+  tenantId   String
+  orderId    String
+  productId  String
+  token      String   @unique
+  downloads  Int      @default(0)
+  expiresAt  DateTime? @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([tenantId])
+}
+
+model Product {
+  id          String        @id @default(cuid())
+  tenantId    String
+  type        ProductType
+  status      ProductStatus @default(DRAFT)
+  title       String
+  slug        String
+  description String?       @db.Text
+  priceAmount Int
+  currency    String        @db.Char(3)
+  compareAt    Int?
+  inventory    Int?
+  weightGrams  Int?
+  sku          String?
+  barcode      String?
+  tags         String[]      @default([])
+  translations Json?
+  publishAt    DateTime?     @db.Timestamptz(6)
+  costAmountCents Int?
+  createdAt    DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime      @updatedAt @db.Timestamptz(6)
+
+  tenant       Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  variants     ProductVariant[]
+  images       ProductImage[]
+  digitalAsset DigitalAsset?
+  orderItems        OrderLineItem[]
+  collectionItems   CollectionProduct[]
+  digitalDownloads  DigitalDownload[]
+  reviews           ProductReview[]
+  questions         ProductQuestion[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId, status])
+}
+
+model ProductVariant {
+  id          String @id @default(cuid())
+  tenantId    String
+  productId   String
+  title       String
+  sku         String?
+  priceAmount Int
+  inventory   Int?
+  weightGrams Int?
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([productId])
+}
+
+model ProductImage {
+  id         String   @id @default(cuid())
+  tenantId   String
+  productId  String
+  storageKey String
+  fileName   String
+  mimeType   String   @default("image/jpeg")
+  sortOrder  Int      @default(0)
+  alt        String?
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([productId])
+}
+
+model DigitalAsset {
+  id            String @id @default(cuid())
+  tenantId      String
+  productId     String @unique
+  storageKey    String
+  fileName      String
+  mimeType      String
+  sizeBytes     Int
+  downloadLimit Int    @default(5)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model Collection {
+  id              String             @id @default(cuid())
+  tenantId        String
+  title           String
+  slug            String
+  description     String?            @db.Text
+  ruleType        CollectionRuleType @default(MANUAL)
+  ruleTag         String?
+  ruleProductType ProductType?
+  createdAt       DateTime           @default(now()) @db.Timestamptz(6)
+
+  tenant   Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products CollectionProduct[]
+
+  @@unique([tenantId, slug])
+}
+
+model StorePage {
+  id        String   @id @default(cuid())
+  tenantId  String
+  title     String
+  slug      String
+  body      String   @db.Text
+  pageType  String   @default("PAGE")
+  published Boolean  @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, slug])
+  @@index([tenantId, pageType])
+}
+
+model ProductReview {
+  id          String   @id @default(cuid())
+  tenantId    String
+  productId   String
+  authorName  String
+  authorEmail String?
+  rating      Int
+  body        String?  @db.Text
+  photoUrls   String[] @default([])
+  approved    Boolean  @default(false)
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([productId, approved])
+}
+
+model ProductQuestion {
+  id          String    @id @default(cuid())
+  tenantId    String
+  productId   String
+  authorName  String
+  authorEmail String?
+  question    String    @db.Text
+  answer      String?   @db.Text
+  approved    Boolean   @default(true)
+  answeredAt  DateTime? @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([productId, approved])
+}
+
+model CollectionProduct {
+  collectionId String
+  productId    String
+  sortOrder    Int        @default(0)
+
+  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  product    Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([collectionId, productId])
+}
+
+model Customer {
+  id               String   @id @default(cuid())
+  tenantId         String
+  email            String
+  name             String?
+  country          String?  @db.Char(2)
+  passwordHash     String?
+  marketingOptOut  Boolean  @default(false)
+  emailBounced     Boolean  @default(false)
+  createdAt        DateTime @default(now()) @db.Timestamptz(6)
+
+  tenant Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+}
+
+model Order {
+  id              String      @id @default(cuid())
+  tenantId        String
+  customerId      String?
+  orderNumber     String
+  status          OrderStatus @default(PENDING)
+  currency        String      @db.Char(3)
+  subtotalAmount  Int
+  shippingAmount  Int         @default(0)
+  taxAmount       Int         @default(0)
+  totalAmount            Int
+  platformFeeAmount      Int         @default(0)
+  stripePaymentId        String?
+  stripeCheckoutSessionId String?    @unique
+  shippingCountry        String?     @db.Char(2)
+  shippingName    String?
+  shippingAddress1 String?
+  shippingAddress2 String?
+  shippingCity    String?
+  shippingPostal  String?
+  trackingNumber  String?
+  shippedAt       DateTime?   @db.Timestamptz(6)
+  discountCodeId  String?
+  discountAmount  Int         @default(0)
+  accessToken     String?     @unique
+  guestEmail      String?
+  createdAt       DateTime    @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime    @updatedAt @db.Timestamptz(6)
+
+  tenant       Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer     Customer?       @relation(fields: [customerId], references: [id])
+  discountCode DiscountCode?   @relation(fields: [discountCodeId], references: [id])
+  items            OrderLineItem[]
+  events           OrderEvent[]
+  digitalDownloads DigitalDownload[]
+
+  @@unique([tenantId, orderNumber])
+  @@index([tenantId, status])
+}
+
+model OrderLineItem {
+  id                 String @id @default(cuid())
+  tenantId           String
+  orderId            String
+  productId          String?
+  variantId          String?
+  title              String
+  quantity           Int
+  fulfilledQuantity  Int    @default(0)
+  unitAmount         Int
+  totalAmount        Int
+
+  order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id])
+
+  @@index([tenantId])
+  @@index([orderId])
+}
+
+model OrderEvent {
+  id          String   @id @default(cuid())
+  tenantId    String
+  orderId     String
+  type        String
+  body        String?  @db.Text
+  meta        Json?
+  authorEmail String?
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([orderId])
+}
+
+model ShippingZone {
+  id                    String @id @default(cuid())
+  tenantId              String
+  name                  String
+  countries             String[]
+  flatRateAmount        Int    @default(0)
+  freeShippingThreshold Int?
+  perKgAmount           Int?
+  currency              String @default("USD") @db.Char(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model StripeWebhookEvent {
+  id        String   @id
+  type      String
+  processed Boolean  @default(false)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model AbandonedCart {
+  id             String    @id @default(cuid())
+  tenantId       String
+  sessionKey     String
+  email          String?
+  items          Json
+  subtotalAmount Int       @default(0)
+  currency       String    @default("USD") @db.Char(3)
+  remindedAt1h   DateTime? @db.Timestamptz(6)
+  remindedAt24h  DateTime? @db.Timestamptz(6)
+  convertedAt    DateTime? @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, sessionKey])
+  @@index([tenantId, convertedAt])
+  @@index([tenantId, updatedAt])
+}
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  tenantId   String
+  userId     String?
+  userEmail  String
+  action     String
+  entityType String?
+  entityId   String?
+  summary    String
+  meta       Json?
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+}
+
+model EmailCampaign {
+  id              String               @id @default(cuid())
+  tenantId        String
+  name            String?
+  segment         EmailCampaignSegment
+  subject         String
+  subjectB        String?
+  abTestPercent   Int                  @default(0)
+  bodyHtml        String               @db.Text
+  plainText       String?              @db.Text
+  templateId      String?
+  discountCode    String?
+  utmCampaign     String?
+  collectionSlug  String?
+  productId       String?
+  status          EmailCampaignStatus  @default(DRAFT)
+  scheduledAt     DateTime?            @db.Timestamptz(6)
+  recipientCount  Int                  @default(0)
+  sentCount       Int                  @default(0)
+  failedCount     Int                  @default(0)
+  openCount       Int                  @default(0)
+  clickCount      Int                  @default(0)
+  createdByEmail  String?
+  sentAt          DateTime?            @db.Timestamptz(6)
+  createdAt       DateTime             @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime             @updatedAt @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, status, scheduledAt])
+}
+
+model EmailSubscriber {
+  id              String   @id @default(cuid())
+  tenantId        String
+  email           String
+  name            String?
+  source          String   @default("import")
+  marketingOptOut Boolean  @default(false)
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+}
+
+model EmailAutomation {
+  id         String              @id @default(cuid())
+  tenantId   String
+  type       EmailAutomationType
+  enabled    Boolean             @default(false)
+  subject    String
+  bodyHtml   String              @db.Text
+  delayHours Int                 @default(0)
+  lastRunAt  DateTime?            @db.Timestamptz(6)
+  createdAt  DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime            @updatedAt @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, type])
+}

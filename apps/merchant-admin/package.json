@@ -1,0 +1,33 @@
+{
+  "name": "@ugclab/merchant-admin",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 3001",
+    "build": "next build",
+    "start": "next start --port 3001",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "@ugclab/database": "*",
+    "@ugclab/i18n": "*",
+    "@ugclab/tenant": "*",
+    "@ugclab/ui": "*",
+    "next": "^15.3.3",
+    "next-auth": "5.0.0-beta.28",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "zod": "^3.25.28"
+  },
+  "devDependencies": {
+    "dotenv": "^16.5.0",
+    "@tailwindcss/postcss": "^4.1.8",
+    "@types/node": "^22.15.21",
+    "@types/react": "^19.1.6",
+    "@types/react-dom": "^19.1.5",
+    "@ugclab/config": "*",
+    "tailwindcss": "^4.1.8",
+    "typescript": "^5.8.3"
+  }
+}

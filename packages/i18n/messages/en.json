@@ -1,0 +1,32 @@
+{
+  "common": {
+    "brand": "UGCLab Store",
+    "getStarted": "Get started free",
+    "signIn": "Sign in",
+    "save": "Save",
+    "cancel": "Cancel",
+    "loading": "Loading…"
+  },
+  "platform": {
+    "heroTitle": "Sell globally from one store",
+    "heroSubtitle": "Launch your shop in minutes. Physical products, digital downloads, and global checkout — built for creators and brands worldwide.",
+    "featuresTitle": "Everything to sell online",
+    "pricingTitle": "Simple, transparent pricing"
+  },
+  "admin": {
+    "dashboard": "Dashboard",
+    "products": "Products",
+    "orders": "Orders",
+    "settings": "Settings",
+    "newProduct": "New product",
+    "noProducts": "No products yet. Create your first product to start selling."
+  },
+  "storefront": {
+    "addToCart": "Add to cart",
+    "checkout": "Checkout",
+    "cart": "Cart",
+    "emptyCart": "Your cart is empty",
+    "digital": "Digital download",
+    "physical": "Ships worldwide"
+  }
+}

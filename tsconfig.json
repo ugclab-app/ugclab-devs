@@ -1,0 +1,7 @@
+{
+  "extends": "@ugclab/config/typescript/base.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "exclude": ["node_modules"]
+}
