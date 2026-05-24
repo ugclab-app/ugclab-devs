@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/dev-server.ts",
+    "start": "tsx src/dev-server.ts",
     "build": "npm run build -w @ugclab/i18n && npm run build -w @ugclab/tenant && tsc --noEmit",
     "lint": "tsc --noEmit",
     "deploy": "cd ../.. && vercel --prod --yes"

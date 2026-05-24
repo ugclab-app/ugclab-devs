@@ -10,7 +10,8 @@ In the Vercel dashboard for **ugclab-devs-api**, set:
 
 ## What is deployed on tescommerce.com
 
-- **Landing** (Vite `apps/platform`) → `apps/api/public` at build; `/assets/*` → lightweight `api/assets.ts`; HTML/SPA → `api/index.ts` with `serveStatic`
+- **Landing** (Vite `apps/platform`) → `apps/api/public` at build; served by `landing-app.ts` via `api/index.ts` (no Prisma on `/`, `/assets/*`)
+- **Do not** add `src/app.ts` or `src/index.ts` — Vercel treats them as extra Hono entrypoints and returns 500
 - **API** (Hono) → `/api/*`; `/health` → edge `api/health.ts`
 - **Not included:** merchant admin (`3001`) and storefront (`3002`) — deploy separately or use subdomains
 

@@ -1,9 +1,5 @@
-import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { authRoutes } from "./routes/auth.js";
 import { merchant } from "./routes/merchant.js";
 import { p1 } from "./routes/merchant-p1.js";
@@ -24,7 +20,8 @@ import { stripeRoutes, merchantStripe } from "./routes/stripe.js";
 import { MERCHANT_WEB_URL, PLATFORM_ADMIN_URL, PLATFORM_URL } from "./env.js";
 import { merchantMaintenanceGuard } from "./middleware/maintenance.js";
 
-export function createApp() {
+/** API-only Hono app (no static landing). Not named app.ts — Vercel auto-detects src/app.ts. */
+export function createApiApp() {
   const app = new Hono();
 
   app.use(
@@ -76,31 +73,7 @@ export function createApp() {
   app.route("/api/files", files);
   app.route("/api/store", store);
 
-  const landingRoot = (() => {
-    const candidates = [
-      join(process.cwd(), "public"),
-      join(dirname(fileURLToPath(import.meta.url)), "..", "public"),
-      join(process.cwd(), "apps", "api", "public"),
-    ];
-    for (const dir of candidates) {
-      if (existsSync(join(dir, "index.html"))) return dir;
-    }
-    return candidates[0]!;
-  })();
-
-  app.use(
-    "/*",
-    serveStatic({
-      root: landingRoot,
-      rewriteRequestPath: (path) => {
-        if (path.startsWith("/api")) return path;
-        if (/\.[a-z0-9]+$/i.test(path)) return path;
-        return "/index.html";
-      },
-    })
-  );
-
   return app;
 }
 
-export const app = createApp();
+export const app = createApiApp();
