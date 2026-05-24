@@ -10,8 +10,13 @@ import {
   IconShield,
   IconSpark,
 } from "@/components/icons";
+import { ComparisonSection } from "@/components/landing/comparison-section";
+import { DemoStoreCta } from "@/components/landing/demo-store-cta";
+import { FaqSection } from "@/components/landing/faq-section";
+import { SiteBuilderShowcase } from "@/components/landing/site-builder-showcase";
+import { SocialProof } from "@/components/landing/social-proof";
 import { StorePreview } from "@/components/store-preview";
-import { merchantAdminUrl } from "@/lib/urls";
+import { demoStoreUrl, merchantAdminUrl } from "@/lib/urls";
 
 const t = getMessages().platform;
 const c = getMessages().common;
@@ -109,8 +114,14 @@ export function HomePage() {
             <a href="#how" className="transition hover:text-violet-600">
               How it works
             </a>
+            <a href="#compare" className="transition hover:text-violet-600">
+              Compare
+            </a>
             <a href="#pricing" className="transition hover:text-violet-600">
               Pricing
+            </a>
+            <a href="#faq" className="transition hover:text-violet-600">
+              FAQ
             </a>
           </nav>
           <div className="flex items-center gap-3">
@@ -141,12 +152,20 @@ export function HomePage() {
             <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-zinc-600 md:text-xl">
               {t.heroSubtitle}
             </p>
-            <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
+            <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row sm:flex-wrap">
               <Link to="/signup">
                 <Button className="min-w-[200px] px-8 py-3.5 text-base shadow-xl shadow-violet-500/30">
                   {c.getStarted}
                 </Button>
               </Link>
+              <a
+                href={demoStoreUrl()}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-w-[200px] items-center justify-center rounded-lg border border-violet-200 bg-violet-50 px-8 py-3.5 text-base font-medium text-violet-800 shadow-sm transition hover:border-violet-300 hover:bg-violet-100"
+              >
+                Open demo store
+              </a>
               <a
                 href="#how"
                 className="inline-flex min-w-[200px] items-center justify-center rounded-lg border border-zinc-300 bg-white px-8 py-3.5 text-base font-medium text-zinc-700 shadow-sm transition hover:border-zinc-400 hover:bg-zinc-50"
@@ -173,6 +192,9 @@ export function HomePage() {
             ))}
           </div>
         </section>
+
+        <DemoStoreCta />
+        <SiteBuilderShowcase />
 
         <section id="features" className="py-24">
           <div className="mx-auto max-w-6xl px-6">
@@ -203,6 +225,8 @@ export function HomePage() {
           </div>
         </section>
 
+        <SocialProof />
+
         <section id="how" className="bg-zinc-900 py-24 text-white">
           <div className="mx-auto max-w-6xl px-6">
             <div className="text-center">
@@ -223,6 +247,8 @@ export function HomePage() {
             </div>
           </div>
         </section>
+
+        <ComparisonSection />
 
         <section id="pricing" className="py-24">
           <div className="mx-auto max-w-6xl px-6">
@@ -272,6 +298,8 @@ export function HomePage() {
             </div>
           </div>
         </section>
+
+        <FaqSection />
 
         <section className="mx-6 mb-24">
           <div className="mx-auto max-w-6xl overflow-hidden rounded-3xl bg-gradient-to-r from-violet-600 to-indigo-600 px-8 py-16 text-center shadow-2xl shadow-violet-500/30 md:px-16">
