@@ -1,0 +1,3 @@
+# Landing is built on Vercel; do not upload local public/ (stale asset hashes break includeFiles).
+public/*
+!public/.gitkeep

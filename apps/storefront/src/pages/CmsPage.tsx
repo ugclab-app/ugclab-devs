@@ -1,4 +1,4 @@
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { storeApi } from "@/api/client";
 import { useStore } from "@/context/store";
@@ -10,10 +10,12 @@ export function CmsPage() {
   const ctx = useStore();
   const { slug } = useParams<{ slug: string }>();
   const { tenant } = useStoreParams();
+  const [searchParams] = useSearchParams();
+  const preview = searchParams.get("preview") === "1";
 
   const { data, isError } = useQuery({
-    queryKey: ["page", tenant, slug],
-    queryFn: () => storeApi.page(tenant, slug!),
+    queryKey: ["page", tenant, slug, preview],
+    queryFn: () => storeApi.page(tenant, slug!, preview),
     enabled: !!slug,
   });
 
@@ -21,10 +23,15 @@ export function CmsPage() {
   useDocumentSeo({
     title: buildStoreTitle(
       (ctx.settings?.seoTitle as string | undefined) || ctx.tenant.name,
-      page?.title
+      page?.seoTitle ?? page?.title
     ),
-    description: ctx.settings?.seoDescription ?? undefined,
-    image: ctx.settings?.seoOgImageUrl ?? ctx.logoUrl,
+    description:
+      page?.seoDescription ??
+      (ctx.settings?.seoDescription as string | undefined) ??
+      undefined,
+    image: page?.ogImageUrl ?? ctx.settings?.seoOgImageUrl ?? ctx.logoUrl,
+    noindex: page?.noindex,
+    canonicalUrl: page?.canonicalUrl,
   });
 
   if (isError) return <p className="text-zinc-500">Page not found.</p>;

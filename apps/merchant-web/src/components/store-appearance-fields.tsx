@@ -337,6 +337,15 @@ export function StoreCheckoutThemeFields({ theme }: { theme: StoreTheme }) {
         </a>{" "}
         account (enable in Stripe Dashboard → Payment methods)
       </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          name="stripePaypalEnabled"
+          defaultChecked={theme.stripePaypalEnabled}
+          value="on"
+        />
+        PayPal at Checkout (enable PayPal in Stripe Dashboard → Payment methods)
+      </label>
       <Field label="Shipping label at checkout">
         <input
           name="shippingCarrierLabel"

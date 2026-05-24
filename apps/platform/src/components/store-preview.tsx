@@ -8,7 +8,7 @@ export function StorePreview() {
           <span className="h-3 w-3 rounded-full bg-amber-400" />
           <span className="h-3 w-3 rounded-full bg-emerald-400" />
           <span className="ml-4 flex-1 rounded-md bg-white px-3 py-1 text-xs text-zinc-400">
-            demo.ugclab.store
+            tescommerce.com
           </span>
         </div>
         <div className="grid gap-0 md:grid-cols-5">

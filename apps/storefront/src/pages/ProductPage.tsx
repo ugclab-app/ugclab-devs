@@ -1,8 +1,7 @@
 import { useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { formatMoney } from "@ugclab/i18n";
-import { moneyLocaleFor } from "@ugclab/i18n/store-currency";
+import { formatMoney, moneyLocaleFor } from "@ugclab/i18n";
 import { storeApi } from "@/api/client";
 import { useStore } from "@/context/store";
 import { useStoreParams } from "@/hooks/use-store-params";
@@ -18,6 +17,7 @@ import { RecentlyViewedSection } from "@/components/recently-viewed-section";
 import { WishlistButton } from "@/components/wishlist-button";
 import { ProductJsonLd } from "@/components/store-json-ld";
 import { StoreTrustStrip } from "@/components/store-trust-strip";
+import { StoreBlockRenderer } from "@/components/store-block-renderer";
 import { buildStoreTitle, useDocumentSeo } from "@/hooks/use-document-seo";
 
 export function ProductPage() {
@@ -159,6 +159,11 @@ export function ProductPage() {
         <StoreTrustStrip />
       </div>
       <RecentlyViewedSection excludeId={product.id} />
+      {(ctx.theme.productPageBlocks?.length ?? 0) > 0 ? (
+        <div className="mt-12">
+          <StoreBlockRenderer blocks={ctx.theme.productPageBlocks!} theme={ctx.theme} />
+        </div>
+      ) : null}
     </>
   );
 }

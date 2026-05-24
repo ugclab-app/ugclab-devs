@@ -2,17 +2,30 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { formatMoney } from "@ugclab/i18n";
 import { api } from "@/api/client";
+import {
+  PlatformActionItems,
+  type ActionItem,
+} from "@/components/platform-action-items";
+import { QueryState } from "@/components/query-state";
 
 export default function DashboardPage() {
-  const { data, isLoading } = useQuery({
+  const query = useQuery({
     queryKey: ["platform-dashboard"],
     queryFn: () => api.dashboard(),
   });
 
-  if (isLoading || !data) {
-    return <p className="text-slate-500">Loading platform metrics…</p>;
-  }
+  return (
+    <QueryState query={query} loadingLabel="Loading platform metrics…">
+      {(data) => <DashboardContent data={data} />}
+    </QueryState>
+  );
+}
 
+function DashboardContent({
+  data,
+}: {
+  data: Awaited<ReturnType<typeof api.dashboard>>;
+}) {
   const m = data.metrics as {
     totalTenants: number;
     activeTenants: number;
@@ -27,7 +40,18 @@ export default function DashboardPage() {
     platformFees30d: number;
     mrrCents: number;
     totalMerchants: number;
+    merchantDebtCents?: number;
+    pendingPayoutCents?: number;
+    pendingPayoutCount?: number;
+    openDisputeEvents?: number;
   };
+
+  const paymentModel = data.paymentModel;
+  const mor = paymentModel === "mor";
+  const actionItems = (data.actionItems as ActionItem[] | undefined ?? []).slice(
+    0,
+    8
+  );
 
   const topStores = (data.topStoresByGmv ?? []) as {
     tenantId: string;
@@ -76,11 +100,31 @@ export default function DashboardPage() {
       value: String(m.churnedStores30d ?? 0),
       tone: (m.churnedStores30d ?? 0) > 0 ? "text-red-600" : undefined,
     },
-    {
-      label: "Stripe payouts ready",
-      value: String(m.stripeConnectedCount ?? 0),
-      tone: "text-violet-600",
-    },
+    ...(mor
+      ? [
+          {
+            label: "Merchant debt (owed)",
+            value: formatMoney(m.merchantDebtCents ?? 0, "USD"),
+            tone: "text-amber-700",
+          },
+          {
+            label: "Pending payouts",
+            value: `${formatMoney(m.pendingPayoutCents ?? 0, "USD")} (${m.pendingPayoutCount ?? 0})`,
+            tone: "text-violet-600",
+          },
+          {
+            label: "Stripe disputes (90d)",
+            value: String(m.openDisputeEvents ?? 0),
+            tone: (m.openDisputeEvents ?? 0) > 0 ? "text-red-600" : undefined,
+          },
+        ]
+      : [
+          {
+            label: "Stripe Connect ready",
+            value: String(m.stripeConnectedCount ?? 0),
+            tone: "text-violet-600",
+          },
+        ]),
     {
       label: "Platform fees (30d)",
       value: formatMoney(m.platformFees30d ?? 0, "USD"),
@@ -93,10 +137,38 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Platform overview</h1>
-        <p className="mt-1 text-slate-500">Global metrics across all tenants</p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Platform overview</h1>
+          <Link to="/inbox" className="mt-2 inline-block text-sm font-medium text-sky-600">
+            Open inbox →
+          </Link>
+          <p className="mt-1 text-slate-500">
+            {mor ? "MoR — platform collects all payments" : "Connect mode"}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {mor ? (
+            <>
+              <Link
+                to="/payouts?status=open"
+                className="ugclab-btn ugclab-btn-primary text-sm"
+              >
+                Payout queue
+              </Link>
+              <button
+                type="button"
+                onClick={() => api.exportPayoutsCsv().catch((e) => alert(String(e)))}
+                className="ugclab-btn border border-slate-200 bg-white text-sm"
+              >
+                Export payouts CSV
+              </button>
+            </>
+          ) : null}
+        </div>
       </div>
+
+      <PlatformActionItems items={actionItems} />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((s) => (

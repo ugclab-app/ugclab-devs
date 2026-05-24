@@ -1,6 +1,7 @@
 import { createMiddleware } from "hono/factory";
-import { getSessionToken, verifySession } from "../lib/auth-token.js";
+import { getSessionToken } from "../lib/auth-token.js";
 import type { SessionPayload } from "../lib/auth-token.js";
+import { resolveSession } from "../lib/session-resolve.js";
 
 export type AuthEnv = {
   Variables: {
@@ -13,7 +14,7 @@ export const requireAuth = createMiddleware<AuthEnv>(async (c, next) => {
   if (!token) {
     return c.json({ error: "Unauthorized" }, 401);
   }
-  const session = await verifySession(token);
+  const session = await resolveSession(token);
   if (!session) {
     return c.json({ error: "Unauthorized" }, 401);
   }

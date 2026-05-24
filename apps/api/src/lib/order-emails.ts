@@ -1,6 +1,6 @@
 import { prisma } from "@ugclab/database";
 import { formatMoney } from "@ugclab/i18n";
-import { sendEmail } from "./email.js";
+import { sendStoreEmail } from "./tenant-email.js";
 
 export async function sendCustomerOrderReceipt(orderId: string) {
   const order = await prisma.order.findUnique({
@@ -53,9 +53,12 @@ export async function sendCustomerOrderReceipt(orderId: string) {
     vars[key] ?? ""
   );
 
-  await sendEmail({
+  await sendStoreEmail(order.tenantId, {
     to: order.customer.email,
     subject,
     html,
   });
+
+  const { logOrderEmailEvent } = await import("./order-events.js");
+  await logOrderEmailEvent(orderId, `Receipt email: ${subject}`);
 }

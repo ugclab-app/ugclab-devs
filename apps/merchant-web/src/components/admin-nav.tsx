@@ -53,10 +53,12 @@ const navItems: NavItem[] = [
       { to: "/customers/segments", label: "Segments" },
     ],
   },
-  { to: "/payments", label: "Payments", perm: "settings" },
+  { to: "/payments", label: "Payments", perm: "payments" },
   { to: "/marketing", label: "Email marketing", perm: "marketing" },
+  { to: "/growth", label: "Growth", perm: "growth" },
   { to: "/abandoned-carts", label: "Abandoned carts", perm: "abandoned-carts" },
   { to: "/shipping", label: "Shipping", perm: "shipping" },
+  { to: "/inventory", label: "Inventory", perm: "products" },
   {
     to: "/discounts",
     label: "Discounts",
@@ -72,6 +74,7 @@ const navItems: NavItem[] = [
   { to: "/reports", label: "Reports", perm: "reports" },
   { to: "/activity-log", label: "Activity log", perm: "activity-log" },
   { to: "/settings", label: "Settings", perm: "settings" },
+  { to: "/help", label: "Help", perm: "settings" },
 ];
 
 function isChildActive(childTo: string, pathname: string, search: string): boolean {

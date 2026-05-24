@@ -1,0 +1,20 @@
+export type StorePageDetail = {
+  id: string;
+  title: string;
+  slug: string;
+  body: string;
+  excerpt: string | null;
+  featuredImageUrl: string | null;
+  pageType: string;
+  published: boolean;
+  publishAt: string | null;
+  authorName: string | null;
+  tags: string[];
+  metaTitle: string | null;
+  metaDescription: string | null;
+  ogImageUrl: string | null;
+  canonicalUrl: string | null;
+  noindex: boolean;
+  status: "draft" | "scheduled" | "published";
+  updatedAt: string;
+};

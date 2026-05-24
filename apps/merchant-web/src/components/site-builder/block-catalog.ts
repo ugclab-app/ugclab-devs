@@ -40,6 +40,13 @@ export const BLOCK_CATALOG: BlockCatalogItem[] = [
   { type: "map", label: "Map", description: "Google Maps embed", category: "marketing", icon: "📍" },
   { type: "logos", label: "Brand logos", description: "Partner / press logos", category: "marketing", icon: "◎" },
   { type: "pricing", label: "Pricing", description: "Plans table", category: "marketing", icon: "$" },
+  { type: "contact_form", label: "Contact form", description: "Name, email, message", category: "marketing", icon: "✉" },
+  { type: "tabs", label: "Tabs", description: "Tabbed content", category: "content", icon: "▤" },
+  { type: "sticky_cta", label: "Sticky CTA", description: "Mobile bottom bar", category: "marketing", icon: "↓" },
+  { type: "blog_feed", label: "Blog feed", description: "Latest posts", category: "content", icon: "📰" },
+  { type: "carousel", label: "Carousel", description: "Horizontal image slider", category: "content", icon: "⟷" },
+  { type: "instagram_embed", label: "Instagram", description: "Embed feed", category: "social", icon: "◎" },
+  { type: "product_compare", label: "Compare products", description: "Side-by-side PDPs", category: "store", icon: "⚖" },
 ];
 
 const CATEGORY_LABELS: Record<BlockCategory, string> = {
@@ -194,6 +201,39 @@ export function createBlock(type: HomeSection): HomeBlock {
           },
         ],
       };
+    case "contact_form":
+      return {
+        ...base,
+        title: "Contact us",
+        subtitle: "We typically reply within one business day.",
+        ctaLabel: "Send message",
+      };
+    case "tabs":
+      return {
+        ...base,
+        title: "Details",
+        tabItems: [
+          { label: "Shipping", body: "Free shipping over $50." },
+          { label: "Returns", body: "30-day returns on unused items." },
+        ],
+      };
+    case "sticky_cta":
+      return {
+        ...base,
+        paddingY: "none",
+        title: "Ready to order?",
+        ctaLabel: "Shop now",
+        ctaPath: "/collections",
+        bgColor: "#ffffff",
+      };
+    case "blog_feed":
+      return { ...base, title: "From the blog", blogLimit: 3 };
+    case "carousel":
+      return { ...base, title: "Highlights", galleryUrls: [] };
+    case "instagram_embed":
+      return { ...base, title: "Follow us", instagramEmbedUrl: "" };
+    case "product_compare":
+      return { ...base, title: "Compare", compareProductSlugs: [] };
     default:
       return { ...base, title: BLOCK_CATALOG.find((b) => b.type === type)?.label };
   }
@@ -212,5 +252,7 @@ export function duplicateBlock(block: HomeBlock): HomeBlock {
       ...x,
       features: x.features ? [...x.features] : undefined,
     })),
+    tabItems: block.tabItems?.map((x) => ({ ...x })),
+    compareProductSlugs: block.compareProductSlugs ? [...block.compareProductSlugs] : undefined,
   };
 }

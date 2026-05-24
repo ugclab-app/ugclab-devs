@@ -5,6 +5,7 @@ import { formatMoney } from "@ugclab/i18n";
 import { api } from "@/api/client";
 import { FormAlert } from "@/components/form-alert";
 import { SettingsPanelShell } from "@/components/settings-section";
+import { BillingInvoicesPanel } from "@/components/billing-invoices-panel";
 
 export function BillingPanel() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -82,9 +83,10 @@ export function BillingPanel() {
   };
 
   return (
+    <div className="space-y-8">
     <SettingsPanelShell
       title="Platform subscription"
-      description="Pay UGCLab for your store plan. Card payments for customers are separate (Payments tab)."
+      description="Pay Tescommerce for your store plan. Card payments for customers are separate (Payments tab)."
     >
       <FormAlert ok={alert.ok} message={alert.message} />
 
@@ -162,5 +164,7 @@ export function BillingPanel() {
         </>
       )}
     </SettingsPanelShell>
+    <BillingInvoicesPanel />
+    </div>
   );
 }

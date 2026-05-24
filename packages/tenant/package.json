@@ -2,11 +2,30 @@
   "name": "@ugclab/tenant",
   "version": "0.0.0",
   "private": true,
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./store-theme": "./src/store-theme.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./store-theme": {
+      "types": "./dist/store-theme.d.ts",
+      "development": "./src/store-theme.ts",
+      "import": "./dist/store-theme.js",
+      "default": "./dist/store-theme.js"
+    },
+    "./block-style": {
+      "types": "./dist/block-style.d.ts",
+      "development": "./src/block-style.ts",
+      "import": "./dist/block-style.js",
+      "default": "./dist/block-style.js"
+    }
+  },
+  "scripts": {
+    "build": "npm run build -w @ugclab/database && tsc -p tsconfig.build.json"
   },
   "dependencies": {
     "@ugclab/database": "*"

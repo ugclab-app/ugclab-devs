@@ -1,12 +1,13 @@
 import { useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatMoney } from "@ugclab/i18n";
 import { api } from "@/api/client";
 import { OrdersToolbar } from "@/components/orders-toolbar";
-import { OrderStatusBadge } from "@/components/status-badge";
+import { OrdersTable, type OrderListRow } from "@/components/orders-table";
 import { EmptyState } from "@/components/empty-state";
 import { AdminPageShell } from "@/components/admin-page-shell";
+import { TwoFaRequiredBanner } from "@/components/two-fa-required-banner";
 import { FormAlert } from "@/components/form-alert";
 import type { OrderStatus } from "@/lib/database-types";
 
@@ -24,20 +25,15 @@ export default function OrdersPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const qc = useQueryClient();
   const [params] = useSearchParams();
+  const navigate = useNavigate();
 
   const { data, isLoading, isFetching } = useQuery({
     queryKey: ["orders", params.toString()],
     queryFn: () => api.orders(params),
   });
 
-  const orders = (data?.orders ?? []) as {
-    id: string;
-    orderNumber: string;
-    status: OrderStatus;
-    totalAmount: number;
-    createdAt: string;
-    customer?: { email: string } | null;
-  }[];
+  const orders = (data?.orders ?? []) as OrderListRow[];
+  const showMorColumns = data?.paymentModel === "mor";
 
   const paidIds = useMemo(
     () => orders.filter((o) => o.status === "PAID").map((o) => o.id),
@@ -96,6 +92,13 @@ export default function OrdersPage() {
           >
             Export CSV
           </button>
+          <button
+            type="button"
+            onClick={() => api.downloadOrdersCsv(params, true)}
+            className="ugclab-btn border border-zinc-200 bg-white text-sm"
+          >
+            Accounting export
+          </button>
           <label className="ugclab-btn cursor-pointer border border-zinc-200 bg-white text-sm">
             Import CSV
             <input
@@ -134,6 +137,7 @@ export default function OrdersPage() {
       }
     >
       <OrdersToolbar sortOptions={SORT_OPTIONS} />
+      <TwoFaRequiredBanner area="orders" />
 
       {banner ? (
         <div className="mt-4">
@@ -165,11 +169,67 @@ export default function OrdersPage() {
             type="button"
             className="font-medium text-violet-700 hover:underline"
             onClick={() => {
-              const id = [...selected][0];
-              if (id) window.open(api.packingSlipUrl(id), "_blank");
+              for (const id of selected) {
+                window.open(api.orderInvoiceUrl(id), "_blank");
+              }
             }}
           >
-            Print packing slip
+            Print invoices
+          </button>
+          <button
+            type="button"
+            className="font-medium text-violet-700 hover:underline"
+            onClick={async () => {
+              const tag = window.prompt("Tag to add to selected orders?");
+              if (!tag?.trim()) return;
+              try {
+                const r = await api.bulkOrderTags([...selected], [tag.trim()], []);
+                setBanner({ ok: true, message: `Tagged ${r.updated} order(s)` });
+                setSelected(new Set());
+                await qc.invalidateQueries({ queryKey: ["orders"] });
+              } catch (e) {
+                setBanner({
+                  ok: false,
+                  message: e instanceof Error ? e.message : "Failed",
+                });
+              }
+            }}
+          >
+            Add tag
+          </button>
+          <button
+            type="button"
+            className="font-medium text-violet-700 hover:underline"
+            onClick={async () => {
+              try {
+                const r = await api.bulkShippingLabels([...selected]);
+                setBanner({
+                  ok: true,
+                  message: `Labels: ${r.results.filter((x) => x.ok).length}/${r.attempted} ok`,
+                });
+                await qc.invalidateQueries({ queryKey: ["orders"] });
+              } catch (e) {
+                setBanner({
+                  ok: false,
+                  message: e instanceof Error ? e.message : "Labels failed",
+                });
+              }
+            }}
+          >
+            Shippo labels
+          </button>
+          <button
+            type="button"
+            className="font-medium text-red-700 hover:underline"
+            onClick={async () => {
+              if (!confirm("Cancel selected pending/draft orders?")) return;
+              const r = await api.bulkCancelOrders([...selected]);
+              setBanner({ ok: true, message: `Cancelled ${r.updated} order(s)` });
+              setSelected(new Set());
+              await qc.invalidateQueries({ queryKey: ["orders"] });
+            }}
+          >
+            Cancel pending
           </button>
           <button
             type="button"
@@ -194,66 +254,53 @@ export default function OrdersPage() {
         </div>
       ) : (
         <>
-          <p className="mb-3 mt-4 text-sm text-zinc-500">
-            {orders.length} order{orders.length === 1 ? "" : "s"}
-            {isFetching && !isLoading ? " · updating…" : ""}
-          </p>
-          <div className="admin-card overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-zinc-50/80 text-left text-xs uppercase tracking-wide text-zinc-500">
-                  <th className="w-12 px-4 py-3">
-                    <input
-                      type="checkbox"
-                      aria-label="Select all orders"
-                      checked={allVisibleSelected}
-                      onChange={(e) => toggleAll(e.target.checked)}
-                    />
-                  </th>
-                  <th className="px-6 py-3">Order</th>
-                  <th className="px-6 py-3">Customer</th>
-                  <th className="px-6 py-3">Status</th>
-                  <th className="px-6 py-3 text-right">Total</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100">
-                {orders.map((o) => (
-                  <tr
-                    key={o.id}
-                    className={`transition hover:bg-violet-50/40 ${
-                      selected.has(o.id) ? "bg-violet-50/60" : ""
-                    }`}
-                  >
-                    <td className="px-4 py-4">
-                      <input
-                        type="checkbox"
-                        checked={selected.has(o.id)}
-                        aria-label={`Select order ${o.orderNumber}`}
-                        onChange={(e) => toggleOne(o.id, e.target.checked)}
-                      />
-                    </td>
-                    <td className="px-6 py-4">
-                      <Link
-                        to={`/orders/${o.id}`}
-                        className="font-semibold text-violet-600 hover:underline"
-                      >
-                        #{o.orderNumber}
-                      </Link>
-                    </td>
-                    <td className="px-6 py-4 text-zinc-700">
-                      {o.customer?.email ?? "—"}
-                    </td>
-                    <td className="px-6 py-4">
-                      <OrderStatusBadge status={o.status} />
-                    </td>
-                    <td className="px-6 py-4 text-right font-medium tabular-nums text-zinc-900">
-                      {formatMoney(o.totalAmount, data!.currency)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="mb-3 mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-zinc-600">
+            <p>
+              Showing {orders.length} of {data?.total ?? orders.length} orders
+              {data?.summary
+                ? ` · ${formatMoney(data.summary.totalCents, data.currency)} total`
+                : ""}
+              {isFetching && !isLoading ? " · updating…" : ""}
+            </p>
+            {(data?.total ?? 0) > (data?.pageSize ?? 50) ? (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={(data?.page ?? 1) <= 1}
+                  className="ugclab-btn border border-zinc-200 bg-white text-xs disabled:opacity-40"
+                  onClick={() => {
+                    const p = new URLSearchParams(params);
+                    p.set("page", String(Math.max(1, (data?.page ?? 1) - 1)));
+                    navigate(`/orders?${p.toString()}`);
+                  }}
+                >
+                  Previous
+                </button>
+                <span className="py-2 text-xs">Page {data?.page ?? 1}</span>
+                <button
+                  type="button"
+                  disabled={orders.length < (data?.pageSize ?? 50)}
+                  className="ugclab-btn border border-zinc-200 bg-white text-xs disabled:opacity-40"
+                  onClick={() => {
+                    const p = new URLSearchParams(params);
+                    p.set("page", String((data?.page ?? 1) + 1));
+                    navigate(`/orders?${p.toString()}`);
+                  }}
+                >
+                  Next
+                </button>
+              </div>
+            ) : null}
           </div>
+          <OrdersTable
+            orders={orders}
+            currency={data!.currency}
+            showMorColumns={showMorColumns}
+            selected={selected}
+            allVisibleSelected={allVisibleSelected}
+            onToggleAll={toggleAll}
+            onToggleOne={toggleOne}
+          />
         </>
       )}
     </AdminPageShell>

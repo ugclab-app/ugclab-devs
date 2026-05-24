@@ -4,9 +4,25 @@ import { api } from "@/api/client";
 
 const links = [
   { to: "/dashboard", label: "Overview" },
+  { to: "/inbox", label: "Inbox" },
+  { to: "/search", label: "Search" },
+  { to: "/revenue", label: "Revenue" },
+  { to: "/disputes", label: "Disputes" },
   { to: "/tenants", label: "Stores" },
-  { to: "/plans", label: "Plans" },
+  { to: "/orders", label: "Orders" },
+  { to: "/payouts", label: "Payouts" },
+  { to: "/domains", label: "Domains" },
+  { to: "/themes", label: "Themes" },
   { to: "/users", label: "Users" },
+  { to: "/plans", label: "Plans" },
+  { to: "/activity", label: "Activity" },
+  { to: "/audit", label: "Audit" },
+  { to: "/announcements", label: "Announcements" },
+  { to: "/reports", label: "Reports" },
+  { to: "/moderation", label: "Moderation" },
+  { to: "/integrations", label: "Integrations" },
+  { to: "/compliance", label: "Compliance" },
+  { to: "/settings", label: "Settings" },
 ];
 
 export function PlatformLayout() {
@@ -19,11 +35,11 @@ export function PlatformLayout() {
       <aside className="platform-sidebar flex w-60 shrink-0 flex-col">
         <div className="border-b border-slate-800 p-5">
           <p className="text-xs font-semibold uppercase tracking-wider text-sky-400">
-            UGCLab
+            Tescommerce
           </p>
           <p className="mt-1 text-lg font-bold text-white">Platform</p>
         </div>
-        <nav className="flex-1 space-y-0.5 p-3">
+        <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
           {links.map((item) => {
             const active =
               pathname === item.to || pathname.startsWith(item.to + "/");
@@ -31,7 +47,7 @@ export function PlatformLayout() {
               <Link
                 key={item.to}
                 to={item.to}
-                className={`block rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+                className={`block rounded-lg px-3 py-2 text-sm font-medium transition ${
                   active
                     ? "bg-slate-800 text-white"
                     : "text-slate-400 hover:bg-slate-900 hover:text-slate-200"

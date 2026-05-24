@@ -12,13 +12,19 @@ export type SettingsTabId = (typeof TABS)[number]["id"];
 export function SettingsTabs({
   active,
   onChange,
+  visibleIds,
 }: {
   active: SettingsTabId;
   onChange: (id: SettingsTabId) => void;
+  /** When set, only these tab ids are shown (e.g. non-owner admin). */
+  visibleIds?: SettingsTabId[];
 }) {
+  const tabs = visibleIds
+    ? TABS.filter((t) => visibleIds.includes(t.id))
+    : TABS;
   return (
     <nav className="settings-tabs" aria-label="Settings sections">
-      {TABS.map((tab) => (
+      {tabs.map((tab) => (
         <button
           key={tab.id}
           type="button"

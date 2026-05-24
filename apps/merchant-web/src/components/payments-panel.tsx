@@ -5,19 +5,23 @@ import { api } from "@/api/client";
 import { FormAlert } from "@/components/form-alert";
 import { SettingsPanelShell } from "@/components/settings-section";
 import { StripePayoutsPanel } from "@/components/stripe-payouts-panel";
+import { MerchantMorPayoutsPanel } from "@/components/merchant-mor-payouts-panel";
+import { PaymentPayoutSettings } from "@/components/payment-payout-settings";
 
 function StatusBadge({
-  connected,
+  ready,
   configured,
+  mor,
 }: {
-  connected: boolean;
+  ready: boolean;
   configured: boolean;
+  mor?: boolean;
 }) {
-  if (connected) {
+  if (ready) {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
         <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-        Payments connected
+        {mor ? "Payments active" : "Payments connected"}
       </span>
     );
   }
@@ -62,9 +66,11 @@ export function PaymentsPanel() {
     );
   }
 
-  const connected = data.paymentsReady;
+  const mor = data.paymentModel === "mor";
+  const ready = data.paymentsReady;
   const feePct =
     data.platformFeeBps > 0 ? (data.platformFeeBps / 100).toFixed(2) : null;
+  const stripeFeePct = import.meta.env.VITE_STRIPE_PROCESSING_FEE_PCT ?? "3";
 
   async function connect() {
     setPending(true);
@@ -97,14 +103,21 @@ export function PaymentsPanel() {
   }
 
   return (
+    <div className="space-y-8">
     <SettingsPanelShell
       title="Accept card payments"
-      description="Connect Stripe to charge customers. Orders stay pending until payment succeeds."
-      badge={<StatusBadge connected={connected} configured={data.configured} />}
+      description={
+        mor
+          ? "Shoppers pay Tescommerce (platform). You receive your share after our fee — no Stripe account required."
+          : "Connect Stripe to charge customers. Orders stay pending until payment succeeds."
+      }
+      badge={
+        <StatusBadge ready={ready} configured={data.configured} mor={mor} />
+      }
     >
       <FormAlert ok={alert.ok} message={alert.message} />
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-3">
+      <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-xl border border-zinc-100 bg-zinc-50/80 p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">
             Platform fee
@@ -116,19 +129,32 @@ export function PaymentsPanel() {
         </div>
         <div className="rounded-xl border border-zinc-100 bg-zinc-50/80 p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">
-            Provider
+            Stripe fee
           </p>
-          <p className="mt-1 text-xl font-bold text-zinc-900">Stripe</p>
-          <p className="mt-0.5 text-xs text-zinc-500">Cards & more</p>
+          <p className="mt-1 text-xl font-bold text-zinc-900">+{stripeFeePct}%</p>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            Card processing (charged by Stripe)
+          </p>
         </div>
         <div className="rounded-xl border border-zinc-100 bg-zinc-50/80 p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">
-            Payouts
+            Model
           </p>
           <p className="mt-1 text-xl font-bold text-zinc-900">
-            {connected ? "Active" : "—"}
+            {mor ? "Platform MoR" : "Stripe Connect"}
           </p>
-          <p className="mt-0.5 text-xs text-zinc-500">To your bank via Stripe</p>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            {mor ? "Tescommerce collects payments" : "Per-merchant Stripe"}
+          </p>
+        </div>
+        <div className="rounded-xl border border-zinc-100 bg-zinc-50/80 p-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">
+            Checkout
+          </p>
+          <p className="mt-1 text-xl font-bold text-zinc-900">
+            {ready ? "Active" : "—"}
+          </p>
+          <p className="mt-0.5 text-xs text-zinc-500">Card & Link via Stripe</p>
         </div>
       </div>
 
@@ -136,11 +162,19 @@ export function PaymentsPanel() {
         <div className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50 px-5 py-6 text-center">
           <p className="text-sm font-medium text-zinc-800">Payments not enabled yet</p>
           <p className="mt-2 text-sm text-zinc-500">
-            Card checkout will be available once the platform finishes payment setup.
-            Contact support if this persists.
+            Add STRIPE_SECRET_KEY to the platform environment, then restart the API.
           </p>
         </div>
-      ) : connected ? (
+      ) : mor ? (
+        <div className="space-y-4">
+          <p className="text-sm text-zinc-600">
+            When a customer pays, funds go to the platform Stripe account. Your balance
+            below is what we owe you (sales minus platform fee). Request a payout when
+            you want to withdraw — we process manually per your contract.
+          </p>
+          <MerchantMorPayoutsPanel />
+        </div>
+      ) : data.connected ? (
         <div className="space-y-4">
           <p className="text-sm text-zinc-600">
             Shoppers pay on Stripe Checkout. You receive the order total minus the platform
@@ -163,7 +197,7 @@ export function PaymentsPanel() {
               Open Stripe Dashboard
             </button>
           </div>
-          <StripePayoutsPanel connected={connected} />
+          <StripePayoutsPanel connected={data.connected} />
         </div>
       ) : (
         <div className="space-y-5">
@@ -198,5 +232,7 @@ export function PaymentsPanel() {
         </div>
       )}
     </SettingsPanelShell>
+    <PaymentPayoutSettings mor={mor} />
+    </div>
   );
 }

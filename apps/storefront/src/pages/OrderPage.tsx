@@ -21,6 +21,12 @@ export function OrderPage() {
     enabled: !!id,
   });
 
+  const { data: upsell } = useQuery({
+    queryKey: ["upsell", tenant],
+    queryFn: () => storeApi.upsellProducts(tenant),
+    enabled: !!ctx.postCheckoutUpsell?.enabled,
+  });
+
   if (isError) {
     return (
       <div className="mx-auto max-w-lg text-center">
@@ -101,6 +107,29 @@ export function OrderPage() {
           </div>
         </dl>
       </div>
+
+      {paid && upsell?.products?.length ? (
+        <section className="mt-8 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-semibold">
+            {upsell.headline ?? "You might also like"}
+          </h2>
+          <ul className="mt-4 grid gap-4 sm:grid-cols-2">
+            {upsell.products.map((p) => (
+              <li key={p.id}>
+                <Link
+                  to={storeHref(`/products/${p.slug}`, nav)}
+                  className="block rounded-xl border border-zinc-100 p-4 hover:border-[var(--store-primary)]"
+                >
+                  <p className="font-medium">{p.title}</p>
+                  <p className="mt-1 text-sm text-zinc-600">
+                    {formatMoney(p.priceAmount, p.currency)}
+                  </p>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {paid && order.digitalDownloads.length > 0 ? (
         <section className="mt-8 rounded-2xl border border-violet-200 bg-violet-50 p-6">

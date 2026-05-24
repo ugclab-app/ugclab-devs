@@ -86,6 +86,7 @@ export function buildThemeFromForm(fd: FormData): StoreTheme {
     trustBadgesEnabled: fd.get("trustBadgesEnabled") === "on",
     stripeTaxEnabled: fd.get("stripeTaxEnabled") === "on",
     stripeLinkEnabled: fd.get("stripeLinkEnabled") === "on",
+    stripePaypalEnabled: fd.get("stripePaypalEnabled") === "on",
     shippingCarrierLabel: String(fd.get("shippingCarrierLabel") ?? "").trim() || undefined,
     checkoutButtonText: String(fd.get("checkoutButtonText") ?? "").trim() || undefined,
     checkoutRequireName: fd.get("checkoutRequireName") === "on",

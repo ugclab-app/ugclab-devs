@@ -23,6 +23,7 @@ export type UserDto = {
   email: string;
   name: string | null;
   role: string;
+  impersonatedBy?: string | null;
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -52,6 +53,11 @@ async function requestBlob(path: string) {
 }
 
 export const api = {
+  impersonate: (token: string) =>
+    request<{ user: UserDto; tenant: TenantDto | null }>("/auth/impersonate", {
+      method: "POST",
+      body: JSON.stringify({ token }),
+    }),
   login: async (email: string, password: string, totpCode?: string) => {
     const res = await fetch(`${API}/auth/login`, {
       method: "POST",
@@ -71,6 +77,10 @@ export const api = {
     return data as { user: UserDto; tenant: TenantDto | null };
   },
   logout: () => request<{ ok: boolean }>("/auth/logout", { method: "POST" }),
+  platformAnnouncement: () =>
+    request<{ announcement: { title: string; message: string } | null }>(
+      "/merchant/platform-announcement"
+    ),
   me: () =>
     request<{ user: UserDto | null; tenant: TenantDto | null }>("/auth/me"),
   dashboard: (range: 7 | 30) =>
@@ -193,9 +203,27 @@ export const api = {
   deleteShippingZone: (id: string) =>
     request(`/merchant/shipping-zones/${id}`, { method: "DELETE" }),
   orders: (params: URLSearchParams) =>
-    request<{ orders: unknown[]; currency: string }>(
-      `/merchant/orders?${params}`
-    ),
+    request<{
+      orders: {
+        id: string;
+        orderNumber: string;
+        status: string;
+        totalAmount: number;
+        platformFeeAmount: number;
+        merchantNetCents: number;
+        createdAt: string;
+        locationLabel: string | null;
+        trackingNumber: string | null;
+        itemsLabel: string;
+        customer?: { email: string } | null;
+      }[];
+      currency: string;
+      paymentModel?: "mor" | "connect";
+      page?: number;
+      pageSize?: number;
+      total?: number;
+      summary?: { count: number; totalCents: number; platformFeesCents: number };
+    }>(`/merchant/orders?${params}`),
   order: (id: string) =>
     request<{ order: unknown; currency: string }>(`/merchant/orders/${id}`),
   updateOrderStatus: (id: string, status: string) =>
@@ -224,8 +252,8 @@ export const api = {
     }),
   resendOrderReceipt: (id: string) =>
     request(`/merchant/orders/${id}/resend-receipt`, { method: "POST" }),
-  downloadOrdersCsv: async (params?: URLSearchParams) => {
-    const allowed = ["status", "q", "from", "to"];
+  downloadOrdersCsv: async (params?: URLSearchParams, accounting = false) => {
+    const allowed = ["status", "q", "from", "to", "country", "view"];
     const qs = new URLSearchParams();
     if (params) {
       for (const key of allowed) {
@@ -233,6 +261,7 @@ export const api = {
         if (v) qs.set(key, v);
       }
     }
+    if (accounting) qs.set("format", "accounting");
     const query = qs.toString();
     const blob = await requestBlob(
       `/merchant/orders/export${query ? `?${query}` : ""}`
@@ -246,20 +275,76 @@ export const api = {
   },
   orderInvoiceUrl: (id: string) => `${API}/merchant/orders/${id}/invoice`,
   orderPackingUrl: (id: string) => `${API}/merchant/orders/${id}/packing-slip`,
-  customers: (q?: string) =>
-    request<{ customers: unknown[]; currency: string }>(
-      `/merchant/customers${q ? `?q=${encodeURIComponent(q)}` : ""}`
-    ),
+  customers: (params?: {
+    q?: string;
+    filter?: string;
+    sort?: string;
+  }) => {
+    const sp = new URLSearchParams();
+    if (params?.q) sp.set("q", params.q);
+    if (params?.filter && params.filter !== "all") sp.set("filter", params.filter);
+    if (params?.sort && params.sort !== "newest") sp.set("sort", params.sort);
+    const qs = sp.toString();
+    return request<{ customers: unknown[]; currency: string }>(
+      `/merchant/customers${qs ? `?${qs}` : ""}`
+    );
+  },
+  exportCustomersCsv: async (params?: { q?: string; filter?: string }) => {
+    const sp = new URLSearchParams();
+    if (params?.q) sp.set("q", params.q);
+    if (params?.filter && params.filter !== "all") sp.set("filter", params.filter);
+    const qs = sp.toString();
+    const res = await fetch(`${API}/merchant/customers/export.csv${qs ? `?${qs}` : ""}`, {
+      credentials: "include",
+    });
+    if (!res.ok) throw new Error("Export failed");
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "customers.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  },
   customer: (id: string) =>
-    request<{ customer: unknown; currency: string }>(
-      `/merchant/customers/${id}`
-    ),
+    request<{
+      customer: unknown;
+      currency: string;
+      summary: unknown;
+      openAbandonedCart: unknown;
+      emailSubscriber: unknown;
+    }>(`/merchant/customers/${id}`),
+  updateCustomer: (id: string, body: { marketingOptOut?: boolean }) =>
+    request(`/merchant/customers/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
   settings: () =>
     request<{ tenant: unknown; emailConfigured: boolean }>("/merchant/settings"),
   updateSettings: (body: Record<string, unknown>) =>
     request("/merchant/settings", {
       method: "PATCH",
       body: JSON.stringify(body),
+    }),
+  updateThemeDraft: (body: { themeDraft: unknown; primaryColor?: string }) =>
+    request("/merchant/settings/theme-draft", {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  sendTestStoreEmail: () =>
+    request<{ ok: boolean; sentTo: string }>("/merchant/settings/test-email", {
+      method: "POST",
+    }),
+  themeVersions: () =>
+    request<{ versions: unknown[] }>("/merchant/settings/theme-versions"),
+  saveThemeVersion: (label: string) =>
+    request("/merchant/settings/theme-versions", {
+      method: "POST",
+      body: JSON.stringify({ label }),
+    }),
+  restoreThemeVersion: (id: string) =>
+    request("/merchant/settings/theme-versions/" + encodeURIComponent(id) + "/restore", {
+      method: "POST",
     }),
   stripeStatus: () =>
     request<{
@@ -270,7 +355,72 @@ export const api = {
       paymentsReady: boolean;
       platformFeeBps: number;
       planFeeBps: number;
+      paymentModel?: "mor" | "connect";
     }>("/merchant/stripe/status"),
+  payoutProfile: () =>
+    request<{
+      paymentModel: string;
+      storefrontCurrency: string;
+      payoutCurrency: string;
+      taxFormType: string | null;
+      taxFormLegalName: string | null;
+      taxFormIdMasked: string | null;
+      hasTaxForm: boolean;
+      notifyPayoutFailed: boolean;
+    }>("/merchant/stripe/payout-profile"),
+  updatePayoutProfile: (body: {
+    payoutCurrency?: string | null;
+    taxFormType?: string | null;
+    taxFormLegalName?: string | null;
+    taxFormId?: string | null;
+    notifyPayoutFailed?: boolean;
+  }) =>
+    request("/merchant/stripe/payout-profile", {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  morBalance: () =>
+    request<{
+      paymentModel: string;
+      currency: string;
+      storefrontCurrency?: string;
+      payoutCurrency?: string;
+      earnedCents: number;
+      platformFeesCents: number;
+      paidOutCents: number;
+      pendingPayoutCents: number;
+      availableCents: number;
+      payoutMinCents?: number;
+      payoutSchedule?: string;
+      payouts: {
+        id: string;
+        amount: number;
+        currency: string;
+        status: string;
+        note: string | null;
+        paidAt: string | null;
+        createdAt: string;
+      }[];
+    }>("/merchant/stripe/mor-balance"),
+  requestMorPayout: (body?: { amountCents?: number; note?: string }) =>
+    request("/merchant/stripe/mor-payout-request", {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
+  exportMorPayoutsCsv: () =>
+    requestBlob("/merchant/stripe/mor-payouts/export.csv").then((blob) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "payouts.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    }),
+  syncOrderStripe: (id: string) =>
+    request<{ synced: boolean; message: string; order: unknown }>(
+      `/merchant/orders/${id}/sync-stripe`,
+      { method: "POST" }
+    ),
   stripeConnect: () =>
     request<{ url: string }>("/merchant/stripe/connect", { method: "POST" }),
   stripeDashboardLink: () =>
@@ -291,6 +441,21 @@ export const api = {
       subscription: unknown;
       plans: unknown[];
     }>("/merchant/stripe/billing"),
+  billingInvoices: () =>
+    request<{
+      configured: boolean;
+      invoices: {
+        id: string;
+        number: string | null;
+        status: string | null;
+        currency: string;
+        amountDue: number;
+        amountPaid: number;
+        createdAt: string;
+        hostedInvoiceUrl: string | null;
+        invoicePdf: string | null;
+      }[];
+    }>("/merchant/stripe/billing/invoices"),
   billingCheckout: (planId: string) =>
     request<{ url: string }>("/merchant/stripe/billing/checkout", {
       method: "POST",
@@ -303,12 +468,30 @@ export const api = {
       `/merchant/orders/${orderId}/shipping-label`,
       { method: "POST", body: JSON.stringify(from ?? {}) }
     ),
-  staff: () => request<{ owner: unknown; members: unknown[]; currentUserId: string }>("/merchant/staff"),
-  inviteStaff: (email: string, role: string) =>
-    request<{ member: unknown; inviteLink: string }>("/merchant/staff/invite", {
+  staff: () =>
+    request<{ owner: unknown; members: unknown[]; currentUserId: string; isOwner: boolean }>(
+      "/merchant/staff"
+    ),
+  inviteStaff: (email: string, role: string, permissions?: string[]) =>
+    request<{ member: unknown; inviteLink: string; emailSent?: boolean }>(
+      "/merchant/staff/invite",
+      {
+        method: "POST",
+        body: JSON.stringify({ email, role, permissions }),
+      }
+    ),
+  resendStaffInvite: (id: string) =>
+    request<{ member: unknown; inviteLink: string; emailSent?: boolean }>(
+      `/merchant/staff/${id}/resend`,
+      { method: "POST" }
+    ),
+  transferOwnership: (email: string) =>
+    request("/merchant/staff/transfer-ownership", {
       method: "POST",
-      body: JSON.stringify({ email, role }),
+      body: JSON.stringify({ email }),
     }),
+  updateProfile: (body: { name?: string; avatarUrl?: string }) =>
+    request("/merchant/me", { method: "PATCH", body: JSON.stringify(body) }),
   removeStaff: (id: string) =>
     request(`/merchant/staff/${id}`, { method: "DELETE" }),
   acceptInvite: (token: string) =>
@@ -340,9 +523,14 @@ export const api = {
     request(`/merchant/domains/${id}/verify`, { method: "POST" }),
   deleteDomain: (id: string) =>
     request(`/merchant/domains/${id}`, { method: "DELETE" }),
-  pages: () => request<{ pages: unknown[] }>("/merchant/pages"),
+  pages: (params?: URLSearchParams) =>
+    request<{ pages: unknown[] }>(
+      `/merchant/pages${params?.toString() ? `?${params}` : ""}`
+    ),
   createPage: (body: Record<string, unknown>) =>
     request("/merchant/pages", { method: "POST", body: JSON.stringify(body) }),
+  duplicatePage: (id: string) =>
+    request(`/merchant/pages/${id}/duplicate`, { method: "POST" }),
   updatePage: (id: string, body: Record<string, unknown>) =>
     request(`/merchant/pages/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deletePage: (id: string) => request(`/merchant/pages/${id}`, { method: "DELETE" }),
@@ -369,14 +557,19 @@ export const api = {
     }),
   deleteQuestion: (id: string) =>
     request(`/merchant/questions/${id}`, { method: "DELETE" }),
-  createDraftOrder: (body: Record<string, unknown>) =>
-    request("/merchant/orders/draft", { method: "POST", body: JSON.stringify(body) }),
   markDraftPaid: (id: string) =>
     request(`/merchant/orders/${id}/mark-paid`, { method: "POST" }),
-  refundOrder: (id: string, reason?: string) =>
+  refundOrder: (
+    id: string,
+    body?: {
+      reason?: string;
+      amountCents?: number;
+      lineItems?: { lineId: string; quantity: number }[];
+    }
+  ) =>
     request(`/merchant/orders/${id}/refund`, {
       method: "POST",
-      body: JSON.stringify({ reason }),
+      body: JSON.stringify(body ?? {}),
     }),
   updateLineFulfillment: (
     id: string,
@@ -409,10 +602,23 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
-  analytics: (range: string) =>
-    request<{ currency: string; analytics: unknown }>(
-      `/merchant/analytics?range=${range}`
+  analytics: (query: string) =>
+    request<{ currency: string; paymentModel?: string; analytics: unknown }>(
+      `/merchant/analytics?${query}`
     ),
+  exportAnalyticsCsv: async (query: string) => {
+    const res = await fetch(`${API}/merchant/analytics/export.csv?${query}`, {
+      credentials: "include",
+    });
+    if (!res.ok) throw new Error("Export failed");
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "analytics.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  },
   promotions: () => request<{ promotions: unknown[] }>("/merchant/promotions"),
   createPromotion: (body: Record<string, unknown>) =>
     request("/merchant/promotions", {
@@ -463,18 +669,78 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ ids }),
     }),
+  bulkCancelOrders: (ids: string[]) =>
+    request<{ updated: number }>("/merchant/orders/bulk-cancel", {
+      method: "POST",
+      body: JSON.stringify({ ids }),
+    }),
+  bulkShippingLabels: (ids: string[]) =>
+    request<{
+      attempted: number;
+      results: { orderId: string; ok: boolean; labelUrl?: string; error?: string }[];
+      note?: string;
+    }>("/merchant/orders/bulk-labels", {
+      method: "POST",
+      body: JSON.stringify({ ids }),
+    }),
+  createDraftOrder: (body: {
+    email: string;
+    name?: string;
+    lines: { productId: string; quantity?: number }[];
+    note?: string;
+  }) =>
+    request<{ order: { id: string; orderNumber: string } }>("/merchant/orders/draft", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  submitSupport: (body: { subject: string; message: string }) =>
+    request<{ ok: boolean; message: string }>("/merchant/support", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  abandonedCartStats: () =>
+    request<{
+      openCarts: number;
+      openValueCents: number;
+      recoveryRatePct: number | null;
+      currency: string;
+    }>("/merchant/abandoned-carts/stats"),
+  marketingAbReport: (id: string) =>
+    request<{
+      openRatePct: number;
+      clickRatePct: number;
+      suggestedWinner: string | null;
+      note: string | null;
+      subjectA: string;
+      subjectB: string | null;
+    }>(`/merchant/marketing/campaigns/${id}/ab-report`),
   publishTheme: () =>
     request("/merchant/settings/publish-theme", { method: "POST" }),
   access: () =>
     request<{
       isOwner: boolean;
+      role: string | null;
       permissions: string[];
+      assignable: string[];
+      ownerOnly: string[];
+      labels: Record<string, string>;
+      presets: Record<string, { label: string; permissions: string[] }>;
+      totpEnabled: boolean;
+      needs2faForOrders: boolean;
+      needs2faForPayouts: boolean;
       all: string[];
     }>("/merchant/access"),
-  activityLog: () =>
-    request<{ logs: unknown[] }>("/merchant/activity-log"),
+  activityLog: (limit?: number) =>
+    request<{ logs: unknown[] }>(
+      `/merchant/activity-log${limit != null ? `?limit=${limit}` : ""}`
+    ),
   abandonedCarts: () =>
     request<{ carts: unknown[] }>("/merchant/abandoned-carts"),
+  sendAbandonedCartRecovery: (cartId: string) =>
+    request<{ sent: boolean; email: string }>(
+      `/merchant/abandoned-carts/${cartId}/send-recovery`,
+      { method: "POST" }
+    ),
   customerSegments: () => request("/merchant/customers/segments"),
   bulkExportOrders: async (ids: string[]) => {
     const res = await fetch(`${API}/merchant/orders/bulk-export`, {
@@ -579,6 +845,143 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
+
+  growth: () => request<Record<string, unknown>>("/merchant/growth"),
+
+  patchGrowthSettings: (body: Record<string, unknown>) =>
+    request("/merchant/growth/settings", {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+
+  createGiftCard: (body: Record<string, unknown>) =>
+    request("/merchant/growth/gift-cards", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  patchGiftCard: (id: string, body: Record<string, unknown>) =>
+    request(`/merchant/growth/gift-cards/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+
+  createBundle: (body: Record<string, unknown>) =>
+    request("/merchant/growth/bundles", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  patchBundle: (id: string, body: Record<string, unknown>) =>
+    request(`/merchant/growth/bundles/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+
+  createWarehouse: (body: Record<string, unknown>) =>
+    request("/merchant/growth/warehouses", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  setWarehouseStock: (
+    warehouseId: string,
+    body: { productId: string; variantId?: string; quantity: number }
+  ) =>
+    request(`/merchant/growth/warehouses/${warehouseId}/stock`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+
+  createMerchantWebhook: (body: Record<string, unknown>) =>
+    request("/merchant/growth/webhooks", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  deleteMerchantWebhook: (id: string) =>
+    request(`/merchant/growth/webhooks/${id}`, { method: "DELETE" }),
+
+  testMerchantWebhook: (id: string) =>
+    request(`/merchant/growth/webhooks/${id}/test`, { method: "POST" }),
+
+  createMerchantApiKey: (name: string) =>
+    request<{ secret: string }>("/merchant/growth/api-keys", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    }),
+
+  deleteMerchantApiKey: (id: string) =>
+    request(`/merchant/growth/api-keys/${id}`, { method: "DELETE" }),
+
+  growthSeoProducts: () =>
+    request<{ products: unknown[] }>("/merchant/growth/seo/products"),
+
+  bulkGrowthSeo: (items: { id: string; seoTitle?: string; seoDescription?: string }[]) =>
+    request("/merchant/growth/seo/bulk", {
+      method: "PATCH",
+      body: JSON.stringify({ items }),
+    }),
+
+  patchProductSubscription: (
+    id: string,
+    body: { subscriptionEnabled: boolean; subscriptionInterval?: string | null }
+  ) =>
+    request(`/merchant/growth/products/${id}/subscription`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+
+  editOrder: (id: string, body: Record<string, unknown>) =>
+    request<{ order: unknown }>(`/merchant/orders/${id}/edit`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+
+  setOrderTags: (id: string, tags: string[]) =>
+    request(`/merchant/orders/${id}/tags`, {
+      method: "PATCH",
+      body: JSON.stringify({ tags }),
+    }),
+
+  bulkOrderTags: (ids: string[], add: string[], remove: string[]) =>
+    request<{ updated: number }>("/merchant/orders/bulk-tags", {
+      method: "POST",
+      body: JSON.stringify({ ids, add, remove }),
+    }),
+
+  orderTagsList: () => request<{ tags: string[] }>("/merchant/orders/tags"),
+
+  inventory: () => request<Record<string, unknown>>("/merchant/inventory"),
+
+  inventoryLookup: (code: string) =>
+    request<{ product: unknown }>(
+      `/merchant/inventory/lookup?code=${encodeURIComponent(code)}`
+    ),
+
+  createInventoryTransfer: (body: Record<string, unknown>) =>
+    request("/merchant/inventory/transfers", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  receiveInventoryTransfer: (id: string) =>
+    request(`/merchant/inventory/transfers/${id}/receive`, { method: "POST" }),
+
+  createPurchaseOrder: (body: Record<string, unknown>) =>
+    request("/merchant/inventory/purchase-orders", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  receivePurchaseOrder: (id: string) =>
+    request(`/merchant/inventory/purchase-orders/${id}/receive`, { method: "POST" }),
+
+  previewShippingRates: (body: Record<string, unknown>) =>
+    request<{ configured: boolean; rates: unknown[] }>(
+      "/merchant/shipping/rates-preview",
+      { method: "POST", body: JSON.stringify(body) }
+    ),
 };
 
 export async function logout() {

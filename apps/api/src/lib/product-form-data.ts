@@ -66,11 +66,10 @@ export function mergeTranslationsWithSeo(
         ? { description: seoDescription || undefined }
         : {}),
     };
-    if (
-      translations._seo &&
-      !translations._seo.title &&
-      !translations._seo.description
-    ) {
+    const seoMeta = translations._seo as
+      | { title?: string; description?: string }
+      | undefined;
+    if (seoMeta && !seoMeta.title && !seoMeta.description) {
       delete translations._seo;
     }
   }

@@ -6,8 +6,9 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
-    "build": "tsc",
-    "lint": "tsc --noEmit"
+    "build": "npm run build -w @ugclab/i18n && npm run build -w @ugclab/tenant && tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "deploy": "cd ../.. && vercel --prod --yes"
   },
   "dependencies": {
     "@hono/node-server": "^1.14.4",

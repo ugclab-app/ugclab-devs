@@ -3,18 +3,57 @@ import { PromotionType, prisma } from "@ugclab/database";
 import type { AuthEnv } from "../middleware/session.js";
 import { requireAuth } from "../middleware/session.js";
 import { requireTenant } from "../lib/merchant.js";
-import { getMerchantAnalytics } from "../lib/analytics.js";
+import { getMerchantAnalytics, analyticsToCsv } from "../lib/analytics.js";
+import { parseAnalyticsRange } from "../lib/analytics-range.js";
+import {
+  getMerchantAccess,
+  hasPermission,
+} from "../lib/permissions.js";
+
+import { useOrderRouteGuards } from "../middleware/merchant-guards.js";
 
 const p3 = new Hono<AuthEnv>();
 p3.use("*", requireAuth);
+useOrderRouteGuards(p3);
 
 p3.get("/analytics", async (c) => {
-  const { tenant } = await requireTenant(c.get("session"));
-  const range = c.req.query("range") === "90" ? 90 : c.req.query("range") === "30" ? 30 : 7;
-  const analytics = await getMerchantAnalytics(tenant.id, range);
+  const { tenant, session } = await requireTenant(c.get("session"));
+  const access = await getMerchantAccess(session, tenant.id);
+  if (!hasPermission(access.permissions, "analytics")) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+  const rangeInput = parseAnalyticsRange({
+    range: c.req.query("range"),
+    from: c.req.query("from"),
+    to: c.req.query("to"),
+  });
+  const analytics = await getMerchantAnalytics(tenant.id, rangeInput);
   return c.json({
     currency: tenant.settings?.currency ?? "USD",
+    paymentModel: analytics.paymentModel,
     analytics,
+  });
+});
+
+p3.get("/analytics/export.csv", async (c) => {
+  const { tenant, session } = await requireTenant(c.get("session"));
+  const access = await getMerchantAccess(session, tenant.id);
+  if (!hasPermission(access.permissions, "analytics")) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+  const rangeInput = parseAnalyticsRange({
+    range: c.req.query("range"),
+    from: c.req.query("from"),
+    to: c.req.query("to"),
+  });
+  const analytics = await getMerchantAnalytics(tenant.id, rangeInput);
+  const currency = tenant.settings?.currency ?? "USD";
+  const csv = analyticsToCsv(analytics, currency);
+  return new Response(csv, {
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="analytics-${tenant.slug}.csv"`,
+    },
   });
 });
 

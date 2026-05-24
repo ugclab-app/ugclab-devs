@@ -1,15 +1,25 @@
-type SendEmailParams = {
+export type SendEmailParams = {
   to: string;
   subject: string;
   html: string;
   text?: string;
+  from?: string;
+  replyTo?: string;
 };
 
-export async function sendEmail({ to, subject, html, text }: SendEmailParams) {
+export async function sendEmail({
+  to,
+  subject,
+  html,
+  text,
+  from,
+  replyTo,
+  template,
+}: SendEmailParams & { template?: string }) {
   const resendKey = process.env.RESEND_API_KEY;
   const sendgridKey = process.env.SENDGRID_API_KEY;
-  const from =
-    process.env.EMAIL_FROM ?? "UGCLab Store <orders@ugclab.store>";
+  const fromHeader =
+    from ?? process.env.EMAIL_FROM ?? "Tescommerce <orders@tescommerce.com>";
 
   if (resendKey) {
     const res = await fetch("https://api.resend.com/emails", {
@@ -19,14 +29,17 @@ export async function sendEmail({ to, subject, html, text }: SendEmailParams) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from,
+        from: fromHeader,
         to: [to],
         subject,
         html,
         ...(text ? { text } : {}),
+        ...(replyTo ? { reply_to: replyTo } : {}),
       }),
     });
     if (!res.ok) throw new Error(`Resend error: ${await res.text()}`);
+    const { logPlatformEmail } = await import("./email-log.js");
+    await logPlatformEmail({ to, subject, template, status: "sent" });
     return;
   }
 
@@ -38,8 +51,16 @@ export async function sendEmail({ to, subject, html, text }: SendEmailParams) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        personalizations: [{ to: [{ email: to }] }],
-        from: { email: from.match(/<([^>]+)>/)?.[1] ?? from },
+        personalizations: [
+          {
+            to: [{ email: to }],
+            ...(replyTo ? { headers: { "Reply-To": replyTo } } : {}),
+          },
+        ],
+        from: {
+          email: fromHeader.match(/<([^>]+)>/)?.[1] ?? fromHeader,
+          name: fromHeader.match(/^([^<]+)</)?.[1]?.trim(),
+        },
         subject,
         content: [
           ...(text ? [{ type: "text/plain", value: text }] : []),
@@ -48,8 +69,12 @@ export async function sendEmail({ to, subject, html, text }: SendEmailParams) {
       }),
     });
     if (!res.ok) throw new Error(`SendGrid error: ${await res.text()}`);
+    const { logPlatformEmail } = await import("./email-log.js");
+    await logPlatformEmail({ to, subject, template, status: "sent" });
     return;
   }
 
   console.warn("[email] No RESEND_API_KEY or SENDGRID_API_KEY — skipped:", subject);
+  const { logPlatformEmail } = await import("./email-log.js");
+  await logPlatformEmail({ to, subject, template, status: "skipped" });
 }

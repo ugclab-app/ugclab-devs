@@ -13,6 +13,8 @@ import { LowStockAlert } from "@/components/low-stock-alert";
 import { StripeConnectBanner } from "@/components/stripe-connect-banner";
 import { OnboardingWizard } from "@/components/onboarding-wizard";
 import { StoreUrlCard } from "@/components/store-url-card";
+import { FirstSalePanel } from "@/components/first-sale-panel";
+import { PlanLimitsBanner } from "@/components/plan-limits-banner";
 
 export default function DashboardPage() {
   const { tenant } = useAuth();
@@ -52,9 +54,35 @@ export default function DashboardPage() {
   };
 
   const currency = data.currency;
+  const firstSale =
+    (metrics as {
+      firstSale?: {
+        hasFirstSale: boolean;
+        firstSaleAt: string | null;
+        hoursToFirstSale: number | null;
+        firstOrderNumber: string | null;
+        firstOrderAmount: number | null;
+      };
+    }).firstSale ??
+    ({
+      hasFirstSale: metrics.paidOrderCount > 0,
+      firstSaleAt: null,
+      hoursToFirstSale: null,
+      firstOrderNumber: null,
+      firstOrderAmount: null,
+    } as const);
+  const planLimits = (data as { planLimits?: { planName: string; productLimit: number | null; productCount: number; staffCount: number } }).planLimits;
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
+      {planLimits ? (
+        <PlanLimitsBanner
+          planName={planLimits.planName}
+          productCount={planLimits.productCount}
+          productLimit={planLimits.productLimit}
+          staffCount={planLimits.staffCount}
+        />
+      ) : null}
       <OnboardingWizard
         tenantSlug={tenant.slug}
         productCount={metrics.productCount}
@@ -68,6 +96,8 @@ export default function DashboardPage() {
       </div>
 
       <NotificationsBar />
+
+      <FirstSalePanel firstSale={firstSale} currency={currency} />
 
       <StripeConnectBanner />
 

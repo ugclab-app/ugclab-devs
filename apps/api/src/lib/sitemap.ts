@@ -1,5 +1,6 @@
 import { ProductStatus, prisma } from "@ugclab/database";
 import { getStorefrontUrl } from "./storefront.js";
+import { storePagePublicWhere } from "./store-page.js";
 
 function xmlEscape(s: string): string {
   return s
@@ -34,8 +35,8 @@ export async function buildStoreSitemapXml(tenantId: string, slug: string): Prom
       select: { slug: true, createdAt: true },
     }),
     prisma.storePage.findMany({
-      where: { tenantId, published: true },
-      select: { slug: true, updatedAt: true },
+      where: { ...storePagePublicWhere(tenantId), noindex: false },
+      select: { slug: true, pageType: true, updatedAt: true },
     }),
   ]);
 
@@ -66,11 +67,17 @@ export async function buildStoreSitemapXml(tenantId: string, slug: string): Prom
     }
   }
 
+  for (const loc of locales) {
+    urls.push({ loc: pageUrl(base, "/blog", loc) });
+  }
+
   for (const pg of pages) {
     const lastmod = pg.updatedAt.toISOString().slice(0, 10);
+    const path =
+      pg.pageType === "BLOG" ? `/blog/${pg.slug}` : `/pages/${pg.slug}`;
     for (const loc of locales) {
       urls.push({
-        loc: pageUrl(base, `/pages/${pg.slug}`, loc),
+        loc: pageUrl(base, path, loc),
         lastmod,
       });
     }

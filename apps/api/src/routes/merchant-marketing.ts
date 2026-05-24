@@ -51,6 +51,45 @@ function parseSegmentParams(body: Record<string, unknown>) {
   };
 }
 
+marketing.get("/marketing/campaigns/:id/ab-report", async (c) => {
+  const { tenant, access } = await actor(c);
+  if (!hasPermission(access.permissions, "marketing")) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+  const campaign = await prisma.emailCampaign.findFirst({
+    where: { id: c.req.param("id"), tenantId: tenant.id },
+  });
+  if (!campaign) return c.json({ error: "Not found" }, 404);
+  const sent = campaign.sentCount || 0;
+  const openRate = sent > 0 ? Math.round((campaign.openCount / sent) * 1000) / 10 : 0;
+  const clickRate = sent > 0 ? Math.round((campaign.clickCount / sent) * 1000) / 10 : 0;
+  const hasAb = Boolean(campaign.subjectB?.trim() && campaign.abTestPercent > 0);
+  let winner: string | null = null;
+  if (hasAb && sent > 0) {
+    winner =
+      openRate >= 15
+        ? campaign.subject
+        : campaign.subjectB ?? campaign.subject;
+  }
+  return c.json({
+    campaignId: campaign.id,
+    status: campaign.status,
+    sentCount: sent,
+    openCount: campaign.openCount,
+    clickCount: campaign.clickCount,
+    openRatePct: openRate,
+    clickRatePct: clickRate,
+    hasAbTest: hasAb,
+    abTestPercent: campaign.abTestPercent,
+    subjectA: campaign.subject,
+    subjectB: campaign.subjectB,
+    suggestedWinner: winner,
+    note: hasAb
+      ? `~${campaign.abTestPercent}% of sends used subject B. Pick winner by open rate and duplicate the campaign with the winning subject.`
+      : null,
+  });
+});
+
 marketing.get("/marketing/campaigns", async (c) => {
   const { tenant, access } = await actor(c);
   if (!hasPermission(access.permissions, "marketing")) {
@@ -313,7 +352,12 @@ marketing.post("/marketing/campaigns/:id/test", async (c) => {
     return c.json({ error: "Email provider not configured" }, 503);
   }
 
-  const body = await c.req.json<{ email?: string }>().catch(() => ({}));
+  let body: { email?: string } = {};
+  try {
+    body = await c.req.json<{ email?: string }>();
+  } catch {
+    /* empty body */
+  }
   const to = body.email?.trim() || userEmail;
   if (!to) return c.json({ error: "Email required" }, 400);
 

@@ -10,6 +10,9 @@ export type SessionPayload = {
   email: string;
   name: string | null;
   role: string;
+  sv: number;
+  impBy?: string;
+  impEmail?: string;
 };
 
 function secretKey() {
@@ -17,7 +20,13 @@ function secretKey() {
 }
 
 export async function signSession(payload: SessionPayload) {
-  return new SignJWT({ email: payload.email, name: payload.name, role: payload.role })
+  return new SignJWT({
+    email: payload.email,
+    name: payload.name,
+    role: payload.role,
+    sv: payload.sv,
+    ...(payload.impBy ? { impBy: payload.impBy, impEmail: payload.impEmail } : {}),
+  })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(payload.sub)
     .setIssuedAt()
@@ -34,6 +43,9 @@ export async function verifySession(token: string): Promise<SessionPayload | nul
       email: String(payload.email ?? ""),
       name: payload.name ? String(payload.name) : null,
       role: String(payload.role ?? "MERCHANT"),
+      sv: Number(payload.sv ?? 0),
+      impBy: payload.impBy ? String(payload.impBy) : undefined,
+      impEmail: payload.impEmail ? String(payload.impEmail) : undefined,
     };
   } catch {
     return null;

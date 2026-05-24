@@ -6,8 +6,10 @@ import { useAuth } from "@/context/auth";
 import { SettingsForm } from "@/components/settings-form";
 import { StorefrontPreview } from "@/components/storefront-preview";
 import { StoreQrCode } from "@/components/store-qr-code";
-import { StaffPanel } from "@/components/staff-panel";
+import { ProfileAvatarPanel, StaffPanel } from "@/components/staff-panel";
 import { SecurityPanel } from "@/components/security-panel";
+import { TeamActivityPreview } from "@/components/team-activity-preview";
+import { usePermissions } from "@/hooks/use-permissions";
 import { DomainsPanel } from "@/components/domains-panel";
 import { PaymentsPanel } from "@/components/payments-panel";
 import { BillingPanel } from "@/components/billing-panel";
@@ -15,9 +17,14 @@ import { SettingsPanelShell } from "@/components/settings-section";
 import { SettingsTabs, type SettingsTabId } from "@/components/settings-tabs";
 import { CopyStoreUrl } from "@/components/copy-store-url";
 import { getStorefrontUrl } from "@/lib/storefront";
+import { AdminPageShell } from "@/components/admin-page-shell";
+import { useAdminLocale } from "@/context/admin-locale";
+import type { Locale } from "@ugclab/i18n";
 
 export default function SettingsPage() {
   const { tenant } = useAuth();
+  const { isOwner, can } = usePermissions();
+  const { locale, setLocale, t } = useAdminLocale();
   const { data } = useQuery({ queryKey: ["settings"], queryFn: () => api.settings() });
   const [params] = useSearchParams();
   const tabParam = params.get("tab");
@@ -57,6 +64,12 @@ export default function SettingsPage() {
     timezone: s?.timezone ?? "UTC",
     primaryColor: s?.primaryColor ?? "#7c3aed",
     logoUrl: s?.logoUrl ?? "",
+    faviconUrl: (s as { faviconUrl?: string })?.faviconUrl ?? "",
+    contactEmail: (s as { contactEmail?: string })?.contactEmail ?? "",
+    contactPhone: (s as { contactPhone?: string })?.contactPhone ?? "",
+    businessAddress: (s as { businessAddress?: string })?.businessAddress ?? "",
+    emailFromName: (s as { emailFromName?: string })?.emailFromName ?? "",
+    emailReplyTo: (s as { emailReplyTo?: string })?.emailReplyTo ?? "",
     privacyUrl: s?.privacyUrl ?? "",
     refundUrl: s?.refundUrl ?? "",
     privacyPolicy: (s as { privacyPolicy?: string })?.privacyPolicy ?? "",
@@ -75,44 +88,54 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="settings-page mx-auto max-w-4xl">
-      <header className="settings-page-header">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Settings</h1>
-          <p className="mt-1 text-sm text-zinc-500">
-            Store identity, payments, domain, and policies.
-          </p>
+    <AdminPageShell
+      wide
+      crumbs={[{ label: "Settings" }]}
+      title="Settings"
+      description="Store identity, payments, domain, and policies."
+      actions={
+        <div className="flex flex-wrap items-center gap-2">
+          <CopyStoreUrl url={storeUrl} />
+          <a
+            href={storeUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="ugclab-btn border border-zinc-200 bg-white px-3 py-2 text-sm"
+          >
+            Open store
+          </a>
         </div>
-        <div className="settings-store-url-bar">
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">
-              Store URL
-            </p>
-            <p className="mt-0.5 truncate font-mono text-sm text-violet-700">{storeUrl}</p>
-          </div>
-          <div className="flex shrink-0 gap-2">
-            <CopyStoreUrl url={storeUrl} />
-            <a
-              href={storeUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="ugclab-btn border border-zinc-200 bg-white px-3 py-2 text-sm"
-            >
-              Open store
-            </a>
-          </div>
-        </div>
-      </header>
-
-      <SettingsTabs active={tab} onChange={setTab} />
+      }
+    >
+      <p className="mb-4 truncate font-mono text-sm text-violet-700">{storeUrl}</p>
+      <label className="mb-4 flex items-center gap-2 text-sm text-zinc-600">
+        {t.language ?? "Language"}
+        <select
+          className="ugclab-select"
+          value={locale}
+          onChange={(e) => setLocale(e.target.value as Locale)}
+        >
+          <option value="en">English</option>
+          <option value="ru">Русский</option>
+        </select>
+      </label>
+      <SettingsTabs
+        active={tab}
+        onChange={setTab}
+        visibleIds={
+          isOwner
+            ? undefined
+            : ["general", "team", "policies"]
+        }
+      />
 
       <div className="mt-6">
         {tab === "general" && (
           <SettingsForm storeUrl={storeUrl} initial={formInitial} mode="general" />
         )}
-        {tab === "billing" && <BillingPanel />}
-        {tab === "payments" && <PaymentsPanel />}
-        {tab === "domain" && (
+        {tab === "billing" && isOwner && <BillingPanel />}
+        {tab === "payments" && (isOwner || can("payments")) && <PaymentsPanel />}
+        {tab === "domain" && isOwner && (
           <div className="space-y-6">
             <DomainsPanel />
             <SettingsPanelShell
@@ -144,8 +167,10 @@ export default function SettingsPage() {
         )}
         {tab === "team" && (
           <div className="space-y-6">
+            <ProfileAvatarPanel />
             <StaffPanel />
             <SecurityPanel />
+            <TeamActivityPreview />
             {data ? (
               <p
                 className={`rounded-lg px-4 py-3 text-sm ${
@@ -165,6 +190,6 @@ export default function SettingsPage() {
           <SettingsForm storeUrl={storeUrl} initial={formInitial} mode="policies" />
         )}
       </div>
-    </div>
+    </AdminPageShell>
   );
 }

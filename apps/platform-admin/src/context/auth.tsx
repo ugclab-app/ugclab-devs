@@ -23,7 +23,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refresh = useCallback(async () => {
     try {
       const data = await api.me();
-      if (data.user?.role === "SUPER_ADMIN") {
+      const staffRoles = [
+        "SUPER_ADMIN",
+        "PLATFORM_OPS",
+        "PLATFORM_SUPPORT",
+        "PLATFORM_FINANCE",
+      ];
+      if (data.user?.role && staffRoles.includes(data.user.role)) {
         setUser(data.user);
       } else {
         setUser(null);

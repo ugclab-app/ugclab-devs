@@ -55,7 +55,7 @@ export default function PageBuilderPage() {
     setPending(true);
     try {
       const pageBlocks = { ...(draftTheme.pageBlocks ?? {}), [slug]: homeBlocksRef.current };
-      await api.updateSettings({
+      await api.updateThemeDraft({
         themeDraft: {
           ...draftTheme,
           pageBlocks,
@@ -94,6 +94,28 @@ export default function PageBuilderPage() {
           onClick={() => void saveBlocks()}
         >
           {pending ? "Saving…" : "Save page layout"}
+        </button>
+        <button
+          type="button"
+          disabled={pending}
+          className="ugclab-btn border border-violet-200 bg-violet-50 text-violet-800"
+          onClick={async () => {
+            setPending(true);
+            try {
+              await saveBlocks();
+              await api.publishTheme();
+              setAlert({ ok: true, message: "Page published to live store" });
+            } catch (e) {
+              setAlert({
+                ok: false,
+                message: e instanceof Error ? e.message : "Publish failed",
+              });
+            } finally {
+              setPending(false);
+            }
+          }}
+        >
+          Save & publish store
         </button>
       </div>
       <FormAlert ok={alert.ok} message={alert.message} />

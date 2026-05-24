@@ -1,0 +1,5 @@
+ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "payoutCurrency" CHAR(3);
+ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "taxFormType" TEXT;
+ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "taxFormLegalName" TEXT;
+ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "taxFormId" TEXT;
+ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "notifyPayoutFailed" BOOLEAN NOT NULL DEFAULT true;

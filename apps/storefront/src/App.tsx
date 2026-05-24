@@ -36,7 +36,7 @@ export default function App() {
         <Route path="blog" element={<BlogPage />} />
         <Route path="blog/:slug" element={<BlogPostPage />} />
       </Route>
-      <Route path="*" element={<Navigate to="/?tenant=demo&locale=en" replace />} />
+      <Route path="*" element={<Navigate to="/?tenant=tescommerce&locale=en" replace />} />
     </Routes>
   );
 }

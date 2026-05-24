@@ -1,5 +1,5 @@
 import { prisma } from "@ugclab/database";
-import { sendEmail } from "./email.js";
+import { sendStoreEmail } from "./tenant-email.js";
 import { getStorefrontUrl } from "./storefront.js";
 
 export async function sendShippingNotification(orderId: string) {
@@ -17,9 +17,10 @@ export async function sendShippingNotification(orderId: string) {
     ? `${storeUrl}/orders/${order.id}?token=${order.accessToken}`
     : storeUrl;
 
-  await sendEmail({
+  const subject = `Your order #${order.orderNumber} has shipped`;
+  await sendStoreEmail(order.tenantId, {
     to: email,
-    subject: `Your order #${order.orderNumber} has shipped`,
+    subject,
     html: `
       <p>Hi${order.shippingName ? ` ${order.shippingName}` : ""},</p>
       <p>Your order <strong>#${order.orderNumber}</strong> is on the way.</p>
@@ -27,4 +28,7 @@ export async function sendShippingNotification(orderId: string) {
       <p><a href="${trackUrl}">View order</a></p>
     `,
   });
+
+  const { logOrderEmailEvent } = await import("./order-events.js");
+  await logOrderEmailEvent(orderId, `Shipping email: ${subject}`);
 }

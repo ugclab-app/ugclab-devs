@@ -64,7 +64,22 @@ export type StoreContextDto = {
     refundUrl?: string | null;
     privacyPolicy?: string | null;
     refundPolicy?: string | null;
+    faviconUrl?: string | null;
+    contactEmail?: string | null;
+    contactPhone?: string | null;
+    businessAddress?: string | null;
   } | null;
+  integrations?: {
+    metaPixelId?: string;
+    gaMeasurementId?: string;
+    tiktokPixelId?: string;
+    gtmId?: string;
+  };
+  postCheckoutUpsell?: {
+    enabled?: boolean;
+    headline?: string;
+    productIds?: string[];
+  };
 };
 
 export const storeApi = {
@@ -203,6 +218,35 @@ export const storeApi = {
       { method: "POST", body: JSON.stringify({ code, subtotalAmount }) }
     ),
 
+  shippingRates: (
+    tenant: string,
+    body: { country: string; city?: string; postal?: string; weightGrams?: number }
+  ) =>
+    request<{
+      rates: { id: string; label: string; amountCents: number; provider: string }[];
+    }>(`/checkout/shipping-rates${qs({ tenant })}`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  validateGiftCard: (tenant: string, code: string, orderTotal: number) =>
+    request<{ giftCardAmount: number; code?: string }>(
+      `/checkout/validate-gift-card${qs({ tenant })}`,
+      { method: "POST", body: JSON.stringify({ code, orderTotal }) }
+    ),
+
+  upsellProducts: (tenant: string) =>
+    request<{
+      headline: string;
+      products: {
+        id: string;
+        title: string;
+        slug: string;
+        priceAmount: number;
+        currency: string;
+      }[];
+    }>(`/upsell-products${qs({ tenant })}`),
+
   placeOrder: (tenant: string, body: Record<string, unknown>) =>
     request<
       | { mode: "stripe"; orderId: string; orderNumber: string; checkoutUrl: string }
@@ -258,25 +302,60 @@ export const storeApi = {
       }>;
     }>(`/wishlist${qs({ tenant, ids: ids.join(",") })}`),
 
-  page: (tenant: string, slug: string) =>
+  page: (tenant: string, slug: string, preview?: boolean) =>
     request<{
       page: {
         title: string;
         slug: string;
         body: string;
+        excerpt?: string | null;
+        seoTitle?: string;
+        seoDescription?: string;
+        ogImageUrl?: string;
+        noindex?: boolean;
+        canonicalUrl?: string;
         blocks?: import("@ugclab/tenant/store-theme").HomeBlock[] | null;
       };
-    }>(`/pages/${slug}${qs({ tenant })}`),
+    }>(`/pages/${slug}${qs({ tenant, ...(preview ? { preview: "1" } : {}) })}`),
 
-  blogPosts: (tenant: string) =>
+  blogPosts: (
+    tenant: string,
+    opts?: { tag?: string; sort?: string }
+  ) =>
     request<{
-      posts: Array<{ title: string; slug: string; body: string; createdAt: string }>;
-    }>(`/blog${qs({ tenant })}`),
+      posts: Array<{
+        title: string;
+        slug: string;
+        excerpt: string;
+        featuredImageUrl: string | null;
+        authorName: string | null;
+        tags: string[];
+        createdAt: string;
+        publishedAt: string;
+      }>;
+    }>(`/blog${qs({ tenant, ...opts })}`),
 
-  blogPost: (tenant: string, slug: string) =>
-    request<{ post: { title: string; slug: string; body: string } }>(
-      `/blog/${slug}${qs({ tenant })}`
-    ),
+  blogPost: (tenant: string, slug: string, preview?: boolean) =>
+    request<{
+      post: {
+        title: string;
+        slug: string;
+        body: string;
+        excerpt: string | null;
+        featuredImageUrl: string | null;
+        authorName: string | null;
+        tags: string[];
+        seoTitle?: string;
+        seoDescription?: string;
+        ogImageUrl?: string;
+        noindex?: boolean;
+        canonicalUrl?: string;
+        publishedAt: string;
+      };
+    }>(`/blog/${slug}${qs({ tenant, ...(preview ? { preview: "1" } : {}) })}`),
+
+  blogRssUrl: (tenant: string) =>
+    `/api/store/blog/rss.xml${qs({ tenant })}`,
 
   storeReviews: (tenant: string, limit = 8) =>
     request<{
@@ -289,6 +368,15 @@ export const storeApi = {
         product: { title: string; slug: string } | null;
       }>;
     }>(`/reviews${qs({ tenant, limit: String(limit) })}`),
+
+  contact: (
+    tenant: string,
+    body: { name: string; email: string; message: string }
+  ) =>
+    request<{ ok: boolean }>(`/contact${qs({ tenant })}`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 
   newsletterSubscribe: (tenant: string, email: string) =>
     request<{ ok: boolean }>(`/newsletter/subscribe${qs({ tenant })}`, {

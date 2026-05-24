@@ -44,11 +44,13 @@ export function OnboardingWizard({
     setStoreDone(true);
   }
 
+  const morPayments = stripe?.paymentModel === "mor";
+
   const steps = [
     {
       id: "stripe",
       done: stripe?.paymentsReady,
-      title: "Connect Stripe",
+      title: morPayments ? "Payments enabled" : "Connect Stripe",
       href: "/payments",
       cta: "Payments",
     },

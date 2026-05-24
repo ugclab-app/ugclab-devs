@@ -6,6 +6,12 @@ import {
   ProductType,
   UserRole,
 } from "@prisma/client";
+import {
+  TESCOMMERCE_DOMAIN,
+  TESCOMMERCE_SLUG,
+  tescommerceSettings,
+  tescommerceTheme,
+} from "./tescommerce-data.js";
 
 const prisma = new PrismaClient();
 
@@ -70,33 +76,36 @@ async function main() {
   });
 
   const tenant = await prisma.tenant.upsert({
-    where: { slug: "demo" },
+    where: { slug: TESCOMMERCE_SLUG },
     update: {
+      status: "ACTIVE",
       ownerId: user.id,
-      name: "Demo Store",
+      name: "Tescommerce",
       settings: {
         upsert: {
           create: {
-            defaultLocale: "en",
-            enabledLocales: ["en", "de"],
-            currency: "USD",
-            primaryColor: "#7c3aed",
+            ...tescommerceSettings,
+            theme: tescommerceTheme,
+            themeDraft: tescommerceTheme,
           },
-          update: { enabledLocales: ["en", "de"] },
+          update: {
+            ...tescommerceSettings,
+            theme: tescommerceTheme,
+            themeDraft: tescommerceTheme,
+          },
         },
       },
     },
     create: {
-      slug: "demo",
-      name: "Demo Store",
+      slug: TESCOMMERCE_SLUG,
+      name: "Tescommerce",
       ownerId: user.id,
       subscriptionPlanId: plan.id,
       settings: {
         create: {
-          defaultLocale: "en",
-          enabledLocales: ["en", "de"],
-          currency: "USD",
-          primaryColor: "#7c3aed",
+          ...tescommerceSettings,
+          theme: tescommerceTheme,
+          themeDraft: tescommerceTheme,
         },
       },
       shippingZones: {
@@ -115,6 +124,28 @@ async function main() {
           },
         ],
       },
+    },
+  });
+
+  await prisma.customDomain.upsert({
+    where: { domain: TESCOMMERCE_DOMAIN },
+    update: { tenantId: tenant.id, verified: true },
+    create: {
+      tenantId: tenant.id,
+      domain: TESCOMMERCE_DOMAIN,
+      verified: true,
+      verificationToken: "seed",
+    },
+  });
+
+  await prisma.customDomain.upsert({
+    where: { domain: `www.${TESCOMMERCE_DOMAIN}` },
+    update: { tenantId: tenant.id, verified: true },
+    create: {
+      tenantId: tenant.id,
+      domain: `www.${TESCOMMERCE_DOMAIN}`,
+      verified: true,
+      verificationToken: "seed",
     },
   });
 
@@ -142,9 +173,9 @@ async function main() {
       tenantId: tenant.id,
       type: ProductType.DIGITAL,
       status: ProductStatus.ACTIVE,
-      title: "Lightroom Preset Pack",
+      title: "Creator Essentials Kit",
       slug: "preset-pack",
-      description: "50 professional presets for global creators.",
+      description: "Digital bundle for content creators — presets, templates, and guides.",
       translations: {
         de: {
           title: "Lightroom Preset Paket",
@@ -173,9 +204,9 @@ async function main() {
       tenantId: tenant.id,
       type: ProductType.PHYSICAL,
       status: ProductStatus.ACTIVE,
-      title: "UGC Creator Tee",
+      title: "Tescommerce Classic Tee",
       slug: "merch-tee",
-      description: "Premium cotton tee, ships worldwide.",
+      description: "Premium cotton tee — ships worldwide from Tescommerce.",
       priceAmount: 3500,
       currency: "USD",
       inventory: 100,
@@ -269,8 +300,9 @@ async function main() {
   console.log("  Platform admin: founder@ugclab.store / founder1234  → http://localhost:3003");
   console.log("  Discount code: WELCOME10 (10% off)");
   console.log("  Merchant: demo@ugclab.store / demo1234");
-  console.log("  Store slug: demo");
-  console.log("  Storefront: http://localhost:3002?tenant=demo");
+  console.log(`  Store slug: ${TESCOMMERCE_SLUG}`);
+  console.log(`  Domain: ${TESCOMMERCE_DOMAIN} (verified in seed)`);
+  console.log(`  Storefront: http://localhost:3002?tenant=${TESCOMMERCE_SLUG}`);
 }
 
 main()

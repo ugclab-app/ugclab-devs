@@ -1,8 +1,7 @@
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { formatMoney } from "@ugclab/i18n";
-import { moneyLocaleFor } from "@ugclab/i18n/store-currency";
+import { formatMoney, moneyLocaleFor } from "@ugclab/i18n";
 import { storeApi } from "@/api/client";
 import { useStoreParams } from "@/hooks/use-store-params";
 import { productImageUrl } from "@/lib/product-images";

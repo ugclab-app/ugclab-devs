@@ -11,7 +11,7 @@
     "dev:react": "turbo run dev --filter=@ugclab/api --filter=@ugclab/merchant-web",
     "dev:platform-admin": "turbo run dev --filter=@ugclab/api --filter=@ugclab/platform-admin",
     "dev:store": "npm run dev -w @ugclab/storefront",
-    "dev:platform": "npm run dev -w @ugclab/platform",
+    "dev:platform": "turbo run dev --filter=@ugclab/api --filter=@ugclab/platform",
     "build": "turbo build",
     "lint": "turbo lint",
     "db:generate": "npm run db:generate -w @ugclab/database",
@@ -21,7 +21,9 @@
     "db:push:force": "npm run db:push:force -w @ugclab/database",
     "db:seed": "npm run db:seed -w @ugclab/database",
     "db:studio": "npm run db:studio -w @ugclab/database",
-    "verify:demo": "node scripts/verify-demo-login.mjs"
+    "verify:demo": "node scripts/verify-demo-login.mjs",
+    "e2e:checkout": "node scripts/e2e-checkout-flow.mjs",
+    "deploy:api": "npm run deploy -w @ugclab/api"
   },
   "devDependencies": {
     "turbo": "^2.5.4",

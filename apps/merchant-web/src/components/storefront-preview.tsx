@@ -10,9 +10,12 @@ const PREVIEW_PAGES = [
 export function StorefrontPreview({
   baseUrl,
   productSlug,
+  refreshKey = 0,
 }: {
   baseUrl: string;
   productSlug?: string | null;
+  /** Bump after saving draft to reload the iframe. */
+  refreshKey?: number;
 }) {
   const [page, setPage] = useState<(typeof PREVIEW_PAGES)[number]["id"]>("home");
   const [loaded, setLoaded] = useState(true);
@@ -26,8 +29,9 @@ export function StorefrontPreview({
     }
     u.pathname = path || "/";
     if (!u.searchParams.has("preview")) u.searchParams.set("preview", "1");
+    if (refreshKey > 0) u.searchParams.set("_draft", String(refreshKey));
     return u.toString();
-  }, [baseUrl, page, productSlug]);
+  }, [baseUrl, page, productSlug, refreshKey]);
 
   return (
     <section className="admin-card overflow-hidden">

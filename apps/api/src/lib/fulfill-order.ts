@@ -7,6 +7,8 @@ import { newDownloadToken } from "./checkout.js";
 import { sendCustomerOrderReceipt } from "./order-emails.js";
 import { notifyMerchantNewOrder } from "./notifications.js";
 import { triggerPostPurchaseEmail } from "./email-automations.js";
+import { dispatchMerchantWebhooks } from "./merchant-webhooks.js";
+import { fulfillInventoryForOrder } from "./inventory.js";
 
 /** Mark order paid, decrement stock, create digital downloads, send emails. */
 export async function fulfillPaidOrder(
@@ -61,6 +63,13 @@ export async function fulfillPaidOrder(
       });
     }
 
+    if (order.giftCardId && order.giftCardAmount > 0) {
+      await tx.giftCard.update({
+        where: { id: order.giftCardId },
+        data: { balanceCents: { decrement: order.giftCardAmount } },
+      });
+    }
+
     for (const line of order.items) {
       const product = line.product;
       if (!product) continue;
@@ -93,6 +102,7 @@ export async function fulfillPaidOrder(
   });
 
   try {
+    await fulfillInventoryForOrder(orderId);
     await sendCustomerOrderReceipt(orderId);
     await notifyMerchantNewOrder(orderId);
     const full = await prisma.order.findUnique({
@@ -109,6 +119,13 @@ export async function fulfillPaidOrder(
   } catch {
     /* optional */
   }
+
+  dispatchMerchantWebhooks(order.tenantId, "order.paid", {
+    orderId: order.id,
+    orderNumber: order.orderNumber,
+    totalAmount: order.totalAmount,
+    currency: order.currency,
+  }).catch(console.error);
 
   return prisma.order.findUnique({
     where: { id: orderId },

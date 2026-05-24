@@ -1,5 +1,5 @@
 import { EmailAutomationType, OrderStatus, prisma } from "@ugclab/database";
-import { sendEmail } from "./email.js";
+import { sendStoreEmail } from "./tenant-email.js";
 import {
   buildCampaignEmail,
   buildPersonalizeContext,
@@ -81,7 +81,7 @@ async function sendAutomation(
     null
   );
   const storeUrl = getStorefrontUrl(auto.tenant.slug);
-  await sendEmail({
+  await sendStoreEmail(tenantId, {
     to: email,
     subject,
     html: wrapShell(auto.tenant.name, html, storeUrl),

@@ -17,6 +17,14 @@ import {
   PricingBlockSection,
   SpacerBlockSection,
 } from "@/components/home-extra-blocks";
+import {
+  BlogFeedBlockSection,
+  CarouselBlockSection,
+  ContactFormBlockSection,
+  InstagramEmbedBlockSection,
+  ProductCompareBlockSection,
+  TabsBlockSection,
+} from "@/components/builder-extra-blocks";
 import { ScrollReveal } from "@/components/scroll-reveal";
 
 function TextBannerSection({ block }: { block: HomeBlock }) {
@@ -90,6 +98,12 @@ const CMS_BLOCK_TYPES = new Set<HomeBlock["type"]>([
   "map",
   "logos",
   "pricing",
+  "contact_form",
+  "tabs",
+  "blog_feed",
+  "carousel",
+  "instagram_embed",
+  "product_compare",
 ]);
 
 export function StoreBlockRenderer({
@@ -165,6 +179,16 @@ export function StoreBlockRenderer({
     if (block.type === "map") emit(block.id, <MapBlockSection block={block} />);
     if (block.type === "logos") emit(block.id, <LogosBlockSection block={block} />);
     if (block.type === "pricing") emit(block.id, <PricingBlockSection block={block} nav={nav} />);
+    if (block.type === "contact_form") emit(block.id, <ContactFormBlockSection block={block} />);
+    if (block.type === "tabs") emit(block.id, <TabsBlockSection block={block} />);
+    if (block.type === "blog_feed") emit(block.id, <BlogFeedBlockSection block={block} />);
+    if (block.type === "carousel") emit(block.id, <CarouselBlockSection block={block} />);
+    if (block.type === "instagram_embed") {
+      emit(block.id, <InstagramEmbedBlockSection block={block} />);
+    }
+    if (block.type === "product_compare") {
+      emit(block.id, <ProductCompareBlockSection block={block} />);
+    }
   }
 
   return (

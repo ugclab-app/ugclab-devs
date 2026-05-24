@@ -1,11 +1,19 @@
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatMoney } from "@ugclab/i18n";
 import { api } from "@/api/client";
 import { AdminPageShell } from "@/components/admin-page-shell";
 import { EmptyState } from "@/components/empty-state";
 
 export default function AbandonedCartsPage() {
+  const qc = useQueryClient();
+  const [alert, setAlert] = useState("");
+  const [sending, setSending] = useState<string | null>(null);
+  const { data: stats } = useQuery({
+    queryKey: ["abandoned-cart-stats"],
+    queryFn: () => api.abandonedCartStats(),
+  });
   const { data, isLoading } = useQuery({
     queryKey: ["abandoned-carts"],
     queryFn: () => api.abandonedCarts(),
@@ -41,6 +49,34 @@ export default function AbandonedCartsPage() {
         </Link>
       }
     >
+      {stats ? (
+        <div className="mb-4 grid gap-3 sm:grid-cols-4">
+          <div className="admin-card p-4">
+            <p className="text-xs text-zinc-500">Open carts</p>
+            <p className="text-xl font-bold">{stats.openCarts}</p>
+          </div>
+          <div className="admin-card p-4">
+            <p className="text-xs text-zinc-500">Open value</p>
+            <p className="text-xl font-bold">
+              {formatMoney(stats.openValueCents, stats.currency)}
+            </p>
+          </div>
+          <div className="admin-card p-4">
+            <p className="text-xs text-zinc-500">Recovery rate</p>
+            <p className="text-xl font-bold">
+              {stats.recoveryRatePct != null ? `${stats.recoveryRatePct}%` : "—"}
+            </p>
+          </div>
+          <div className="admin-card p-4 text-xs text-zinc-500">
+            Recovery = carts that converted after at least one reminder email.
+          </div>
+        </div>
+      ) : null}
+      {alert ? (
+        <p className="mb-4 rounded-lg border border-violet-100 bg-violet-50 px-4 py-2 text-sm text-violet-900">
+          {alert}
+        </p>
+      ) : null}
       {carts.length > 0 ? (
         <p className="mb-4 text-sm text-zinc-600">
           {carts.length} cart{carts.length === 1 ? "" : "s"} · potential{" "}
@@ -61,6 +97,7 @@ export default function AbandonedCartsPage() {
                 <th className="px-6 py-3">Value</th>
                 <th className="px-6 py-3">Reminders</th>
                 <th className="px-6 py-3">Updated</th>
+                <th className="px-6 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100">
@@ -76,6 +113,32 @@ export default function AbandonedCartsPage() {
                   </td>
                   <td className="px-6 py-4 text-zinc-500">
                     {new Date(cart.updatedAt).toLocaleString()}
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    {cart.email ? (
+                      <button
+                        type="button"
+                        disabled={sending === cart.id}
+                        className="text-sm font-semibold text-violet-600 hover:text-violet-700 disabled:opacity-50"
+                        onClick={async () => {
+                          setSending(cart.id);
+                          setAlert("");
+                          try {
+                            const r = await api.sendAbandonedCartRecovery(cart.id);
+                            setAlert(`Recovery email sent to ${r.email}`);
+                            await qc.invalidateQueries({ queryKey: ["abandoned-carts"] });
+                          } catch (e) {
+                            setAlert(e instanceof Error ? e.message : "Send failed");
+                          } finally {
+                            setSending(null);
+                          }
+                        }}
+                      >
+                        {sending === cart.id ? "Sending…" : "Send recovery"}
+                      </button>
+                    ) : (
+                      <span className="text-xs text-zinc-400">No email</span>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -53,10 +53,19 @@ export function OrderTimeline({
         </button>
       </form>
       <ul className="mt-6 space-y-4">
-        {initial.map((ev) => (
-          <li key={ev.id} className="border-l-2 border-violet-200 pl-4">
+        {initial.map((ev) => {
+          const border =
+            ev.type === "EMAIL"
+              ? "border-blue-300"
+              : ev.type === "EDIT"
+                ? "border-amber-300"
+                : ev.type === "STATUS_CHANGE"
+                  ? "border-emerald-300"
+                  : "border-violet-200";
+          return (
+          <li key={ev.id} className={`border-l-2 ${border} pl-4`}>
             <p className="text-xs font-medium uppercase text-zinc-400">
-              {ev.type.replace("_", " ")} ·{" "}
+              {ev.type.replace(/_/g, " ")} ·{" "}
               {new Date(ev.createdAt).toLocaleString()}
             </p>
             {ev.body ? <p className="mt-1 text-sm text-zinc-800">{ev.body}</p> : null}
@@ -64,7 +73,8 @@ export function OrderTimeline({
               <p className="mt-0.5 text-xs text-zinc-500">{ev.authorEmail}</p>
             ) : null}
           </li>
-        ))}
+        );
+        })}
         {initial.length === 0 ? (
           <p className="text-sm text-zinc-500">No activity yet.</p>
         ) : null}

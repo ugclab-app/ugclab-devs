@@ -1,6 +1,7 @@
 import { AdminPageShell } from "@/components/admin-page-shell";
 import { PaymentsPanel } from "@/components/payments-panel";
 import { BillingPanel } from "@/components/billing-panel";
+import { TwoFaRequiredBanner } from "@/components/two-fa-required-banner";
 
 export default function PaymentsPage() {
   return (
@@ -10,6 +11,7 @@ export default function PaymentsPage() {
       description="Accept card payments, manage your platform subscription, and view payouts."
     >
       <div className="space-y-8 pb-8">
+        <TwoFaRequiredBanner area="payouts" />
         <PaymentsPanel />
         <BillingPanel />
       </div>

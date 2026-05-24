@@ -1,16 +1,18 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { Fragment, useEffect, useState, type CSSProperties } from "react";
 import type { HomeBlock, HomeSection, StoreTheme } from "@ugclab/tenant/store-theme";
 import { cloneBlocks, reidBlocks, resolveHomeBlocks } from "@ugclab/tenant/store-theme";
 import { BlockPreview } from "./block-preview";
 import { BlockInspector } from "./block-inspector";
 import { PageStylePanel, type PageStyleState } from "./page-style-panel";
-import { catalogByCategory, createBlock, duplicateBlock, type BlockCatalogItem } from "./block-catalog";
+import { catalogByCategory, duplicateBlock } from "./block-catalog";
+import { createBlockWithVariant } from "./block-variants";
 import {
   PAGE_TEMPLATES,
   getStoreTheme,
   type StoreThemePreset,
 } from "./store-themes";
 import { ThemeGalleryModal } from "./theme-gallery-modal";
+import { BlockPickerModal } from "./block-picker-modal";
 import { useBuilderHistory } from "./use-builder-history";
 
 export function SiteBuilder({
@@ -44,8 +46,9 @@ export function SiteBuilder({
   const { blocks, commit, undo, redo, resetHistory, canUndo, canRedo } =
     useBuilderHistory(initial);
   const [selectedId, setSelectedId] = useState<string | null>(blocks[0]?.id ?? null);
-  const [libraryOpen, setLibraryOpen] = useState(false);
-  const [viewport, setViewport] = useState<"desktop" | "mobile">("desktop");
+  const [blockPickerOpen, setBlockPickerOpen] = useState(false);
+  const [insertAtIndex, setInsertAtIndex] = useState<number | null>(null);
+  const [viewport, setViewport] = useState<"desktop" | "tablet" | "mobile">("desktop");
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [inspectorTab, setInspectorTab] = useState<"block" | "page">("block");
   const [themeGalleryOpen, setThemeGalleryOpen] = useState(false);
@@ -69,11 +72,24 @@ export function SiteBuilder({
     patchBlock(selected.id, patch);
   }
 
-  function addBlock(type: HomeSection) {
-    const block = createBlock(type);
-    updateBlocks([...blocks, block]);
+  function openBlockPicker(atIndex: number | null = null) {
+    setInsertAtIndex(atIndex);
+    setBlockPickerOpen(true);
+  }
+
+  function addBlock(
+    type: HomeSection,
+    variantId?: string,
+    atIndex: number | null = insertAtIndex,
+  ) {
+    const block = createBlockWithVariant(type, variantId);
+    const index = atIndex ?? blocks.length;
+    const next = [...blocks];
+    next.splice(index, 0, block);
+    updateBlocks(next);
     setSelectedId(block.id);
-    setLibraryOpen(false);
+    setInsertAtIndex(null);
+    setBlockPickerOpen(false);
   }
 
   function move(from: number, to: number) {
@@ -228,6 +244,14 @@ export function SiteBuilder({
             </button>
             <button
               type="button"
+              className={viewport === "tablet" ? "is-active" : ""}
+              onClick={() => setViewport("tablet")}
+              title="Tablet preview"
+            >
+              Tablet
+            </button>
+            <button
+              type="button"
               className={viewport === "mobile" ? "is-active" : ""}
               onClick={() => setViewport("mobile")}
               title="Mobile preview"
@@ -239,42 +263,17 @@ export function SiteBuilder({
           <button
             type="button"
             className="site-builder-toolbar-btn site-builder-toolbar-btn--primary"
-            onClick={() => setLibraryOpen((o) => !o)}
+            onClick={() => openBlockPicker(null)}
           >
             + Add block
           </button>
         </div>
       </div>
 
-      <div className={`site-builder-layout${libraryOpen ? " has-library" : ""}`}>
-        {libraryOpen ? (
-          <aside className="site-builder-library">
-            <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-3">
-              <p className="text-sm font-semibold">Block library</p>
-              <button type="button" className="text-zinc-400" onClick={() => setLibraryOpen(false)}>
-                ✕
-              </button>
-            </div>
-            <div className="overflow-y-auto p-3 space-y-5 max-h-[min(70vh,640px)]">
-              {catalogByCategory().map((group) => (
-                <div key={group.category}>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
-                    {group.label}
-                  </p>
-                  <ul className="grid gap-2">
-                    {group.items.map((item) => (
-                      <LibraryCard key={item.type} item={item} onAdd={() => addBlock(item.type)} />
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          </aside>
-        ) : null}
-
+      <div className="site-builder-layout">
         <main className="site-builder-canvas-wrap">
           <div
-            className={`site-builder-canvas ${viewport === "mobile" ? "is-mobile" : ""}`}
+            className={`site-builder-canvas${viewport === "mobile" ? " is-mobile" : ""}${viewport === "tablet" ? " is-tablet" : ""}`}
             style={canvasStyle}
             onClick={(e) => {
               if (e.target === e.currentTarget) setSelectedId(null);
@@ -286,7 +285,14 @@ export function SiteBuilder({
                 <p className="mt-2 max-w-sm text-sm">
                   Pick a template or add blocks. Click text on the canvas to edit inline.
                 </p>
-                <div className="mt-6 flex flex-wrap justify-center gap-2">
+                <button
+                  type="button"
+                  className="ugclab-btn ugclab-btn-primary mt-6"
+                  onClick={() => openBlockPicker(0)}
+                >
+                  + Choose a block
+                </button>
+                <div className="mt-4 flex flex-wrap justify-center gap-2">
                   {PAGE_TEMPLATES.map((t) => (
                     <button
                       key={t.id}
@@ -301,77 +307,110 @@ export function SiteBuilder({
               </div>
             ) : (
               <ul className="space-y-0">
+                <li className="group/parent">
+                  <div className="site-builder-add-between">
+                    <button
+                      type="button"
+                      className="site-builder-add-between-btn"
+                      onClick={() => openBlockPicker(0)}
+                    >
+                      + Add block here
+                    </button>
+                  </div>
+                </li>
                 {blocks.map((block, idx) => (
-                  <li
-                    key={block.id}
-                    draggable
-                    onDragStart={() => setDragIdx(idx)}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={() => {
-                      if (dragIdx == null || dragIdx === idx) return;
-                      move(dragIdx, idx);
-                      setDragIdx(null);
-                    }}
-                    className={`site-builder-block group ${
-                      selectedId === block.id ? "is-selected" : ""
-                    }`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedId(block.id);
-                      setInspectorTab("block");
-                    }}
-                  >
-                    <div className="site-builder-block-chrome">
-                      <span className="site-builder-block-label">
-                        {catalogByCategory()
-                          .flatMap((g) => g.items)
-                          .find((i) => i.type === block.type)?.label ?? block.type}
-                      </span>
-                      <div className="site-builder-block-actions">
-                        <button type="button" onClick={() => move(idx, idx - 1)} disabled={idx === 0}>
-                          ↑
-                        </button>
+                  <Fragment key={block.id}>
+                    <li
+                      draggable
+                      onDragStart={() => setDragIdx(idx)}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={() => {
+                        if (dragIdx == null || dragIdx === idx) return;
+                        move(dragIdx, idx);
+                        setDragIdx(null);
+                      }}
+                      className={`site-builder-block group ${
+                        selectedId === block.id ? "is-selected" : ""
+                      }`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedId(block.id);
+                        setInspectorTab("block");
+                      }}
+                    >
+                      <div className="site-builder-block-chrome">
+                        <span className="site-builder-block-label">
+                          {catalogByCategory()
+                            .flatMap((g) => g.items)
+                            .find((i) => i.type === block.type)?.label ?? block.type}
+                        </span>
+                        <div className="site-builder-block-actions">
+                          <button
+                            type="button"
+                            title="Add block below"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openBlockPicker(idx + 1);
+                            }}
+                          >
+                            +
+                          </button>
+                          <button type="button" onClick={() => move(idx, idx - 1)} disabled={idx === 0}>
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => move(idx, idx + 1)}
+                            disabled={idx === blocks.length - 1}
+                          >
+                            ↓
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const copy = duplicateBlock(block);
+                              const next = [...blocks];
+                              next.splice(idx + 1, 0, copy);
+                              updateBlocks(next);
+                              setSelectedId(copy.id);
+                            }}
+                          >
+                            ⧉
+                          </button>
+                          <button
+                            type="button"
+                            className="text-red-600"
+                            onClick={() => {
+                              const next = blocks.filter((b) => b.id !== block.id);
+                              updateBlocks(next);
+                              if (selectedId === block.id) setSelectedId(next[0]?.id ?? null);
+                            }}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      </div>
+                      <div className="site-builder-block-preview">
+                        <BlockPreview
+                          block={block}
+                          primaryColor={primaryColor}
+                          storeName={storeName}
+                          onPatch={(patch) => patchBlock(block.id, patch)}
+                        />
+                      </div>
+                    </li>
+                    <li className="group/parent">
+                      <div className="site-builder-add-between">
                         <button
                           type="button"
-                          onClick={() => move(idx, idx + 1)}
-                          disabled={idx === blocks.length - 1}
+                          className="site-builder-add-between-btn"
+                          onClick={() => openBlockPicker(idx + 1)}
                         >
-                          ↓
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const copy = duplicateBlock(block);
-                            const next = [...blocks];
-                            next.splice(idx + 1, 0, copy);
-                            updateBlocks(next);
-                            setSelectedId(copy.id);
-                          }}
-                        >
-                          ⧉
-                        </button>
-                        <button
-                          type="button"
-                          className="text-red-600"
-                          onClick={() => {
-                            const next = blocks.filter((b) => b.id !== block.id);
-                            updateBlocks(next);
-                            if (selectedId === block.id) setSelectedId(next[0]?.id ?? null);
-                          }}
-                        >
-                          ×
+                          + Add block here
                         </button>
                       </div>
-                    </div>
-                    <div className="site-builder-block-preview">
-                      <BlockPreview
-                        block={block}
-                        primaryColor={primaryColor}
-                        storeName={storeName}
-                        onPatch={(patch) => patchBlock(block.id, patch)}
-                      />
-                    </div>
-                  </li>
+                    </li>
+                  </Fragment>
                 ))}
               </ul>
             )}
@@ -417,32 +456,20 @@ export function SiteBuilder({
         customPresets={customThemePresets}
         currentThemeId={appliedThemeId}
       />
-    </div>
-  );
-}
 
-function LibraryCard({
-  item,
-  onAdd,
-}: {
-  item: BlockCatalogItem;
-  onAdd: () => void;
-}) {
-  return (
-    <li>
-      <button
-        type="button"
-        onClick={onAdd}
-        className="flex w-full items-start gap-3 rounded-lg border border-zinc-200 bg-white p-3 text-left transition hover:border-violet-300 hover:shadow-sm"
-      >
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-lg text-violet-700">
-          {item.icon}
-        </span>
-        <span>
-          <span className="block text-sm font-semibold text-zinc-900">{item.label}</span>
-          <span className="block text-xs text-zinc-500">{item.description}</span>
-        </span>
-      </button>
-    </li>
+      <BlockPickerModal
+        open={blockPickerOpen}
+        onClose={() => {
+          setBlockPickerOpen(false);
+          setInsertAtIndex(null);
+        }}
+        onPick={(type, variantId) => addBlock(type, variantId)}
+        insertHint={
+          insertAtIndex != null
+            ? `Block will be inserted at position ${insertAtIndex + 1}.`
+            : null
+        }
+      />
+    </div>
   );
 }

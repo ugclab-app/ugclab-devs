@@ -12,9 +12,22 @@ import { saveProductImage, uploadPublicUrl } from "../lib/uploads.js";
 import { sendCustomerOrderReceipt } from "../lib/order-emails.js";
 import { renderOrderHtml } from "../lib/order-document.js";
 import { randomBytes } from "crypto";
+import { logActivity } from "../lib/activity-log.js";
+import {
+  buildInviteLink,
+  inviteExpiresAt,
+  isInviteExpired,
+  sendStaffInviteEmail,
+} from "../lib/staff-invite.js";
+import {
+  sanitizeStaffPermissions,
+  requireOwnerAccess,
+} from "../lib/permissions.js";
+import { useOrderRouteGuards } from "../middleware/merchant-guards.js";
 
 const p1 = new Hono<AuthEnv>();
 p1.use("*", requireAuth);
+useOrderRouteGuards(p1);
 
 function parseVariantsJson(raw: unknown) {
   if (!raw) return [];
@@ -441,32 +454,41 @@ p1.post("/orders/:id/notes", async (c) => {
 async function loadOrderDoc(tenantId: string, orderId: string) {
   return prisma.order.findFirst({
     where: { id: orderId, tenantId },
-    include: { customer: true, items: true, tenant: true },
+    include: {
+      customer: true,
+      items: true,
+      tenant: { include: { settings: true } },
+    },
   });
+}
+
+function orderDocPayload(order: NonNullable<Awaited<ReturnType<typeof loadOrderDoc>>>) {
+  const s = order.tenant.settings;
+  return {
+    orderNumber: order.orderNumber,
+    status: order.status,
+    currency: order.currency,
+    createdAt: order.createdAt,
+    tenantName: order.tenant.name,
+    contactEmail: s?.contactEmail ?? null,
+    contactPhone: s?.contactPhone ?? null,
+    businessAddress: s?.businessAddress ?? null,
+    customerEmail: order.customer?.email ?? null,
+    customerName: order.customer?.name ?? null,
+    shippingCountry: order.shippingCountry,
+    subtotalAmount: order.subtotalAmount,
+    shippingAmount: order.shippingAmount,
+    taxAmount: order.taxAmount,
+    totalAmount: order.totalAmount,
+    items: order.items,
+  };
 }
 
 p1.get("/orders/:id/invoice", async (c) => {
   const { tenant } = await requireTenant(c.get("session"));
   const order = await loadOrderDoc(tenant.id, c.req.param("id"));
   if (!order) return c.json({ error: "Not found" }, 404);
-  const html = renderOrderHtml(
-    {
-      orderNumber: order.orderNumber,
-      status: order.status,
-      currency: order.currency,
-      createdAt: order.createdAt,
-      tenantName: order.tenant.name,
-      customerEmail: order.customer?.email ?? null,
-      customerName: order.customer?.name ?? null,
-      shippingCountry: order.shippingCountry,
-      subtotalAmount: order.subtotalAmount,
-      shippingAmount: order.shippingAmount,
-      taxAmount: order.taxAmount,
-      totalAmount: order.totalAmount,
-      items: order.items,
-    },
-    "invoice"
-  );
+  const html = renderOrderHtml(orderDocPayload(order), "invoice");
   return c.html(html);
 });
 
@@ -474,24 +496,7 @@ p1.get("/orders/:id/packing-slip", async (c) => {
   const { tenant } = await requireTenant(c.get("session"));
   const order = await loadOrderDoc(tenant.id, c.req.param("id"));
   if (!order) return c.json({ error: "Not found" }, 404);
-  const html = renderOrderHtml(
-    {
-      orderNumber: order.orderNumber,
-      status: order.status,
-      currency: order.currency,
-      createdAt: order.createdAt,
-      tenantName: order.tenant.name,
-      customerEmail: order.customer?.email ?? null,
-      customerName: order.customer?.name ?? null,
-      shippingCountry: order.shippingCountry,
-      subtotalAmount: order.subtotalAmount,
-      shippingAmount: order.shippingAmount,
-      taxAmount: order.taxAmount,
-      totalAmount: order.totalAmount,
-      items: order.items,
-    },
-    "packing"
-  );
+  const html = renderOrderHtml(orderDocPayload(order), "packing");
   return c.html(html);
 });
 
@@ -528,20 +533,59 @@ p1.post("/orders/:id/resend-receipt", async (c) => {
 });
 
 // ——— Staff ———
+function serializeMember(
+  m: {
+    id: string;
+    email: string;
+    role: string;
+    permissions: string[];
+    createdAt: Date;
+    acceptedAt: Date | null;
+    inviteExpiresAt: Date | null;
+    user: { id: string; email: string; name: string | null; avatarUrl: string | null } | null;
+  }
+) {
+  const expired = isInviteExpired(m);
+  return {
+    id: m.id,
+    userId: m.user?.id ?? null,
+    email: m.email,
+    role: m.role,
+    permissions: m.permissions,
+    createdAt: m.createdAt.toISOString(),
+    acceptedAt: m.acceptedAt?.toISOString() ?? null,
+    inviteExpiresAt: m.inviteExpiresAt?.toISOString() ?? null,
+    inviteExpired: expired,
+    pending: !m.acceptedAt,
+    user: m.user
+      ? {
+          id: m.user.id,
+          email: m.user.email,
+          name: m.user.name,
+          avatarUrl: m.user.avatarUrl,
+        }
+      : null,
+  };
+}
+
 p1.get("/staff", async (c) => {
   const { tenant, session } = await requireTenant(c.get("session"));
   const members = await prisma.tenantMember.findMany({
     where: { tenantId: tenant.id },
-    include: { user: { select: { id: true, email: true, name: true } } },
+    include: {
+      user: {
+        select: { id: true, email: true, name: true, avatarUrl: true },
+      },
+    },
     orderBy: { createdAt: "asc" },
   });
   const owner = await prisma.user.findUnique({
     where: { id: tenant.ownerId },
-    select: { id: true, email: true, name: true },
+    select: { id: true, email: true, name: true, avatarUrl: true },
   });
   return c.json({
-    owner: { ...owner, id: tenant.ownerId },
-    members,
+    owner: owner ? { ...owner, id: tenant.ownerId } : null,
+    members: members.map(serializeMember),
     currentUserId: session.sub,
     isOwner: tenant.ownerId === session.sub,
   });
@@ -549,18 +593,19 @@ p1.get("/staff", async (c) => {
 
 p1.post("/staff/invite", async (c) => {
   const { tenant, session } = await requireTenant(c.get("session"));
-  if (tenant.ownerId !== session.sub) {
-    return c.json({ error: "Only the store owner can invite staff" }, 403);
-  }
-  const { email, role } = await c.req.json<{
+  const ownerGate = await requireOwnerAccess(session, tenant.id);
+  if (!ownerGate.ok) return c.json({ error: ownerGate.error }, 403);
+
+  const body = await c.req.json<{
     email: string;
     role?: TenantMemberRole;
+    permissions?: string[];
   }>();
-  const emailNorm = String(email ?? "").trim().toLowerCase();
+  const emailNorm = String(body.email ?? "").trim().toLowerCase();
   if (!emailNorm) return c.json({ error: "Email required" }, 400);
   const memberRole =
-    role && Object.values(TenantMemberRole).includes(role)
-      ? role
+    body.role && Object.values(TenantMemberRole).includes(body.role)
+      ? body.role
       : TenantMemberRole.STAFF;
   if (memberRole === TenantMemberRole.OWNER) {
     return c.json({ error: "Cannot assign OWNER via invite" }, 400);
@@ -573,6 +618,11 @@ p1.post("/staff/invite", async (c) => {
 
   const inviteUser = await prisma.user.findUnique({ where: { email: emailNorm } });
   const inviteToken = randomBytes(24).toString("hex");
+  const expires = inviteExpiresAt();
+  const perms =
+    memberRole === TenantMemberRole.STAFF
+      ? sanitizeStaffPermissions(body.permissions ?? [])
+      : [];
 
   const member = await prisma.tenantMember.create({
     data: {
@@ -580,30 +630,204 @@ p1.post("/staff/invite", async (c) => {
       email: emailNorm,
       userId: inviteUser?.id ?? null,
       role: memberRole,
+      permissions: perms,
       inviteToken,
+      inviteExpiresAt: expires,
       acceptedAt: inviteUser ? new Date() : null,
     },
-    include: { user: { select: { id: true, email: true, name: true } } },
+    include: {
+      user: {
+        select: { id: true, email: true, name: true, avatarUrl: true },
+      },
+    },
   });
 
-  const adminUrl = process.env.MERCHANT_ADMIN_URL ?? "http://localhost:3001";
+  const inviteLink = buildInviteLink(inviteToken);
+  const inviter = await prisma.user.findUnique({
+    where: { id: session.sub },
+    select: { email: true },
+  });
+  const emailSent = inviteUser
+    ? false
+    : await sendStaffInviteEmail({
+        to: emailNorm,
+        storeName: tenant.name,
+        role: memberRole,
+        inviteLink,
+        inviterEmail: inviter?.email ?? "owner",
+      });
+
+  await logActivity({
+    tenantId: tenant.id,
+    userId: session.sub,
+    userEmail: inviter?.email ?? session.email,
+    action: "staff.invite",
+    entityType: "staff",
+    entityId: member.id,
+    summary: `Invited ${emailNorm} as ${memberRole}`,
+  });
+
   return c.json({
-    member,
-    inviteLink: `${adminUrl}/login?invite=${inviteToken}`,
+    member: serializeMember(member),
+    inviteLink,
+    emailSent,
+  });
+});
+
+p1.post("/staff/:id/resend", async (c) => {
+  const { tenant, session } = await requireTenant(c.get("session"));
+  const ownerGate = await requireOwnerAccess(session, tenant.id);
+  if (!ownerGate.ok) return c.json({ error: ownerGate.error }, 403);
+
+  const member = await prisma.tenantMember.findFirst({
+    where: { id: c.req.param("id"), tenantId: tenant.id },
+    include: {
+      user: {
+        select: { id: true, email: true, name: true, avatarUrl: true },
+      },
+    },
+  });
+  if (!member) return c.json({ error: "Not found" }, 404);
+  if (member.acceptedAt) {
+    return c.json({ error: "Member already accepted" }, 400);
+  }
+
+  const inviteToken = randomBytes(24).toString("hex");
+  const expires = inviteExpiresAt();
+  const updated = await prisma.tenantMember.update({
+    where: { id: member.id },
+    data: { inviteToken, inviteExpiresAt: expires },
+    include: {
+      user: {
+        select: { id: true, email: true, name: true, avatarUrl: true },
+      },
+    },
+  });
+
+  const inviteLink = buildInviteLink(inviteToken);
+  const inviter = await prisma.user.findUnique({
+    where: { id: session.sub },
+    select: { email: true },
+  });
+  const emailSent = await sendStaffInviteEmail({
+    to: member.email,
+    storeName: tenant.name,
+    role: member.role,
+    inviteLink,
+    inviterEmail: inviter?.email ?? "owner",
+  });
+
+  return c.json({
+    member: serializeMember(updated),
+    inviteLink,
+    emailSent,
   });
 });
 
 p1.delete("/staff/:id", async (c) => {
   const { tenant, session } = await requireTenant(c.get("session"));
-  if (tenant.ownerId !== session.sub) {
-    return c.json({ error: "Only the store owner can remove staff" }, 403);
-  }
+  const ownerGate = await requireOwnerAccess(session, tenant.id);
+  if (!ownerGate.ok) return c.json({ error: ownerGate.error }, 403);
+
   const member = await prisma.tenantMember.findFirst({
     where: { id: c.req.param("id"), tenantId: tenant.id },
   });
   if (!member) return c.json({ error: "Not found" }, 404);
+
   await prisma.tenantMember.delete({ where: { id: member.id } });
+  const inviter = await prisma.user.findUnique({
+    where: { id: session.sub },
+    select: { email: true },
+  });
+  await logActivity({
+    tenantId: tenant.id,
+    userId: session.sub,
+    userEmail: inviter?.email ?? session.email,
+    action: member.acceptedAt ? "staff.remove" : "staff.revoke",
+    entityType: "staff",
+    summary: member.acceptedAt
+      ? `Removed ${member.email}`
+      : `Revoked invite for ${member.email}`,
+  });
   return c.json({ ok: true });
+});
+
+p1.post("/staff/transfer-ownership", async (c) => {
+  const { tenant, session } = await requireTenant(c.get("session"));
+  const ownerGate = await requireOwnerAccess(session, tenant.id);
+  if (!ownerGate.ok) return c.json({ error: ownerGate.error }, 403);
+
+  const { email } = await c.req.json<{ email: string }>();
+  const emailNorm = String(email ?? "").trim().toLowerCase();
+  if (!emailNorm) return c.json({ error: "Email required" }, 400);
+
+  const targetUser = await prisma.user.findUnique({
+    where: { email: emailNorm },
+  });
+  if (!targetUser) {
+    return c.json({ error: "User must have an account and accept invite first" }, 400);
+  }
+
+  const member = await prisma.tenantMember.findFirst({
+    where: {
+      tenantId: tenant.id,
+      email: emailNorm,
+      acceptedAt: { not: null },
+    },
+  });
+  if (!member) {
+    return c.json({ error: "User must be an active team member" }, 400);
+  }
+  if (targetUser.id === tenant.ownerId) {
+    return c.json({ error: "Already the owner" }, 400);
+  }
+
+  const oldOwnerId = tenant.ownerId;
+  await prisma.$transaction(async (tx) => {
+    await tx.tenant.update({
+      where: { id: tenant.id },
+      data: { ownerId: targetUser.id },
+    });
+    await tx.tenantMember.delete({ where: { id: member.id } });
+    const oldOwner = await tx.user.findUnique({
+      where: { id: oldOwnerId },
+      select: { email: true },
+    });
+    if (oldOwner) {
+      await tx.tenantMember.upsert({
+        where: {
+          tenantId_email: { tenantId: tenant.id, email: oldOwner.email },
+        },
+        create: {
+          tenantId: tenant.id,
+          email: oldOwner.email,
+          userId: oldOwnerId,
+          role: TenantMemberRole.ADMIN,
+          acceptedAt: new Date(),
+          permissions: [],
+        },
+        update: {
+          userId: oldOwnerId,
+          role: TenantMemberRole.ADMIN,
+          acceptedAt: new Date(),
+        },
+      });
+    }
+  });
+
+  const inviter = await prisma.user.findUnique({
+    where: { id: session.sub },
+    select: { email: true },
+  });
+  await logActivity({
+    tenantId: tenant.id,
+    userId: session.sub,
+    userEmail: inviter?.email ?? session.email,
+    action: "staff.transfer_ownership",
+    summary: `Ownership transferred to ${emailNorm}`,
+  });
+
+  return c.json({ ok: true, newOwnerEmail: emailNorm });
 });
 
 p1.post("/staff/accept-invite", async (c) => {
@@ -613,6 +837,9 @@ p1.post("/staff/accept-invite", async (c) => {
     where: { inviteToken: String(token ?? "") },
   });
   if (!member) return c.json({ error: "Invalid invite" }, 400);
+  if (isInviteExpired(member)) {
+    return c.json({ error: "Invite expired. Ask the store owner to resend." }, 400);
+  }
 
   const user = await prisma.user.findUnique({ where: { id: session.sub } });
   if (!user || user.email.toLowerCase() !== member.email.toLowerCase()) {
@@ -621,7 +848,12 @@ p1.post("/staff/accept-invite", async (c) => {
 
   await prisma.tenantMember.update({
     where: { id: member.id },
-    data: { userId: user.id, acceptedAt: new Date(), inviteToken: null },
+    data: {
+      userId: user.id,
+      acceptedAt: new Date(),
+      inviteToken: null,
+      inviteExpiresAt: null,
+    },
   });
   return c.json({ ok: true });
 });

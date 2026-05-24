@@ -1,7 +1,7 @@
 /** Storefront link for merchant admin (local dev uses ?tenant=slug). */
 export function getStorefrontUrl(tenantSlug: string): string {
   const slug = tenantSlug.trim().toLowerCase();
-  if (!slug) return "http://localhost:3002/?tenant=demo";
+  if (!slug) return "http://localhost:3002/?tenant=tescommerce";
 
   const configuredBase = (
     import.meta.env.VITE_STOREFRONT_URL ??

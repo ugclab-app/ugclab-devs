@@ -1,6 +1,8 @@
-import type { ColumnItem, FaqItem, FeatureItem, HomeBlock, PricingItem } from "@ugclab/tenant/store-theme";
+import type { ColumnItem, FaqItem, FeatureItem, HomeBlock, PricingItem, TabItem } from "@ugclab/tenant/store-theme";
 import { MediaPicker } from "@/components/media-picker";
 import { BLOCK_CATALOG } from "./block-catalog";
+import { BlockStyleFields } from "./block-style-fields";
+import { LinkPathField } from "./link-picker";
 
 export function BlockInspector({
   block,
@@ -154,11 +156,9 @@ export function BlockInspector({
             value={block.ctaLabel ?? ""}
             onChange={(ctaLabel) => onChange({ ctaLabel })}
           />
-          <TextField
-            label="Link path"
+          <LinkPathField
             value={block.ctaPath ?? ""}
             onChange={(ctaPath) => onChange({ ctaPath })}
-            mono
           />
         </fieldset>
       ) : null}
@@ -301,6 +301,101 @@ export function BlockInspector({
           </p>
         </>
       )}
+
+      {block.type === "tabs" && (
+        <TabsListEditor items={block.tabItems ?? []} onChange={(tabItems) => onChange({ tabItems })} />
+      )}
+
+      {block.type === "blog_feed" && (
+        <label className="block text-xs">
+          Number of posts
+          <input
+            type="number"
+            min={1}
+            max={12}
+            className="ugclab-input mt-1 w-24"
+            value={block.blogLimit ?? 3}
+            onChange={(e) => onChange({ blogLimit: parseInt(e.target.value, 10) || 3 })}
+          />
+        </label>
+      )}
+
+      {block.type === "instagram_embed" && (
+        <TextField
+          label="Instagram embed URL"
+          value={block.instagramEmbedUrl ?? ""}
+          onChange={(instagramEmbedUrl) => onChange({ instagramEmbedUrl })}
+          mono
+        />
+      )}
+
+      {block.type === "product_compare" && (
+        <label className="block text-xs">
+          Product slugs (comma-separated)
+          <input
+            className="ugclab-input mt-1 font-mono text-xs"
+            value={(block.compareProductSlugs ?? []).join(", ")}
+            onChange={(e) =>
+              onChange({
+                compareProductSlugs: e.target.value
+                  .split(",")
+                  .map((s) => s.trim())
+                  .filter(Boolean),
+              })
+            }
+          />
+        </label>
+      )}
+
+      {block.type === "carousel" && (
+        <GalleryEditor urls={block.galleryUrls ?? []} onChange={(galleryUrls) => onChange({ galleryUrls })} />
+      )}
+
+      <BlockStyleFields block={block} onChange={onChange} />
+    </div>
+  );
+}
+
+function TabsListEditor({
+  items,
+  onChange,
+}: {
+  items: TabItem[];
+  onChange: (items: TabItem[]) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      {items.map((tab, i) => (
+        <div key={i} className="rounded border border-zinc-100 p-2 space-y-1">
+          <input
+            className="ugclab-input text-sm"
+            value={tab.label}
+            onChange={(e) => {
+              const next = [...items];
+              next[i] = { ...tab, label: e.target.value };
+              onChange(next);
+            }}
+            placeholder="Tab label"
+          />
+          <textarea
+            className="ugclab-input text-xs"
+            rows={3}
+            value={tab.body}
+            onChange={(e) => {
+              const next = [...items];
+              next[i] = { ...tab, body: e.target.value };
+              onChange(next);
+            }}
+          />
+        </div>
+      ))}
+      <button
+        type="button"
+        className="text-xs text-violet-600"
+        onClick={() => onChange([...items, { label: "Tab", body: "Content" }])}
+      >
+        + Add tab
+      </button>
     </div>
   );
 }

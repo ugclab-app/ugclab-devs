@@ -1,0 +1,6 @@
+ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "faviconUrl" TEXT;
+ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "contactEmail" TEXT;
+ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "contactPhone" TEXT;
+ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "businessAddress" TEXT;
+ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "emailFromName" TEXT;
+ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "emailReplyTo" TEXT;

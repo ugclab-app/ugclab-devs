@@ -88,7 +88,7 @@ export function SiteBuilderFullscreenShell({
             onClick={onPublish}
             className="ugclab-btn border border-violet-200 bg-violet-50 text-violet-800 text-xs"
           >
-            Publish
+            Publish live
           </button>
         </div>
       </header>

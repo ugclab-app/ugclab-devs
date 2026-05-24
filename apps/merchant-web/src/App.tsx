@@ -31,6 +31,9 @@ import MarketingPage from "@/pages/MarketingPage";
 import PaymentsPage from "@/pages/PaymentsPage";
 import { PermissionGate } from "@/components/permission-gate";
 import NoStorePage from "@/pages/NoStorePage";
+import HelpPage from "@/pages/HelpPage";
+import GrowthPage from "@/pages/GrowthPage";
+import InventoryPage from "@/pages/InventoryPage";
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, tenant, loading } = useAuth();
@@ -96,19 +99,22 @@ export default function App() {
         <Route path="abandoned-carts" element={<PermissionGate perm="abandoned-carts"><AbandonedCartsPage /></PermissionGate>} />
         <Route path="activity-log" element={<PermissionGate perm="activity-log"><ActivityLogPage /></PermissionGate>} />
         <Route path="customers/segments" element={<PermissionGate perm="customers"><CustomerSegmentsPage /></PermissionGate>} />
-        <Route path="payments" element={<PermissionGate perm="settings"><PaymentsPage /></PermissionGate>} />
+        <Route path="payments" element={<PermissionGate perm="payments"><PaymentsPage /></PermissionGate>} />
         <Route path="marketing" element={<PermissionGate perm="marketing"><MarketingPage /></PermissionGate>} />
+        <Route path="growth" element={<PermissionGate perm="growth"><GrowthPage /></PermissionGate>} />
         <Route path="pages/:id/edit" element={<PermissionGate perm="pages"><PageEditPage /></PermissionGate>} />
         <Route path="pages/:id/builder" element={<PermissionGate perm="pages"><PageBuilderPage /></PermissionGate>} />
         <Route path="settings" element={<PermissionGate perm="settings"><SettingsPage /></PermissionGate>} />
         <Route path="collections" element={<CollectionsPage />} />
         <Route path="collections/:id" element={<CollectionEditPage />} />
         <Route path="shipping" element={<ShippingPage />} />
+        <Route path="inventory" element={<PermissionGate perm="products"><InventoryPage /></PermissionGate>} />
         <Route path="discounts" element={<DiscountsPage />} />
         <Route path="promotions" element={<PromotionsPage />} />
         <Route path="pages" element={<PagesPage />} />
         <Route path="reviews" element={<ReviewsPage />} />
         <Route path="draft-orders" element={<DraftOrdersPage />} />
+        <Route path="help" element={<HelpPage />} />
       </Route>
     </Routes>
   );

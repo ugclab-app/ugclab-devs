@@ -8,12 +8,20 @@ import {
   getMerchantAccess,
   hasPermission,
   MERCHANT_PERMISSIONS,
+  OWNER_ONLY_PERMISSIONS,
+  PERMISSION_LABELS,
+  ROLE_PRESETS,
+  STAFF_ASSIGNABLE_PERMISSIONS,
+  sanitizeStaffPermissions,
   type MerchantPermission,
 } from "../lib/permissions.js";
+import { useOrderRouteGuards } from "../middleware/merchant-guards.js";
 import { generateTotpSecret, totpUri, verifyTotp } from "../lib/totp.js";
+import { computeCustomerMetrics } from "../lib/customer-metrics.js";
 
 const p5 = new Hono<AuthEnv>();
 p5.use("*", requireAuth);
+useOrderRouteGuards(p5);
 
 async function actor(c: import("hono").Context) {
   const { tenant, session } = await requireTenant(c.get("session"));
@@ -35,21 +43,53 @@ function requirePerm(access: { permissions: MerchantPermission[] }, perm: Mercha
 }
 
 p5.get("/access", async (c) => {
-  const { access } = await actor(c);
+  const { access, session } = await actor(c);
+  const user = await prisma.user.findUnique({
+    where: { id: session.sub },
+    select: { totpEnabled: true },
+  });
+  const needsOrders2fa =
+    hasPermission(access.permissions, "orders") && !user?.totpEnabled;
+  const needsPayouts2fa = access.isOwner && !user?.totpEnabled;
   return c.json({
     isOwner: access.isOwner,
+    role: access.role,
     permissions: access.permissions,
+    assignable: STAFF_ASSIGNABLE_PERMISSIONS,
+    ownerOnly: OWNER_ONLY_PERMISSIONS,
+    labels: PERMISSION_LABELS,
+    presets: ROLE_PRESETS,
+    totpEnabled: user?.totpEnabled ?? false,
+    needs2faForOrders: needsOrders2fa,
+    needs2faForPayouts: needsPayouts2fa,
     all: MERCHANT_PERMISSIONS,
   });
+});
+
+p5.patch("/me", async (c) => {
+  const session = c.get("session");
+  const body = await c.req.json<{ name?: string; avatarUrl?: string }>();
+  const updated = await prisma.user.update({
+    where: { id: session.sub },
+    data: {
+      ...(body.name != null ? { name: String(body.name).trim() || null } : {}),
+      ...(body.avatarUrl != null
+        ? { avatarUrl: String(body.avatarUrl).trim() || null }
+        : {}),
+    },
+    select: { id: true, email: true, name: true, avatarUrl: true, totpEnabled: true },
+  });
+  return c.json({ user: updated });
 });
 
 p5.get("/activity-log", async (c) => {
   const { tenant, access } = await actor(c);
   if (!requirePerm(access, "activity-log")) return c.json({ error: "Forbidden" }, 403);
+  const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10) || 50, 100);
   const logs = await prisma.activityLog.findMany({
     where: { tenantId: tenant.id },
     orderBy: { createdAt: "desc" },
-    take: 100,
+    take: limit,
   });
   return c.json({ logs });
 });
@@ -65,6 +105,68 @@ p5.get("/abandoned-carts", async (c) => {
   return c.json({ carts });
 });
 
+p5.get("/abandoned-carts/stats", async (c) => {
+  const { tenant, access } = await actor(c);
+  if (!requirePerm(access, "abandoned-carts")) return c.json({ error: "Forbidden" }, 403);
+
+  const [open, converted, reminded] = await Promise.all([
+    prisma.abandonedCart.count({
+      where: { tenantId: tenant.id, convertedAt: null },
+    }),
+    prisma.abandonedCart.count({
+      where: { tenantId: tenant.id, convertedAt: { not: null } },
+    }),
+    prisma.abandonedCart.count({
+      where: {
+        tenantId: tenant.id,
+        convertedAt: { not: null },
+        OR: [{ remindedAt1h: { not: null } }, { remindedAt24h: { not: null } }],
+      },
+    }),
+  ]);
+
+  const openAgg = await prisma.abandonedCart.aggregate({
+    where: { tenantId: tenant.id, convertedAt: null },
+    _sum: { subtotalAmount: true },
+  });
+
+  const recoveryRate =
+    reminded > 0 ? Math.round((converted / Math.max(reminded, 1)) * 100) : null;
+
+  return c.json({
+    openCarts: open,
+    convertedAfterReminder: reminded,
+    totalConverted: converted,
+    openValueCents: openAgg._sum.subtotalAmount ?? 0,
+    recoveryRatePct: recoveryRate,
+    currency:
+      (
+        await prisma.storeSettings.findUnique({
+          where: { tenantId: tenant.id },
+          select: { currency: true },
+        })
+      )?.currency ?? "USD",
+  });
+});
+
+p5.post("/abandoned-carts/:id/send-recovery", async (c) => {
+  const { tenant, access } = await actor(c);
+  if (!requirePerm(access, "abandoned-carts")) return c.json({ error: "Forbidden" }, 403);
+  const { sendAbandonedCartRecoveryEmail } = await import("../lib/abandoned-cart.js");
+  try {
+    const result = await sendAbandonedCartRecoveryEmail({
+      cartId: c.req.param("id"),
+      tenantId: tenant.id,
+    });
+    return c.json(result);
+  } catch (e) {
+    return c.json(
+      { error: e instanceof Error ? e.message : "Send failed" },
+      400
+    );
+  }
+});
+
 p5.get("/customers/segments", async (c) => {
   const { tenant, access } = await actor(c);
   if (!requirePerm(access, "customers")) return c.json({ error: "Forbidden" }, 403);
@@ -74,13 +176,12 @@ p5.get("/customers/segments", async (c) => {
     include: {
       orders: {
         where: { status: { in: [OrderStatus.PAID, OrderStatus.FULFILLED] } },
-        select: { totalAmount: true, createdAt: true },
+        select: { totalAmount: true, createdAt: true, status: true },
       },
     },
     take: 500,
   });
 
-  const vipThreshold = 50000;
   const segments = {
     all: customers.length,
     vip: 0,
@@ -99,15 +200,13 @@ p5.get("/customers/segments", async (c) => {
   };
 
   for (const cust of customers) {
-    const orderCount = cust.orders.length;
-    const totalSpent = cust.orders.reduce((s, o) => s + o.totalAmount, 0);
-    const tags: string[] = [];
-    if (totalSpent >= vipThreshold) tags.push("vip");
-    if (orderCount >= 2) tags.push("repeat");
-    if (orderCount === 0) tags.push("new");
-    if (totalSpent >= vipThreshold) segments.vip++;
-    if (orderCount >= 2) segments.repeat++;
-    if (orderCount === 0) segments.new++;
+    const metrics = computeCustomerMetrics(cust.orders, cust.orders.length);
+    const orderCount = metrics.paidOrderCount;
+    const totalSpent = metrics.totalSpent;
+    const tags = metrics.segment.filter((t) => t !== "active");
+    if (metrics.segment.includes("vip")) segments.vip++;
+    if (metrics.segment.includes("repeat")) segments.repeat++;
+    if (metrics.segment.includes("new")) segments.new++;
     if (cust.country) {
       segments.byCountry[cust.country] = (segments.byCountry[cust.country] ?? 0) + 1;
     }
@@ -200,9 +299,7 @@ p5.patch("/staff/:id/permissions", async (c) => {
   });
   if (!member) return c.json({ error: "Not found" }, 404);
 
-  const allowed = (permissions ?? []).filter((p) =>
-    (MERCHANT_PERMISSIONS as readonly string[]).includes(p)
-  );
+  const allowed = sanitizeStaffPermissions(permissions ?? []);
 
   await prisma.tenantMember.update({
     where: { id: member.id },

@@ -34,8 +34,17 @@ export async function getDashboardMetrics(
   start.setDate(start.getDate() - (rangeDays - 1));
   const dayStart = startOfDay(now);
 
-  const [ordersToday, paidOrders, products, pendingOrders, lowStockCount, allPaidInRange, recentOrders] =
-    await Promise.all([
+  const [
+    ordersToday,
+    paidOrders,
+    products,
+    pendingOrders,
+    lowStockCount,
+    allPaidInRange,
+    recentOrders,
+    firstPaidOrder,
+    tenantRow,
+  ] = await Promise.all([
       prisma.order.count({
         where: { tenantId, createdAt: { gte: dayStart } },
       }),
@@ -70,7 +79,28 @@ export async function getDashboardMetrics(
         orderBy: { createdAt: "desc" },
         take: 5,
       }),
+      prisma.order.findFirst({
+        where: {
+          tenantId,
+          status: { in: [OrderStatus.PAID, OrderStatus.FULFILLED] },
+        },
+        orderBy: { createdAt: "asc" },
+        select: { createdAt: true, totalAmount: true, orderNumber: true },
+      }),
+      prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { createdAt: true },
+      }),
     ]);
+
+  const firstSaleAt = firstPaidOrder?.createdAt ?? null;
+  const storeCreatedAt = tenantRow?.createdAt ?? null;
+  const hoursToFirstSale =
+    firstSaleAt && storeCreatedAt
+      ? Math.round(
+          (firstSaleAt.getTime() - storeCreatedAt.getTime()) / (1000 * 60 * 60)
+        )
+      : null;
 
   const buckets: DayRevenue[] = [];
   for (let i = 0; i < rangeDays; i++) {
@@ -120,5 +150,12 @@ export async function getDashboardMetrics(
     platformFees: paymentRange.platformFees,
     netPayout: paymentRange.netPayout,
     platformFeeBps: feeBps,
+    firstSale: {
+      hasFirstSale: Boolean(firstPaidOrder),
+      firstSaleAt: firstSaleAt?.toISOString() ?? null,
+      hoursToFirstSale,
+      firstOrderNumber: firstPaidOrder?.orderNumber ?? null,
+      firstOrderAmount: firstPaidOrder?.totalAmount ?? null,
+    },
   };
 }

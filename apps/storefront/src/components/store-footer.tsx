@@ -14,6 +14,19 @@ export function StoreFooter() {
         <div>
           <p className="font-semibold text-zinc-900">{tenant.name}</p>
           <p className="mt-1 text-sm text-zinc-500">Thanks for shopping with us.</p>
+          {settings?.contactEmail || settings?.contactPhone || settings?.businessAddress ? (
+            <div className="mt-3 space-y-1 text-sm text-zinc-600">
+              {settings.contactEmail ? (
+                <a href={`mailto:${settings.contactEmail}`} className="block hover:text-violet-700">
+                  {settings.contactEmail}
+                </a>
+              ) : null}
+              {settings.contactPhone ? <p>{settings.contactPhone}</p> : null}
+              {settings.businessAddress ? (
+                <p className="whitespace-pre-line text-zinc-500">{settings.businessAddress}</p>
+              ) : null}
+            </div>
+          ) : null}
           {social?.instagram || social?.telegram || social?.tiktok ? (
             <div className="mt-4 flex flex-wrap gap-3 text-sm">
               {social.instagram ? (
@@ -125,7 +138,7 @@ export function StoreFooter() {
         </div>
       </div>
       <p className="store-container mt-10 border-t border-zinc-100 pt-6 text-center text-xs text-zinc-400">
-        © {new Date().getFullYear()} {tenant.name}. Powered by UGCLab.
+        © {new Date().getFullYear()} {tenant.name}. Powered by Tescommerce.
       </p>
     </footer>
   );

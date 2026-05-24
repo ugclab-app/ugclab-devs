@@ -15,15 +15,19 @@ export function StickyCartBar() {
   const nav = { locale: ctx.locale, tenant: ctx.tenant.slug };
 
   const path = location.pathname.replace(/\/$/, "") || "/";
-  if (ctx.theme.storeClosed || ctx.cartCount <= 0 || HIDE_ON.some((p) => path.endsWith(p))) {
-    return null;
-  }
+  const hidden =
+    ctx.theme.storeClosed ||
+    ctx.cartCount <= 0 ||
+    HIDE_ON.some((p) => path.endsWith(p));
 
   const { data } = useQuery({
     queryKey: ["cart", tenant],
     queryFn: () => storeApi.cart(tenant),
     staleTime: 30_000,
+    enabled: !hidden,
   });
+
+  if (hidden) return null;
 
   const totalLabel =
     data?.total != null ? formatMoney(data.total, data.currency ?? ctx.currency) : null;

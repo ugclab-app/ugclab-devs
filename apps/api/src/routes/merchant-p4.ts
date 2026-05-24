@@ -7,8 +7,11 @@ import { saveStoreMedia } from "../lib/uploads.js";
 import { getMerchantPaymentMetrics } from "../lib/payment-metrics.js";
 import { resolvePlatformFeeBps } from "../lib/platform-fee.js";
 
+import { useOrderRouteGuards } from "../middleware/merchant-guards.js";
+
 const p4 = new Hono<AuthEnv>();
 p4.use("*", requireAuth);
+useOrderRouteGuards(p4);
 
 p4.get("/search", async (c) => {
   const { tenant } = await requireTenant(c.get("session"));
@@ -147,16 +150,98 @@ p4.post("/orders/bulk-fulfill", async (c) => {
   const { ids } = await c.req.json<{ ids: string[] }>();
   if (!ids?.length) return c.json({ error: "No orders selected" }, 400);
 
-  const result = await prisma.order.updateMany({
+  const paid = await prisma.order.findMany({
     where: {
       id: { in: ids },
       tenantId: tenant.id,
       status: OrderStatus.PAID,
     },
-    data: { status: OrderStatus.FULFILLED },
+    select: { id: true },
   });
 
+  const result = await prisma.order.updateMany({
+    where: { id: { in: paid.map((o) => o.id) } },
+    data: { status: OrderStatus.FULFILLED, shippedAt: new Date() },
+  });
+
+  const { fulfillInventoryForOrder } = await import("../lib/inventory.js");
+  for (const o of paid) {
+    await fulfillInventoryForOrder(o.id).catch(() => {});
+  }
+
   return c.json({ updated: result.count });
+});
+
+p4.post("/orders/bulk-cancel", async (c) => {
+  const { tenant } = await requireTenant(c.get("session"));
+  const { ids } = await c.req.json<{ ids: string[] }>();
+  if (!ids?.length) return c.json({ error: "No orders selected" }, 400);
+
+  const toCancel = await prisma.order.findMany({
+    where: {
+      id: { in: ids },
+      tenantId: tenant.id,
+      status: { in: [OrderStatus.PENDING, OrderStatus.DRAFT] },
+    },
+    select: { id: true },
+  });
+
+  const result = await prisma.order.updateMany({
+    where: {
+      id: { in: toCancel.map((o) => o.id) },
+      tenantId: tenant.id,
+    },
+    data: { status: OrderStatus.CANCELLED },
+  });
+
+  const { releaseInventoryForOrder } = await import("../lib/inventory.js");
+  for (const o of toCancel) {
+    await releaseInventoryForOrder(o.id).catch(() => {});
+  }
+
+  return c.json({ updated: result.count });
+});
+
+p4.post("/orders/bulk-labels", async (c) => {
+  const { tenant } = await requireTenant(c.get("session"));
+  const { ids } = await c.req.json<{ ids: string[] }>();
+  if (!ids?.length) return c.json({ error: "No orders selected" }, 400);
+
+  const { isShippoConfigured } = await import("../lib/shippo.js");
+  if (!isShippoConfigured()) {
+    return c.json({ error: "Shippo is not configured (SHIPPO_API_KEY)" }, 503);
+  }
+
+  const orders = await prisma.order.findMany({
+    where: {
+      id: { in: ids },
+      tenantId: tenant.id,
+      shippingAddress1: { not: null },
+      status: { in: [OrderStatus.PAID, OrderStatus.FULFILLED] },
+    },
+  });
+
+  const results: { orderId: string; ok: boolean; labelUrl?: string; error?: string }[] =
+    [];
+  const { createShippingLabelForOrder } = await import("../lib/shipping-label-order.js");
+  for (const order of orders) {
+    try {
+      const label = await createShippingLabelForOrder(order.id, tenant.id);
+      results.push({ orderId: order.id, ok: true, labelUrl: label.labelUrl });
+    } catch (e) {
+      results.push({
+        orderId: order.id,
+        ok: false,
+        error: e instanceof Error ? e.message : "Failed",
+      });
+    }
+  }
+
+  return c.json({
+    attempted: orders.length,
+    results,
+    note: "DHL/FedEx direct APIs are not integrated — labels use Shippo rates.",
+  });
 });
 
 export { p4 };

@@ -38,7 +38,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-slate-950 p-6">
       <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-8 text-slate-100 shadow-xl">
         <p className="text-xs font-semibold uppercase tracking-wider text-sky-400">
-          UGCLab Platform
+          Tescommerce Platform
         </p>
         <h1 className="mt-2 text-2xl font-bold">Founder admin</h1>
         <p className="mt-2 text-sm text-slate-400">

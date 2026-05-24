@@ -5,8 +5,11 @@ import { requireAuth } from "../middleware/session.js";
 import { requireTenant } from "../lib/merchant.js";
 import { randomBytes } from "crypto";
 
+import { useOwnerOnlyDomainGuards } from "../middleware/merchant-guards.js";
+
 const p15 = new Hono<AuthEnv>();
 p15.use("*", requireAuth);
+useOwnerOnlyDomainGuards(p15);
 
 // ——— Discount codes ———
 p15.get("/discounts", async (c) => {

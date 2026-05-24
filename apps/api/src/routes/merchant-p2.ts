@@ -10,9 +10,17 @@ import type { AuthEnv } from "../middleware/session.js";
 import { requireAuth } from "../middleware/session.js";
 import { normalizeSlug, requireTenant } from "../lib/merchant.js";
 import { sendShippingNotification } from "../lib/shipping-email.js";
+import { serializeStorePage, pageStatus } from "../lib/store-page.js";
+import {
+  buildStorePageCreateData,
+  buildStorePageUpdateData,
+} from "../lib/store-page-mutate.js";
+
+import { useOrderRouteGuards } from "../middleware/merchant-guards.js";
 
 const p2 = new Hono<AuthEnv>();
 p2.use("*", requireAuth);
+useOrderRouteGuards(p2);
 
 function parseTags(raw: unknown): string[] {
   if (Array.isArray(raw)) {
@@ -27,64 +35,102 @@ function parseTags(raw: unknown): string[] {
 // ——— Store pages (About, Contact, Blog) ———
 p2.get("/pages", async (c) => {
   const { tenant } = await requireTenant(c.get("session"));
+  const type = c.req.query("type");
+  const status = c.req.query("status");
+  const tag = c.req.query("tag")?.trim().toLowerCase();
+
   const pages = await prisma.storePage.findMany({
     where: { tenantId: tenant.id },
     orderBy: { updatedAt: "desc" },
   });
-  return c.json({ pages });
+
+  let filtered = pages;
+  if (type === "PAGE" || type === "BLOG") {
+    filtered = filtered.filter((p) => p.pageType === type);
+  }
+  if (status === "draft") {
+    filtered = filtered.filter((p) => pageStatus(p) === "draft");
+  } else if (status === "scheduled") {
+    filtered = filtered.filter((p) => pageStatus(p) === "scheduled");
+  } else if (status === "published") {
+    filtered = filtered.filter((p) => pageStatus(p) === "published");
+  }
+  if (tag) {
+    filtered = filtered.filter((p) => p.tags.includes(tag));
+  }
+
+  return c.json({ pages: filtered.map(serializeStorePage) });
 });
 
 p2.post("/pages", async (c) => {
   const { tenant } = await requireTenant(c.get("session"));
-  const body = await c.req.json<{
-    title?: string;
-    slug?: string;
-    body?: string;
-    pageType?: string;
-    published?: boolean;
-  }>();
-  const title = String(body.title ?? "").trim();
-  const slug = normalizeSlug(String(body.slug ?? title)) || "page";
-  if (!title) return c.json({ error: "Title required" }, 400);
+  const body = (await c.req.json()) as Record<string, unknown>;
+  const built = buildStorePageCreateData(tenant.id, body);
+  if (built.error) return c.json({ error: built.error }, 400);
+  const slug =
+    normalizeSlug(String(built.data.slug || body.title || "")) || "page";
+  built.data.slug = slug;
   const dup = await prisma.storePage.findUnique({
     where: { tenantId_slug: { tenantId: tenant.id, slug } },
   });
   if (dup) return c.json({ error: "Slug in use" }, 400);
-  const page = await prisma.storePage.create({
-    data: {
-      tenantId: tenant.id,
-      title,
-      slug,
-      body: String(body.body ?? ""),
-      pageType: body.pageType === "BLOG" ? "BLOG" : "PAGE",
-      published: body.published !== false,
-    },
-  });
-  return c.json({ page }, 201);
+  const page = await prisma.storePage.create({ data: built.data });
+  return c.json({ page: serializeStorePage(page) }, 201);
 });
 
-p2.patch("/pages/:id", async (c) => {
+p2.post("/pages/:id/duplicate", async (c) => {
   const { tenant } = await requireTenant(c.get("session"));
-  const body = await c.req.json<Record<string, unknown>>();
   const page = await prisma.storePage.findFirst({
     where: { id: c.req.param("id"), tenantId: tenant.id },
   });
   if (!page) return c.json({ error: "Not found" }, 404);
-  const updated = await prisma.storePage.update({
-    where: { id: page.id },
+  let slug = `${page.slug}-copy`;
+  for (let i = 0; i < 8; i++) {
+    const exists = await prisma.storePage.findUnique({
+      where: { tenantId_slug: { tenantId: tenant.id, slug } },
+    });
+    if (!exists) break;
+    slug = `${page.slug}-copy-${i + 2}`;
+  }
+  const copy = await prisma.storePage.create({
     data: {
-      ...(body.title != null ? { title: String(body.title).trim() } : {}),
-      ...(body.slug != null
-        ? { slug: normalizeSlug(String(body.slug)) }
-        : {}),
-      ...(body.body != null ? { body: String(body.body) } : {}),
-      ...(body.pageType != null
-        ? { pageType: body.pageType === "BLOG" ? "BLOG" : "PAGE" }
-        : {}),
-      ...(body.published != null ? { published: Boolean(body.published) } : {}),
+      tenantId: tenant.id,
+      title: `${page.title} (copy)`,
+      slug,
+      body: page.body,
+      excerpt: page.excerpt,
+      featuredImageUrl: page.featuredImageUrl,
+      pageType: page.pageType,
+      published: false,
+      publishAt: null,
+      authorName: page.authorName,
+      tags: page.tags,
+      metaTitle: page.metaTitle,
+      metaDescription: page.metaDescription,
+      ogImageUrl: page.ogImageUrl,
+      canonicalUrl: page.canonicalUrl,
+      noindex: page.noindex,
     },
   });
-  return c.json({ page: updated });
+  return c.json({ page: serializeStorePage(copy) }, 201);
+});
+
+p2.patch("/pages/:id", async (c) => {
+  const { tenant } = await requireTenant(c.get("session"));
+  const body = (await c.req.json()) as Record<string, unknown>;
+  const page = await prisma.storePage.findFirst({
+    where: { id: c.req.param("id"), tenantId: tenant.id },
+  });
+  if (!page) return c.json({ error: "Not found" }, 404);
+  const data = buildStorePageUpdateData(body);
+  if (body.slug != null) {
+    data.slug = normalizeSlug(String(body.slug));
+  }
+  const updated = await prisma.storePage.update({
+    where: { id: page.id },
+    data,
+  });
+  return c.json({ page: serializeStorePage(updated) });
 });
 
 p2.delete("/pages/:id", async (c) => {
@@ -425,18 +471,23 @@ p2.post("/orders/:id/mark-paid", async (c) => {
   if (order.status !== OrderStatus.DRAFT && order.status !== OrderStatus.PENDING) {
     return c.json({ error: "Order cannot be marked paid" }, 400);
   }
+  if (order.status === OrderStatus.DRAFT) {
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { status: OrderStatus.PENDING },
+    });
+  }
   const user = await prisma.user.findUnique({ where: { id: session.sub } });
-  const updated = await prisma.order.update({
-    where: { id: order.id },
-    data: { status: OrderStatus.PAID },
-    include: { items: true, customer: true, events: { orderBy: { createdAt: "desc" } } },
+  const { fulfillPaidOrder } = await import("../lib/fulfill-order.js");
+  const updated = await fulfillPaidOrder(order.id, {
+    platformFeeAmount: order.platformFeeAmount,
   });
   await prisma.orderEvent.create({
     data: {
       tenantId: tenant.id,
       orderId: order.id,
-      type: "STATUS_CHANGE",
-      body: "Marked as paid (manual / demo)",
+      type: "NOTE",
+      body: "Marked as paid manually (webhook fallback)",
       authorEmail: user?.email,
     },
   });
@@ -498,27 +549,79 @@ p2.patch("/orders/:id/line-fulfillment", async (c) => {
 
 p2.post("/orders/:id/refund", async (c) => {
   const { tenant, session } = await requireTenant(c.get("session"));
-  const body = await c.req.json<{ reason?: string }>();
+  const body = await c.req.json<{
+    reason?: string;
+    amountCents?: number;
+    lineItems?: { lineId: string; quantity: number }[];
+  }>();
   const order = await prisma.order.findFirst({
     where: { id: c.req.param("id"), tenantId: tenant.id },
   });
   if (!order) return c.json({ error: "Not found" }, 404);
+  if (order.status !== OrderStatus.PAID && order.status !== OrderStatus.FULFILLED) {
+    return c.json({ error: "Only paid or fulfilled orders can be refunded" }, 400);
+  }
   const user = await prisma.user.findUnique({ where: { id: session.sub } });
-  const updated = await prisma.order.update({
-    where: { id: order.id },
-    data: { status: OrderStatus.REFUNDED },
-    include: { items: true, customer: true, events: { orderBy: { createdAt: "desc" } } },
-  });
-  await prisma.orderEvent.create({
-    data: {
-      tenantId: tenant.id,
-      orderId: order.id,
-      type: "STATUS_CHANGE",
-      body: body.reason?.trim() || "Order refunded",
+
+  try {
+    const { refundOrderInStripe, markOrderRefunded } = await import("../lib/stripe-refund.js");
+    let refundAmountCents = body.amountCents;
+    let stripeRefund = false;
+    if (order.stripePaymentId) {
+      const r = await refundOrderInStripe(order.id, {
+        amountCents: body.amountCents,
+        lineItems: body.lineItems,
+      });
+      refundAmountCents = r.amountCents;
+      stripeRefund = Boolean(r.refundId);
+    } else if (body.lineItems?.length) {
+      const full = await prisma.order.findUnique({
+        where: { id: order.id },
+        include: { items: true },
+      });
+      refundAmountCents = 0;
+      for (const req of body.lineItems) {
+        const line = full?.items.find((i) => i.id === req.lineId);
+        if (line) refundAmountCents += line.unitAmount * Math.min(req.quantity, line.quantity);
+      }
+    } else {
+      refundAmountCents = refundAmountCents ?? order.totalAmount;
+    }
+
+    const partial =
+      (refundAmountCents ?? 0) > 0 && (refundAmountCents ?? 0) < order.totalAmount;
+    const updated = await markOrderRefunded(order.id, {
+      reason: body.reason,
       authorEmail: user?.email,
-    },
+      partial,
+      refundAmountCents,
+    });
+    return c.json({ order: updated, stripeRefund, partial, refundAmountCents });
+  } catch (e) {
+    return c.json(
+      { error: e instanceof Error ? e.message : "Refund failed" },
+      400
+    );
+  }
+});
+
+p2.post("/orders/:id/sync-stripe", async (c) => {
+  const { tenant } = await requireTenant(c.get("session"));
+  const order = await prisma.order.findFirst({
+    where: { id: c.req.param("id"), tenantId: tenant.id },
   });
-  return c.json({ order: updated });
+  if (!order) return c.json({ error: "Not found" }, 404);
+  try {
+    const { syncOrderFromStripe } = await import("../lib/stripe-order-sync.js");
+    const result = await syncOrderFromStripe(order.id);
+    const fresh = await prisma.order.findFirst({
+      where: { id: order.id },
+      include: { items: true, customer: true, events: { orderBy: { createdAt: "desc" } } },
+    });
+    return c.json({ ...result, order: fresh });
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : "Sync failed" }, 400);
+  }
 });
 
 // ——— Product CSV ———

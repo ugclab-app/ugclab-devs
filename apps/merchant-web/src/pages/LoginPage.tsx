@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api, type TenantDto, type UserDto } from "@/api/client";
 import { useAuth } from "@/context/auth";
@@ -16,6 +16,26 @@ export default function LoginPage() {
   const [needs2fa, setNeeds2fa] = useState(false);
   const [email, setEmail] = useState(params.get("email") ?? "");
   const [password, setPassword] = useState("");
+
+  useEffect(() => {
+    const token = params.get("impersonate");
+    if (!token) return;
+    setLoading(true);
+    api
+      .impersonate(token)
+      .then((data) => {
+        setSession(data.user, data.tenant);
+        if (!data.tenant) {
+          navigate("/no-store", { replace: true });
+          return;
+        }
+        navigate("/dashboard", { replace: true });
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : "Impersonation failed");
+      })
+      .finally(() => setLoading(false));
+  }, [params, navigate, setSession]);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -66,7 +86,7 @@ export default function LoginPage() {
         <h1 className="text-2xl font-bold text-zinc-900">Sign in</h1>
         <p className="mt-2 text-sm text-zinc-500">
           <a href={platformUrl} className="text-violet-600 hover:underline">
-            UGCLab Store
+            Tescommerce
           </a>{" "}
           merchant dashboard
         </p>

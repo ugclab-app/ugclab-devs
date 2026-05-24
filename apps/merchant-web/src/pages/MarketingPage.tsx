@@ -518,6 +518,24 @@ function CampaignList({
                     </button>
                   </>
                 )}
+                {c.status === "SENT" && c.subjectB && c.abTestPercent ? (
+                  <button
+                    type="button"
+                    className="text-amber-700"
+                    onClick={async () => {
+                      try {
+                        const r = await api.marketingAbReport(c.id);
+                        alert(
+                          `Open ${r.openRatePct}% · Click ${r.clickRatePct}%\nSuggested winner: ${r.suggestedWinner ?? "—"}\n${r.note ?? ""}`
+                        );
+                      } catch (e) {
+                        alert(e instanceof Error ? e.message : "Report failed");
+                      }
+                    }}
+                  >
+                    A/B report
+                  </button>
+                ) : null}
                 <button type="button" className="text-zinc-600" onClick={() => onDuplicate(c.id)}>
                   Duplicate
                 </button>

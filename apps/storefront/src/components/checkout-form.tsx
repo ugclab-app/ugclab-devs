@@ -29,8 +29,30 @@ export function CheckoutForm({
 
   const [discountCode, setDiscountCode] = useState("");
   const [discountPreview, setDiscountPreview] = useState<number | null>(null);
+  const [giftCardCode, setGiftCardCode] = useState("");
+  const [giftCardPreview, setGiftCardPreview] = useState<number | null>(null);
+  const [shippingRates, setShippingRates] = useState<
+    { id: string; label: string; amountCents: number }[]
+  >([]);
+  const [selectedRateId, setSelectedRateId] = useState<string>("flat");
   const [error, setError] = useState<string | null>(null);
   const [createAccount, setCreateAccount] = useState(false);
+
+  async function previewGiftCard() {
+    if (!giftCardCode.trim()) return;
+    try {
+      const estTotal = Math.max(
+        0,
+        subtotalAmount - (discountPreview ?? 0)
+      );
+      const data = await storeApi.validateGiftCard(tenant, giftCardCode, estTotal);
+      setGiftCardPreview(data.giftCardAmount);
+      setError(null);
+    } catch (e) {
+      setGiftCardPreview(null);
+      setError(e instanceof Error ? e.message : "Invalid gift card");
+    }
+  }
 
   async function previewDiscount() {
     if (!discountCode.trim()) return;
@@ -84,6 +106,9 @@ export function CheckoutForm({
           createAccount: createAccount,
         };
         if (discountCode) body.discountCode = discountCode;
+        if (giftCardCode) body.giftCardCode = giftCardCode;
+        const rate = shippingRates.find((r) => r.id === selectedRateId);
+        if (rate) body.shippingAmountCents = rate.amountCents;
         if (createAccount) body.password = fd.get("password");
         place.mutate(body);
       }}
@@ -95,35 +120,78 @@ export function CheckoutForm({
         </p>
       ) : null}
 
-      <Input name="email" label="Email" type="email" required />
-      <Input
-        name="name"
-        label="Full name"
-        type="text"
-        required={theme.checkoutRequireName}
-      />
+      <fieldset className="space-y-4 rounded-xl border border-zinc-100 bg-zinc-50/50 p-4">
+        <legend className="px-1 text-sm font-semibold text-zinc-800">Contact</legend>
+        <Input name="email" label="Email" type="email" required />
+        <Input
+          name="name"
+          label="Full name"
+          type="text"
+          required={theme.checkoutRequireName}
+        />
       {theme.checkoutRequirePhone ? (
         <Input name="phone" label="Phone" type="tel" required />
       ) : null}
-      <Input name="shippingName" label="Shipping name" type="text" />
-      <Input name="shippingAddress1" label="Address line 1" type="text" />
-      <Input name="shippingAddress2" label="Address line 2 (optional)" type="text" />
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Input name="shippingCity" label="City" type="text" />
-        <Input name="shippingPostal" label="Postal code" type="text" />
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-zinc-700">Country (shipping)</label>
-        <select name="country" defaultValue="US" className="ugclab-select mt-1.5 w-full">
-          <option value="US">United States</option>
-          <option value="CA">Canada</option>
-          <option value="GB">United Kingdom</option>
-          <option value="DE">Germany</option>
-          <option value="FR">France</option>
-          <option value="NL">Netherlands</option>
-          <option value="PL">Poland</option>
-        </select>
-      </div>
+      </fieldset>
+
+      <fieldset className="space-y-4 rounded-xl border border-zinc-100 p-4">
+        <legend className="px-1 text-sm font-semibold text-zinc-800">Shipping</legend>
+        <Input name="shippingName" label="Shipping name" type="text" />
+        <Input name="shippingAddress1" label="Address line 1" type="text" />
+        <Input name="shippingAddress2" label="Address line 2 (optional)" type="text" />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Input name="shippingCity" label="City" type="text" />
+          <Input name="shippingPostal" label="Postal code" type="text" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-zinc-700">Country</label>
+          <select
+            name="country"
+            defaultValue="US"
+            className="ugclab-select mt-1.5 w-full"
+            onChange={async (e) => {
+              const country = e.target.value;
+              const city = (document.querySelector('[name="shippingCity"]') as HTMLInputElement)?.value;
+              const postal = (document.querySelector('[name="shippingPostal"]') as HTMLInputElement)?.value;
+              try {
+                const data = await storeApi.shippingRates(tenant, { country, city, postal });
+                setShippingRates(data.rates);
+                setSelectedRateId(data.rates[0]?.id ?? "flat");
+              } catch {
+                setShippingRates([]);
+              }
+            }}
+          >
+            <option value="US">United States</option>
+            <option value="CA">Canada</option>
+            <option value="GB">United Kingdom</option>
+            <option value="DE">Germany</option>
+            <option value="FR">France</option>
+            <option value="NL">Netherlands</option>
+            <option value="PL">Poland</option>
+          </select>
+        </div>
+      </fieldset>
+
+      {shippingRates.length > 1 ? (
+        <fieldset className="space-y-2 rounded-xl border border-zinc-100 p-4">
+          <legend className="px-1 text-sm font-semibold text-zinc-800">Shipping method</legend>
+          {shippingRates.map((r) => (
+            <label key={r.id} className="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="shippingRate"
+                checked={selectedRateId === r.id}
+                onChange={() => setSelectedRateId(r.id)}
+              />
+              <span className="flex-1">{r.label}</span>
+              <span className="font-medium">
+                {(r.amountCents / 100).toFixed(2)} {currency}
+              </span>
+            </label>
+          ))}
+        </fieldset>
+      ) : null}
 
       <div className="rounded-lg border border-zinc-200 p-4 space-y-2">
         <label className="block text-sm font-medium">Discount code</label>
@@ -145,6 +213,30 @@ export function CheckoutForm({
         {discountPreview != null ? (
           <p className="text-sm text-emerald-700">
             Discount: −{(discountPreview / 100).toFixed(2)} {currency}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="rounded-lg border border-zinc-200 p-4 space-y-2">
+        <label className="block text-sm font-medium">Gift card</label>
+        <div className="flex gap-2">
+          <input
+            value={giftCardCode}
+            onChange={(e) => setGiftCardCode(e.target.value.toUpperCase())}
+            className="ugclab-input flex-1 font-mono uppercase"
+            placeholder="GC-XXXX"
+          />
+          <button
+            type="button"
+            onClick={previewGiftCard}
+            className="ugclab-btn border border-zinc-200 bg-white text-sm"
+          >
+            Apply
+          </button>
+        </div>
+        {giftCardPreview != null ? (
+          <p className="text-sm text-emerald-700">
+            Gift card: −{(giftCardPreview / 100).toFixed(2)} {currency}
           </p>
         ) : null}
       </div>

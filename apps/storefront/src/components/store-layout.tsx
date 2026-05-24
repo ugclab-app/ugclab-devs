@@ -13,10 +13,17 @@ import { StoreOrganizationJsonLd } from "@/components/store-json-ld";
 import { StickyCartBar } from "@/components/sticky-cart-bar";
 import { DiscountPopup } from "@/components/discount-popup";
 import { LiveChatWidget } from "@/components/live-chat-widget";
+import { AnalyticsScripts } from "@/components/analytics-scripts";
 import { CookieConsent } from "@/components/cookie-consent";
 import { StoreHreflang } from "@/components/store-hreflang";
 import { StoreClosedGate } from "@/components/store-closed-gate";
-import { storeThemeCssVars, storeButtonClass, resolveHomeBlocks } from "@ugclab/tenant/store-theme";
+import {
+  storeThemeCssVars,
+  storeButtonClass,
+  resolveHomeBlocks,
+} from "@ugclab/tenant/store-theme";
+import { StoreBlockRenderer } from "@/components/store-block-renderer";
+import { StickyCtaBar } from "@/components/builder-extra-blocks";
 
 export function StoreLayout({
   mainClassName = "store-container flex-1 py-10",
@@ -45,7 +52,7 @@ export function StoreLayout({
           <h1 className="text-xl font-semibold">Store not found</h1>
           <p className="mt-2 text-zinc-600">
             Open{" "}
-            <code className="rounded bg-zinc-100 px-1">?tenant=demo&amp;locale=en</code>
+            <code className="rounded bg-zinc-100 px-1">?tenant=tescommerce&amp;locale=en</code>
           </p>
         </div>
       </div>
@@ -53,17 +60,24 @@ export function StoreLayout({
   }
 
   const btnClass = storeButtonClass(data.theme);
-  const discountBlock = resolveHomeBlocks(data.theme).find((b) => b.type === "discount_popup");
+  const homeBlocks = resolveHomeBlocks(data.theme);
+  const globalBlocks = data.theme.globalBlocks ?? [];
+  const discountBlock = [...globalBlocks, ...homeBlocks].find((b) => b.type === "discount_popup");
+  const stickyCta = [...globalBlocks, ...homeBlocks].find((b) => b.type === "sticky_cta");
   const nav = { locale: data.locale, tenant: data.tenant.slug };
   const showStickyCart = !data.theme.storeClosed && data.cartCount > 0;
+  const layoutGlobal = globalBlocks.filter(
+    (b) => b.type !== "discount_popup" && b.type !== "sticky_cta"
+  );
 
   return (
     <StoreProvider value={data}>
       <div
-        className={`flex min-h-screen flex-col ${btnClass}${showStickyCart ? " store-has-sticky-cart" : ""}`}
+        className={`flex min-h-screen flex-col ${btnClass}${showStickyCart ? " store-has-sticky-cart" : ""}${stickyCta ? " store-has-sticky-cta" : ""}`}
         style={storeThemeCssVars(data.theme, data.primaryColor) as CSSProperties}
       >
         <StoreThemeHead />
+        <AnalyticsScripts />
         <StoreHreflang />
         <StoreOrganizationJsonLd />
         <AnnouncementBar
@@ -71,6 +85,11 @@ export function StoreLayout({
           primaryColor={data.primaryColor}
           barColor={data.theme.announcementColor}
         />
+        {layoutGlobal.length > 0 ? (
+          <div className="border-b border-zinc-100 bg-white">
+            <StoreBlockRenderer blocks={layoutGlobal} theme={data.theme} scrollAnimation="none" />
+          </div>
+        ) : null}
         {data.showCurrencyConversion && data.baseCurrency ? (
           <p className="bg-zinc-50 py-1 text-center text-xs text-zinc-500">
             Prices shown in {data.currency}. Charged in {data.baseCurrency} at checkout.
@@ -84,6 +103,7 @@ export function StoreLayout({
         </main>
         <StoreFooter />
         <StickyCartBar />
+        {stickyCta ? <StickyCtaBar block={stickyCta} /> : null}
         {discountBlock ? (
           <DiscountPopup block={discountBlock} tenantId={data.tenant.id} nav={nav} />
         ) : null}

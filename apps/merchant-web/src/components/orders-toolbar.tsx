@@ -6,7 +6,11 @@ const STATUS_CHIPS = [
   { value: "PENDING", label: "Pending" },
   { value: "PAID", label: "Paid" },
   { value: "FULFILLED", label: "Fulfilled" },
+  { value: "REFUNDED", label: "Refunded" },
+  { value: "CANCELLED", label: "Cancelled" },
 ] as const;
+
+const VIEW_CHIPS = [{ value: "paid-unfulfilled", label: "Paid · not shipped" }] as const;
 
 type SortOption = { value: string; label: string };
 
@@ -26,6 +30,9 @@ export function OrdersToolbar({
   const status = searchParams.get("status") ?? "";
   const from = searchParams.get("from") ?? "";
   const to = searchParams.get("to") ?? "";
+  const country = searchParams.get("country") ?? "";
+  const tag = searchParams.get("tag") ?? "";
+  const view = searchParams.get("view") ?? "";
 
   const update = useCallback(
     (updates: Record<string, string | null>) => {
@@ -45,6 +52,16 @@ export function OrdersToolbar({
     const next = new URLSearchParams(searchParams);
     if (nextStatus) next.set("status", nextStatus);
     else next.delete("status");
+    next.delete("view");
+    const qs = next.toString();
+    return qs ? `/orders?${qs}` : "/orders";
+  }
+
+  function hrefForView(nextView: string) {
+    const next = new URLSearchParams(searchParams);
+    if (nextView) next.set("view", nextView);
+    else next.delete("view");
+    next.delete("status");
     const qs = next.toString();
     return qs ? `/orders?${qs}` : "/orders";
   }
@@ -95,7 +112,7 @@ export function OrdersToolbar({
       <div className="flex flex-col gap-4 border-t border-zinc-100 pt-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="flex flex-wrap gap-2">
           {STATUS_CHIPS.map((chip) => {
-            const active = status === chip.value;
+            const active = status === chip.value && !view;
             return (
               <Link
                 key={chip.label}
@@ -110,8 +127,51 @@ export function OrdersToolbar({
               </Link>
             );
           })}
+          {VIEW_CHIPS.map((chip) => {
+            const active = view === chip.value;
+            return (
+              <Link
+                key={chip.label}
+                to={hrefForView(chip.value)}
+                className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                  active
+                    ? "bg-amber-600 text-white shadow-sm"
+                    : "border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100"
+                }`}
+              >
+                {chip.label}
+              </Link>
+            );
+          })}
         </div>
         <div className="flex flex-wrap items-end gap-3 lg:justify-end">
+          <label className="block shrink-0">
+            <span className="mb-1 block text-xs font-medium text-zinc-500">Country</span>
+            <select
+              value={country}
+              onChange={(e) => update({ country: e.target.value || null })}
+              className="ugclab-select orders-toolbar-sort"
+              aria-label="Filter by shipping country"
+            >
+              <option value="">All</option>
+              <option value="US">US</option>
+              <option value="CA">CA</option>
+              <option value="GB">GB</option>
+              <option value="DE">DE</option>
+              <option value="FR">FR</option>
+              <option value="NL">NL</option>
+              <option value="PL">PL</option>
+            </select>
+          </label>
+          <label className="block shrink-0">
+            <span className="mb-1 block text-xs font-medium text-zinc-500">Tag</span>
+            <input
+              value={tag}
+              onChange={(e) => update({ tag: e.target.value || null })}
+              placeholder="vip…"
+              className="ugclab-input orders-toolbar-sort w-28"
+            />
+          </label>
           <label className="block shrink-0">
             <span className="mb-1 block text-xs font-medium text-zinc-500">From</span>
             <input

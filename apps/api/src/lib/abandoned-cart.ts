@@ -1,7 +1,7 @@
 import { prisma } from "@ugclab/database";
 import { getCookie, setCookie } from "hono/cookie";
 import type { Context } from "hono";
-import { sendEmail } from "./email.js";
+import { sendStoreEmail } from "./tenant-email.js";
 import { getStorefrontUrl } from "./storefront.js";
 import type { CartItem } from "./store-cart.js";
 
@@ -91,7 +91,7 @@ export async function processAbandonedCartReminders() {
     const total = (cart.subtotalAmount / 100).toFixed(2);
 
     if (!cart.remindedAt1h && cart.updatedAt <= oneHourAgo) {
-      await sendEmail({
+      await sendStoreEmail(cart.tenantId, {
         to: cart.email,
         subject: `You left items in your cart — ${cart.tenant.name}`,
         html: `
@@ -113,7 +113,7 @@ export async function processAbandonedCartReminders() {
       !cart.remindedAt24h &&
       cart.updatedAt <= twentyFourHoursAgo
     ) {
-      await sendEmail({
+      await sendStoreEmail(cart.tenantId, {
         to: cart.email,
         subject: `Still thinking? Your cart at ${cart.tenant.name}`,
         html: `
@@ -128,4 +128,37 @@ export async function processAbandonedCartReminders() {
       });
     }
   }
+}
+
+export async function sendAbandonedCartRecoveryEmail(opts: {
+  cartId: string;
+  tenantId: string;
+}) {
+  const cart = await prisma.abandonedCart.findFirst({
+    where: { id: opts.cartId, tenantId: opts.tenantId, convertedAt: null },
+    include: { tenant: { select: { slug: true, name: true } } },
+  });
+  if (!cart) throw new Error("Cart not found");
+  if (!cart.email) throw new Error("Cart has no email");
+
+  const storeUrl = getStorefrontUrl(cart.tenant.slug);
+  const total = (cart.subtotalAmount / 100).toFixed(2);
+
+  await sendStoreEmail(cart.tenantId, {
+    to: cart.email,
+    subject: `Complete your order — ${cart.tenant.name}`,
+    html: `
+      <h2>Your cart is waiting</h2>
+      <p>You left items at <strong>${cart.tenant.name}</strong>.</p>
+      <p>Cart total: ${total} ${cart.currency}</p>
+      <p><a href="${storeUrl}/cart">Return to checkout →</a></p>
+    `,
+  });
+
+  await prisma.abandonedCart.update({
+    where: { id: cart.id },
+    data: { remindedAt1h: cart.remindedAt1h ?? new Date(), remindedAt24h: new Date() },
+  });
+
+  return { sent: true, email: cart.email };
 }

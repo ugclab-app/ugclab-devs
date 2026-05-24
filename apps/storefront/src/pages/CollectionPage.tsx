@@ -35,6 +35,7 @@ export function CollectionPage() {
   if (!data) return <p className="text-zinc-500">Loading…</p>;
 
   const hero = data.hero;
+  const extraBlocks = ctx.theme.collectionPageBlocks?.[slug ?? ""] ?? [];
 
   return (
     <>
@@ -64,6 +65,11 @@ export function CollectionPage() {
           ))}
         </ul>
       )}
+      {extraBlocks.length > 0 ? (
+        <div className="mt-12">
+          <StoreBlockRenderer blocks={extraBlocks} theme={ctx.theme} />
+        </div>
+      ) : null}
     </>
   );
 }

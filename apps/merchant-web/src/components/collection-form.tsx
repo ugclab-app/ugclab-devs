@@ -153,7 +153,7 @@ export function CollectionForm({
       collectionSeo,
     };
 
-    await api.updateSettings({ themeDraft: nextTheme });
+    await api.updateThemeDraft({ themeDraft: nextTheme });
     await queryClient.invalidateQueries({ queryKey: ["settings"] });
   }
 

@@ -21,9 +21,18 @@ export type HomeSection =
   | "logos"
   | "pricing"
   | "columns"
-  | "discount_popup";
+  | "discount_popup"
+  | "contact_form"
+  | "tabs"
+  | "sticky_cta"
+  | "blog_feed"
+  | "carousel"
+  | "instagram_embed"
+  | "product_compare";
 
+export type TabItem = { label: string; body: string };
 export type FaqItem = { question: string; answer: string };
+export type TitleSize = "sm" | "md" | "lg" | "xl";
 export type FeatureItem = { title: string; text: string };
 export type ColumnItem = { title?: string; text?: string; imageUrl?: string };
 export type PricingItem = {
@@ -71,6 +80,33 @@ export type HomeBlock = {
   popupDelaySec?: number;
   /** Discount popup: promo code shown to customer */
   discountCode?: string;
+  /** Visibility */
+  hiddenOnMobile?: boolean;
+  hiddenOnDesktop?: boolean;
+  borderRadius?: number;
+  bgGradient?: string;
+  marginX?: number;
+  titleSize?: TitleSize;
+  /** Catalog blocks */
+  productLimit?: number;
+  productColumns?: 2 | 3 | 4;
+  productIds?: string[];
+  /** Tabs block */
+  tabItems?: TabItem[];
+  /** Instagram embed URL or profile link */
+  instagramEmbedUrl?: string;
+  /** Blog feed limit */
+  blogLimit?: number;
+  /** Product compare slugs */
+  compareProductSlugs?: string[];
+};
+
+export type ThemeVersionSnapshot = {
+  id: string;
+  label: string;
+  savedAt: string;
+  homeBlocks: HomeBlock[];
+  globalBlocks?: HomeBlock[];
 };
 
 export function blockPaddingClass(padding?: BlockPadding): string {
@@ -169,6 +205,14 @@ export type StoreTheme = {
   trustBadgesEnabled?: boolean;
   /** Visual blocks per CMS page slug (`/pages/about`) */
   pageBlocks?: Record<string, HomeBlock[]>;
+  /** Blocks on every page (promo strip, trust bar) */
+  globalBlocks?: HomeBlock[];
+  /** Extra blocks below collection grid, keyed by collection slug */
+  collectionPageBlocks?: Record<string, HomeBlock[]>;
+  /** Blocks below product detail on all PDPs */
+  productPageBlocks?: HomeBlock[];
+  /** Published snapshots for restore (newest first) */
+  themeVersionHistory?: ThemeVersionSnapshot[];
   /** Hero block per collection slug */
   collectionHeroes?: Record<string, HomeBlock>;
   /** SEO overrides per collection slug */
@@ -179,6 +223,8 @@ export type StoreTheme = {
   stripeTaxEnabled?: boolean;
   /** Stripe Link (https://link.com) one-click at Checkout */
   stripeLinkEnabled?: boolean;
+  /** PayPal via Stripe Checkout (enable in Stripe Dashboard) */
+  stripePaypalEnabled?: boolean;
   /** Label shown at checkout, e.g. "Standard shipping (3–5 days)" */
   shippingCarrierLabel?: string;
   checkoutButtonText?: string;
@@ -244,6 +290,13 @@ const HOME_SECTIONS = new Set<HomeSection>([
   "pricing",
   "columns",
   "discount_popup",
+  "contact_form",
+  "tabs",
+  "sticky_cta",
+  "blog_feed",
+  "carousel",
+  "instagram_embed",
+  "product_compare",
 ]);
 
 function parseAlign(v: unknown): BlockAlign | undefined {
@@ -310,6 +363,21 @@ function parsePricing(raw: unknown): PricingItem[] | undefined {
   return items.length > 0 ? items : undefined;
 }
 
+function parseTabItems(raw: unknown): TabItem[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const items: TabItem[] = [];
+  for (const row of raw as Record<string, unknown>[]) {
+    const label = str(row.label);
+    const body = str(row.body);
+    if (label && body) items.push({ label, body });
+  }
+  return items.length > 0 ? items : undefined;
+}
+
+function parseTitleSize(v: unknown): TitleSize | undefined {
+  return v === "sm" || v === "md" || v === "lg" || v === "xl" ? v : undefined;
+}
+
 function parseFaqItems(raw: unknown): FaqItem[] | undefined {
   if (Array.isArray(raw)) {
     const items: FaqItem[] = [];
@@ -373,9 +441,56 @@ function parseHomeBlocks(raw: unknown): HomeBlock[] | undefined {
           ? row.popupDelaySec
           : parseInt(String(row.popupDelaySec ?? ""), 10) || undefined,
       discountCode: str(row.discountCode),
+      hiddenOnMobile: row.hiddenOnMobile === true,
+      hiddenOnDesktop: row.hiddenOnDesktop === true,
+      borderRadius:
+        typeof row.borderRadius === "number"
+          ? row.borderRadius
+          : parseInt(String(row.borderRadius ?? ""), 10) || undefined,
+      bgGradient: str(row.bgGradient),
+      marginX:
+        typeof row.marginX === "number"
+          ? row.marginX
+          : parseInt(String(row.marginX ?? ""), 10) || undefined,
+      titleSize: parseTitleSize(row.titleSize),
+      productLimit:
+        typeof row.productLimit === "number"
+          ? row.productLimit
+          : parseInt(String(row.productLimit ?? ""), 10) || undefined,
+      productColumns:
+        row.productColumns === 2 || row.productColumns === 3 || row.productColumns === 4
+          ? row.productColumns
+          : undefined,
+      productIds: parseStringArray(row.productIds),
+      tabItems: parseTabItems(row.tabItems),
+      instagramEmbedUrl: str(row.instagramEmbedUrl),
+      blogLimit:
+        typeof row.blogLimit === "number"
+          ? row.blogLimit
+          : parseInt(String(row.blogLimit ?? ""), 10) || undefined,
+      compareProductSlugs: parseStringArray(row.compareProductSlugs),
     });
   }
   return blocks.length > 0 ? blocks : undefined;
+}
+
+function parseThemeVersionHistory(raw: unknown): ThemeVersionSnapshot[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out: ThemeVersionSnapshot[] = [];
+  for (const row of raw as Record<string, unknown>[]) {
+    const id = str(row.id);
+    const label = str(row.label);
+    const homeBlocks = parseHomeBlocks(row.homeBlocks);
+    if (!id || !label || !homeBlocks?.length) continue;
+    out.push({
+      id,
+      label,
+      savedAt: str(row.savedAt) ?? new Date().toISOString(),
+      homeBlocks,
+      globalBlocks: parseHomeBlocks(row.globalBlocks),
+    });
+  }
+  return out.length > 0 ? out : undefined;
 }
 
 function parsePageBlocks(raw: unknown): Record<string, HomeBlock[]> | undefined {
@@ -559,11 +674,16 @@ export function parseStoreTheme(raw: unknown): StoreTheme {
     customCss: str(t.customCss),
     trustBadgesEnabled: t.trustBadgesEnabled === true,
     pageBlocks: parsePageBlocks(t.pageBlocks),
+    globalBlocks: parseHomeBlocks(t.globalBlocks),
+    collectionPageBlocks: parsePageBlocks(t.collectionPageBlocks),
+    productPageBlocks: parseHomeBlocks(t.productPageBlocks),
+    themeVersionHistory: parseThemeVersionHistory(t.themeVersionHistory),
     collectionHeroes: parseCollectionHeroes(t.collectionHeroes),
     collectionSeo: parseCollectionSeo(t.collectionSeo),
     customThemePresets: parseCustomThemePresets(t.customThemePresets),
     stripeTaxEnabled: t.stripeTaxEnabled === true,
     stripeLinkEnabled: t.stripeLinkEnabled !== false,
+    stripePaypalEnabled: t.stripePaypalEnabled === true,
     shippingCarrierLabel: str(t.shippingCarrierLabel),
     checkoutButtonText: str(t.checkoutButtonText),
     checkoutRequireName: t.checkoutRequireName === true,

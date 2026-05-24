@@ -1,0 +1,35 @@
+{
+  "common": {
+    "brand": "Tescommerce",
+    "getStarted": "Начать бесплатно",
+    "signIn": "Войти",
+    "save": "Сохранить",
+    "cancel": "Отмена",
+    "loading": "Загрузка…"
+  },
+  "platform": {
+    "heroTitle": "Продавайте по всему миру из одного магазина",
+    "heroSubtitle": "Запустите магазин за минуты. Физические и цифровые товары, глобальный checkout.",
+    "featuresTitle": "Всё для продаж онлайн",
+    "pricingTitle": "Прозрачные тарифы"
+  },
+  "admin": {
+    "dashboard": "Дашборд",
+    "products": "Товары",
+    "orders": "Заказы",
+    "settings": "Настройки",
+    "newProduct": "Новый товар",
+    "noProducts": "Товаров пока нет. Создайте первый, чтобы начать продажи.",
+    "help": "Помощь",
+    "support": "Поддержка",
+    "language": "Язык"
+  },
+  "storefront": {
+    "addToCart": "В корзину",
+    "checkout": "Оформление",
+    "cart": "Корзина",
+    "emptyCart": "Корзина пуста",
+    "digital": "Цифровая загрузка",
+    "physical": "Доставка по миру"
+  }
+}

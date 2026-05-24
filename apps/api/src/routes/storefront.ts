@@ -12,6 +12,11 @@ import {
 import { getMessages } from "@ugclab/i18n";
 import { hash, compare } from "bcryptjs";
 import { validateDiscountCode } from "../lib/checkout.js";
+import { validateGiftCard } from "../lib/gift-card.js";
+import {
+  parseIntegrations,
+  parsePostCheckoutUpsell,
+} from "../lib/growth-settings.js";
 import { getCollectionProducts } from "../lib/store-collections.js";
 import { getUploadRoot } from "../lib/uploads.js";
 import {
@@ -36,6 +41,12 @@ import { isAnnouncementActive, parseStoreTheme } from "../lib/store-theme.js";
 import { buildProductSearchWhere } from "../lib/product-search.js";
 import { displayCurrencyMeta, priceForDisplay } from "../lib/store-display-currency.js";
 import { resolveTenantFromHost } from "@ugclab/tenant";
+import { isMorPaymentModel } from "../lib/payment-model.js";
+import { isStripeConfigured } from "../lib/stripe.js";
+import {
+  buildPageSeo,
+  storePagePublicWhere,
+} from "../lib/store-page.js";
 
 const store = new Hono();
 
@@ -109,7 +120,7 @@ store.get("/context", async (c) => {
       select: { id: true, title: true, slug: true, description: true },
     }),
     prisma.storePage.findMany({
-      where: { tenantId: tenant.id, pageType: "PAGE", published: true },
+      where: storePagePublicWhere(tenant.id, { pageType: "PAGE" }),
       orderBy: { title: "asc" },
       select: { title: true, slug: true },
     }),
@@ -185,13 +196,21 @@ store.get("/context", async (c) => {
     cartCount,
     cartLabel: sf.cart,
     settings: tenant.settings,
+    integrations: parseIntegrations(tenant.settings?.integrations),
+    postCheckoutUpsell: parsePostCheckoutUpsell(
+      tenant.settings?.postCheckoutUpsell
+    ),
     checkoutGuestLookup: tenant.settings?.checkoutGuestLookup !== false,
     checkoutFooterText: tenant.settings?.checkoutFooterText ?? null,
     payments: {
-      stripeLive:
-        Boolean(process.env.STRIPE_SECRET_KEY) &&
-        Boolean(tenant.stripeAccountId) &&
-        tenant.stripeChargesEnabled,
+      stripeLive: isMorPaymentModel()
+        ? isStripeConfigured()
+        : Boolean(
+            process.env.STRIPE_SECRET_KEY &&
+              tenant.stripeAccountId &&
+              tenant.stripeChargesEnabled
+          ),
+      paymentModel: isMorPaymentModel() ? "mor" : "connect",
       demoMode: !process.env.STRIPE_SECRET_KEY,
     },
   });
@@ -648,6 +667,151 @@ store.delete("/cart", async (c) => {
   return c.json({ ok: true });
 });
 
+store.get("/upsell-products", async (c) => {
+  const slug = tenantSlug(c);
+  const tenant = await resolveTenantBySlug(slug);
+  if (!tenant) return c.json({ error: "Store not found" }, 404);
+  const upsell = parsePostCheckoutUpsell(tenant.settings?.postCheckoutUpsell);
+  if (!upsell.enabled || !upsell.productIds?.length) {
+    return c.json({ products: [], headline: upsell.headline ?? null });
+  }
+  const products = await prisma.product.findMany({
+    where: {
+      tenantId: tenant.id,
+      id: { in: upsell.productIds },
+      status: ProductStatus.ACTIVE,
+    },
+    select: {
+      id: true,
+      title: true,
+      slug: true,
+      priceAmount: true,
+      currency: true,
+      compareAt: true,
+    },
+  });
+  return c.json({
+    headline: upsell.headline ?? "You might also like",
+    products,
+  });
+});
+
+store.get("/bundles", async (c) => {
+  const slug = tenantSlug(c);
+  const tenant = await resolveTenantBySlug(slug);
+  if (!tenant) return c.json({ error: "Store not found" }, 404);
+  const bundles = await prisma.productBundle.findMany({
+    where: { tenantId: tenant.id, active: true },
+    include: {
+      items: {
+        include: {
+          product: {
+            select: {
+              id: true,
+              title: true,
+              slug: true,
+              images: { take: 1, orderBy: { sortOrder: "asc" } },
+            },
+          },
+        },
+      },
+    },
+    orderBy: { title: "asc" },
+  });
+  return c.json({ bundles });
+});
+
+store.post("/checkout/shipping-rates", async (c) => {
+  const slug = tenantSlug(c);
+  const tenant = await resolveTenantBySlug(slug);
+  if (!tenant) return c.json({ error: "Store not found" }, 404);
+  const body = await c.req.json<{
+    country: string;
+    city?: string;
+    postal?: string;
+    weightGrams?: number;
+  }>();
+  const { getShippoRates, isShippoConfigured } = await import("../lib/shippo.js");
+  const { resolveShipping } = await import("../lib/checkout.js");
+
+  const flat = await resolveShipping(
+    tenant.id,
+    (body.country ?? "US").slice(0, 2).toUpperCase(),
+    0,
+    body.weightGrams ?? 500
+  );
+
+  const rates: {
+    id: string;
+    label: string;
+    amountCents: number;
+    provider: string;
+  }[] = [
+    {
+      id: "flat",
+      label: flat.label ?? "Standard shipping",
+      amountCents: flat.amount,
+      provider: "Store",
+    },
+  ];
+
+  if (isShippoConfigured()) {
+    const live = await getShippoRates({
+      from: {
+        name: tenant.name,
+        street1: "1 Warehouse St",
+        city: "New York",
+        state: "NY",
+        zip: "10001",
+        country: "US",
+      },
+      to: {
+        name: "Customer",
+        street1: "100 Main St",
+        city: body.city?.trim() || "New York",
+        zip: body.postal?.trim() || "10001",
+        country: (body.country ?? "US").slice(0, 2).toUpperCase(),
+      },
+      weightGrams: body.weightGrams ?? 500,
+    });
+    for (const r of live) {
+      rates.push({
+        id: r.id,
+        label: `${r.provider} ${r.service}`,
+        amountCents: r.amountCents,
+        provider: r.provider,
+      });
+    }
+  }
+
+  return c.json({ rates });
+});
+
+store.post("/checkout/validate-gift-card", async (c) => {
+  const slug = tenantSlug(c);
+  const tenant = await resolveTenantBySlug(slug);
+  if (!tenant) return c.json({ error: "Store not found" }, 404);
+  const body = await c.req.json<{ code: string; orderTotal: number }>();
+  try {
+    const result = await validateGiftCard(
+      tenant.id,
+      body.code,
+      body.orderTotal
+    );
+    if (!result) return c.json({ giftCardAmount: 0 });
+    return c.json({
+      giftCardAmount: result.giftCardAmount,
+      code: result.card.code,
+      balanceRemaining: result.card.balanceCents - result.giftCardAmount,
+    });
+  } catch (e) {
+    return c.json(
+      { error: e instanceof Error ? e.message : "Invalid gift card" },
+      400
+    );
+  }
+});
+
 store.post("/checkout/validate-discount", async (c) => {
   const slug = tenantSlug(c);
   const tenant = await resolveTenantBySlug(slug);
@@ -824,28 +988,32 @@ store.get("/pages/:slug", async (c) => {
   const slug = tenantSlug(c);
   const tenant = await resolveTenantBySlug(slug);
   if (!tenant) return c.json({ error: "Store not found" }, 404);
+  const preview = c.req.query("preview") === "1";
   const page = await prisma.storePage.findFirst({
-    where: {
-      tenantId: tenant.id,
-      slug: c.req.param("slug"),
-      pageType: "PAGE",
-      published: true,
-    },
+    where: storePagePublicWhere(
+      tenant.id,
+      { slug: c.req.param("slug"), pageType: "PAGE" },
+      preview
+    ),
   });
   if (!page) return c.json({ error: "Not found" }, 404);
   const settings = tenant.settings;
   const theme = parseStoreTheme(
-    c.req.query("preview") === "1" && settings?.themeDraft
-      ? settings.themeDraft
-      : settings?.theme
+    preview && settings?.themeDraft ? settings.themeDraft : settings?.theme
   );
   const pageBlocks = theme.pageBlocks?.[page.slug];
+  const seo = buildPageSeo(page);
   return c.json({
     page: {
       title: page.title,
       slug: page.slug,
       body: page.body,
-      seoTitle: page.title,
+      excerpt: page.excerpt,
+      featuredImageUrl: page.featuredImageUrl,
+      authorName: page.authorName,
+      tags: page.tags,
+      createdAt: page.createdAt.toISOString(),
+      ...seo,
       blocks: pageBlocks ?? null,
     },
   });
@@ -855,29 +1023,138 @@ store.get("/blog", async (c) => {
   const slug = tenantSlug(c);
   const tenant = await resolveTenantBySlug(slug);
   if (!tenant) return c.json({ error: "Store not found" }, 404);
+  const tag = c.req.query("tag")?.trim().toLowerCase();
+  const sort = c.req.query("sort") ?? "newest";
+  const orderBy =
+    sort === "oldest"
+      ? { createdAt: "asc" as const }
+      : sort === "title"
+        ? { title: "asc" as const }
+        : { createdAt: "desc" as const };
+
   const posts = await prisma.storePage.findMany({
-    where: { tenantId: tenant.id, pageType: "BLOG", published: true },
-    orderBy: { createdAt: "desc" },
-    select: { title: true, slug: true, body: true, createdAt: true },
+    where: {
+      ...storePagePublicWhere(tenant.id, { pageType: "BLOG" }),
+      ...(tag ? { tags: { has: tag } } : {}),
+    },
+    orderBy,
+    select: {
+      title: true,
+      slug: true,
+      body: true,
+      excerpt: true,
+      featuredImageUrl: true,
+      authorName: true,
+      tags: true,
+      createdAt: true,
+      publishAt: true,
+    },
   });
-  return c.json({ posts });
+  return c.json({
+    posts: posts.map((p) => ({
+      title: p.title,
+      slug: p.slug,
+      excerpt:
+        p.excerpt?.trim() ||
+        p.body.replace(/<[^>]+>/g, "").trim().slice(0, 200),
+      featuredImageUrl: p.featuredImageUrl,
+      authorName: p.authorName,
+      tags: p.tags,
+      createdAt: p.createdAt.toISOString(),
+      publishedAt: (p.publishAt ?? p.createdAt).toISOString(),
+    })),
+  });
 });
 
 store.get("/blog/:slug", async (c) => {
   const slug = tenantSlug(c);
   const tenant = await resolveTenantBySlug(slug);
   if (!tenant) return c.json({ error: "Store not found" }, 404);
+  const preview = c.req.query("preview") === "1";
   const post = await prisma.storePage.findFirst({
-    where: {
-      tenantId: tenant.id,
-      slug: c.req.param("slug"),
-      pageType: "BLOG",
-      published: true,
-    },
+    where: storePagePublicWhere(
+      tenant.id,
+      { slug: c.req.param("slug"), pageType: "BLOG" },
+      preview
+    ),
   });
   if (!post) return c.json({ error: "Not found" }, 404);
-  return c.json({ post });
+  const seo = buildPageSeo(post);
+  return c.json({
+    post: {
+      title: post.title,
+      slug: post.slug,
+      body: post.body,
+      excerpt: post.excerpt,
+      featuredImageUrl: post.featuredImageUrl,
+      authorName: post.authorName,
+      tags: post.tags,
+      createdAt: post.createdAt.toISOString(),
+      publishedAt: (post.publishAt ?? post.createdAt).toISOString(),
+      ...seo,
+    },
+  });
 });
+
+store.get("/blog/rss.xml", async (c) => {
+  const slug = tenantSlug(c);
+  const tenant = await resolveTenantBySlug(slug);
+  if (!tenant) return c.text("Not found", 404);
+  const posts = await prisma.storePage.findMany({
+    where: storePagePublicWhere(tenant.id, { pageType: "BLOG", noindex: false }),
+    orderBy: { createdAt: "desc" },
+    take: 50,
+    select: {
+      title: true,
+      slug: true,
+      excerpt: true,
+      body: true,
+      authorName: true,
+      createdAt: true,
+      publishAt: true,
+    },
+  });
+  const base = c.req.url.split("/blog/rss.xml")[0];
+  const feedUrl = `${base}/blog/rss.xml?tenant=${encodeURIComponent(slug)}`;
+  const items = posts
+    .map((p) => {
+      const link = `${base}/blog/${p.slug}?tenant=${encodeURIComponent(slug)}`;
+      const pub = (p.publishAt ?? p.createdAt).toUTCString();
+      const desc = escapeXml(
+        p.excerpt?.trim() || p.body.replace(/<[^>]+>/g, "").slice(0, 500)
+      );
+      return `<item>
+  <title>${escapeXml(p.title)}</title>
+  <link>${link}</link>
+  <guid isPermaLink="true">${link}</guid>
+  <pubDate>${pub}</pubDate>
+  <description>${desc}</description>
+  ${p.authorName ? `<author>${escapeXml(p.authorName)}</author>` : ""}
+</item>`;
+    })
+    .join("\n");
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+<channel>
+  <title>${escapeXml(tenant.name)} Blog</title>
+  <link>${feedUrl}</link>
+  <description>${escapeXml(tenant.name)} blog posts</description>
+  <language>en</language>
+  ${items}
+</channel>
+</rss>`;
+  return c.body(xml, 200, {
+    "Content-Type": "application/rss+xml; charset=utf-8",
+  });
+});
+
+function escapeXml(s: string) {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
 
 store.get("/reviews", async (c) => {
   const slug = tenantSlug(c);
@@ -1021,6 +1298,36 @@ store.post("/newsletter/subscribe", async (c) => {
       console.error
     );
   }
+
+  return c.json({ ok: true });
+});
+
+store.post("/contact", async (c) => {
+  const slug = tenantSlug(c);
+  const tenant = await resolveTenantBySlug(slug);
+  if (!tenant) return c.json({ error: "Store not found" }, 404);
+
+  const body = await c.req.json<{ name?: string; email?: string; message?: string }>();
+  const name = String(body.name ?? "").trim();
+  const email = String(body.email ?? "").trim().toLowerCase();
+  const message = String(body.message ?? "").trim();
+  if (!name || !email.includes("@") || !message) {
+    return c.json({ error: "Name, email, and message are required" }, 400);
+  }
+
+  const to =
+    tenant.settings?.contactEmail?.trim() ??
+    process.env.PLATFORM_OPS_EMAIL ??
+    null;
+  if (!to) return c.json({ error: "Store has no contact email configured" }, 503);
+
+  const { sendStoreEmail } = await import("../lib/tenant-email.js");
+  await sendStoreEmail(tenant.id, {
+    to,
+    subject: `Contact form — ${tenant.name}`,
+    html: `<p><strong>From:</strong> ${name} &lt;${email}&gt;</p><p>${message.replace(/\n/g, "<br/>")}</p>`,
+    replyTo: email,
+  });
 
   return c.json({ ok: true });
 });

@@ -62,7 +62,7 @@ export function SecurityPanel() {
   return (
     <SettingsPanelShell
       title="Two-factor authentication"
-      description="Add an extra layer of security to your merchant account."
+      description="Required for viewing orders and requesting payouts. Add an extra layer of security to your account."
       badge={
         <span
           className={`rounded-full px-3 py-1 text-xs font-semibold ${

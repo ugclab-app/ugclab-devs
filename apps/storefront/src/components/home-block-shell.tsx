@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
+import { blockOuterClass, blockSectionStyle } from "@ugclab/tenant/block-style";
 import { blockPaddingClass, type HomeBlock } from "@ugclab/tenant/store-theme";
 
 export function HomeBlockShell({
@@ -9,9 +10,9 @@ export function HomeBlockShell({
   children: ReactNode;
 }) {
   const style: CSSProperties = {
-    backgroundColor: block.bgColor,
-    color: block.textColor,
+    ...blockSectionStyle(block),
   };
+
   const inner =
     block.contentWidth === "full" ? (
       children
@@ -20,7 +21,7 @@ export function HomeBlockShell({
     );
 
   return (
-    <div className={blockPaddingClass(block.paddingY)} style={style}>
+    <div className={`${blockPaddingClass(block.paddingY)} ${blockOuterClass(block)}`} style={style}>
       {inner}
     </div>
   );

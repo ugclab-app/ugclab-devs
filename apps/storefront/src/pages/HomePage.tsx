@@ -33,6 +33,14 @@ import {
   PricingBlockSection,
   SpacerBlockSection,
 } from "@/components/home-extra-blocks";
+import {
+  BlogFeedBlockSection,
+  CarouselBlockSection,
+  ContactFormBlockSection,
+  InstagramEmbedBlockSection,
+  ProductCompareBlockSection,
+  TabsBlockSection,
+} from "@/components/builder-extra-blocks";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { buildStoreTitle, useDocumentSeo } from "@/hooks/use-document-seo";
 
@@ -362,7 +370,7 @@ export function HomePage() {
   }
 
   for (const block of homeBlocks) {
-    if (block.type === "discount_popup") continue;
+    if (block.type === "discount_popup" || block.type === "sticky_cta") continue;
     if (filtered && block.type !== "products") continue;
 
     if (block.type === "hero") {
@@ -450,6 +458,16 @@ export function HomePage() {
     if (block.type === "logos") emit(block.id, <LogosBlockSection block={block} />);
     if (block.type === "pricing") {
       emit(block.id, <PricingBlockSection block={block} nav={nav} />);
+    }
+    if (block.type === "contact_form") emit(block.id, <ContactFormBlockSection block={block} />);
+    if (block.type === "tabs") emit(block.id, <TabsBlockSection block={block} />);
+    if (block.type === "blog_feed") emit(block.id, <BlogFeedBlockSection block={block} />);
+    if (block.type === "carousel") emit(block.id, <CarouselBlockSection block={block} />);
+    if (block.type === "instagram_embed") {
+      emit(block.id, <InstagramEmbedBlockSection block={block} />);
+    }
+    if (block.type === "product_compare") {
+      emit(block.id, <ProductCompareBlockSection block={block} />);
     }
   }
 

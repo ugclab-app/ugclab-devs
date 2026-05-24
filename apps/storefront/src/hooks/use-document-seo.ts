@@ -5,6 +5,8 @@ export type DocumentSeo = {
   description?: string | null;
   image?: string | null;
   type?: "website" | "product" | "article";
+  noindex?: boolean;
+  canonicalUrl?: string | null;
 };
 
 export function useDocumentSeo(seo: DocumentSeo) {
@@ -30,7 +32,11 @@ export function useDocumentSeo(seo: DocumentSeo) {
     setMeta("og:type", seo.type ?? "website", true);
     if (seo.image) setMeta("og:image", seo.image, true);
 
-    const canonical = window.location.href;
+    if (seo.noindex) {
+      setMeta("robots", "noindex, nofollow");
+    }
+
+    const canonical = seo.canonicalUrl?.trim() || window.location.href;
     let link = document.querySelector<HTMLLinkElement>('link[rel="canonical"][data-store]');
     if (!link) {
       link = document.createElement("link");
@@ -39,7 +45,7 @@ export function useDocumentSeo(seo: DocumentSeo) {
       document.head.appendChild(link);
     }
     link.href = canonical;
-  }, [seo.title, seo.description, seo.image, seo.type]);
+  }, [seo.title, seo.description, seo.image, seo.type, seo.noindex, seo.canonicalUrl]);
 }
 
 export function buildStoreTitle(storeName: string, page?: string) {

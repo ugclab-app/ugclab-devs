@@ -13,6 +13,7 @@ import {
   resolveShipping,
   validateDiscountCode,
 } from "./checkout.js";
+import { validateGiftCard } from "./gift-card.js";
 import { parseStoreTheme } from "./store-theme.js";
 import { applyAutoPromotions } from "./promotions.js";
 import { fulfillPaidOrder } from "./fulfill-order.js";
@@ -20,6 +21,8 @@ import {
   calcPlatformFeeAmount,
   resolvePlatformFeeBps,
 } from "./platform-fee.js";
+import type Stripe from "stripe";
+import { isMorPaymentModel } from "./payment-model.js";
 import { getStripe, isStripeConfigured } from "./stripe.js";
 import { getStorefrontUrl } from "./storefront.js";
 import {
@@ -49,6 +52,8 @@ export type PreparedOrder = {
   totalAmount: number;
   platformFeeAmount: number;
   discountCodeId: string | null;
+  giftCardId: string | null;
+  giftCardAmount: number;
   country: string;
   hasPhysical: boolean;
   shippingName: string | null;
@@ -61,6 +66,7 @@ export type PreparedOrder = {
   accessToken: string;
   stripeTaxEnabled: boolean;
   stripeLinkEnabled: boolean;
+  stripePaypalEnabled: boolean;
   shippingLabel: string | null;
   lineData: {
     productId: string;
@@ -103,51 +109,108 @@ async function prepareOrder(
   });
   if (!tenant) throw new Error("Store not found");
 
-  const cart = getCart(c).filter((i) => i.tenantId === tenantId);
-  if (cart.length === 0) throw new Error("Cart is empty");
-
-  const products = await prisma.product.findMany({
-    where: {
-      id: { in: cart.map((i) => i.productId) },
-      tenantId,
-      status: ProductStatus.ACTIVE,
-    },
-    include: { digitalAsset: true, variants: true },
-  });
-
+  const bundleId = String(body.bundleId ?? "").trim();
+  let cart = getCart(c).filter((i) => i.tenantId === tenantId);
+  let lineData: PreparedOrder["lineData"] = [];
   let subtotal = 0;
   let totalWeightGrams = 0;
   let hasPhysical = false;
-  const lineData: PreparedOrder["lineData"] = [];
 
-  for (const item of cart) {
-    const p = products.find((x) => x.id === item.productId);
-    if (!p) continue;
-    const variant = item.variantId
-      ? p.variants.find((v) => v.id === item.variantId)
-      : null;
-    const unit = variant?.priceAmount ?? p.priceAmount;
-    const title = variant ? `${p.title} — ${variant.title}` : p.title;
-    const stock = variant?.inventory ?? p.inventory;
-    if (p.type === ProductType.PHYSICAL && stock != null && stock < item.quantity) {
-      throw new Error(`${title} is out of stock`);
-    }
-    const lineTotal = unit * item.quantity;
-    subtotal += lineTotal;
-    if (p.type === ProductType.PHYSICAL) {
-      hasPhysical = true;
-      totalWeightGrams +=
-        (variant?.weightGrams ?? p.weightGrams ?? 0) * item.quantity;
-    }
-    lineData.push({
-      productId: p.id,
-      variantId: variant?.id ?? null,
-      title,
-      quantity: item.quantity,
-      unitAmount: unit,
-      totalAmount: lineTotal,
-      type: p.type,
+  if (bundleId) {
+    const bundle = await prisma.productBundle.findFirst({
+      where: { id: bundleId, tenantId, active: true },
+      include: {
+        items: {
+          include: {
+            product: { include: { variants: true, digitalAsset: true } },
+          },
+        },
+      },
     });
+    if (!bundle?.items.length) throw new Error("Bundle not found");
+    const catalogSum = bundle.items.reduce(
+      (s, i) => s + i.product.priceAmount * i.quantity,
+      0
+    );
+    for (const item of bundle.items) {
+      const p = item.product;
+      if (p.status !== ProductStatus.ACTIVE) {
+        throw new Error(`${p.title} is unavailable`);
+      }
+      const share =
+        catalogSum > 0
+          ? Math.round(
+              (bundle.priceAmount * (p.priceAmount * item.quantity)) / catalogSum
+            )
+          : Math.round(bundle.priceAmount / bundle.items.length);
+      const unit = Math.round(share / item.quantity);
+      const lineTotal = unit * item.quantity;
+      subtotal += lineTotal;
+      if (p.type === ProductType.PHYSICAL) {
+        hasPhysical = true;
+        totalWeightGrams += (p.weightGrams ?? 0) * item.quantity;
+      }
+      lineData.push({
+        productId: p.id,
+        variantId: null,
+        title: `${bundle.title} — ${p.title}`,
+        quantity: item.quantity,
+        unitAmount: unit,
+        totalAmount: lineTotal,
+        type: p.type,
+      });
+    }
+    subtotal = bundle.priceAmount;
+    lineData = lineData.map((l, idx, arr) => {
+      if (idx < arr.length - 1) return l;
+      const fixed = bundle.priceAmount - arr.slice(0, -1).reduce((s, x) => s + x.totalAmount, 0);
+      return {
+        ...l,
+        totalAmount: fixed,
+        unitAmount: Math.round(fixed / l.quantity),
+      };
+    });
+  } else {
+    if (cart.length === 0) throw new Error("Cart is empty");
+
+    const products = await prisma.product.findMany({
+      where: {
+        id: { in: cart.map((i) => i.productId) },
+        tenantId,
+        status: ProductStatus.ACTIVE,
+      },
+      include: { digitalAsset: true, variants: true },
+    });
+
+    for (const item of cart) {
+      const p = products.find((x) => x.id === item.productId);
+      if (!p) continue;
+      const variant = item.variantId
+        ? p.variants.find((v) => v.id === item.variantId)
+        : null;
+      const unit = variant?.priceAmount ?? p.priceAmount;
+      const title = variant ? `${p.title} — ${variant.title}` : p.title;
+      const stock = variant?.inventory ?? p.inventory;
+      if (p.type === ProductType.PHYSICAL && stock != null && stock < item.quantity) {
+        throw new Error(`${title} is out of stock`);
+      }
+      const lineTotal = unit * item.quantity;
+      subtotal += lineTotal;
+      if (p.type === ProductType.PHYSICAL) {
+        hasPhysical = true;
+        totalWeightGrams +=
+          (variant?.weightGrams ?? p.weightGrams ?? 0) * item.quantity;
+      }
+      lineData.push({
+        productId: p.id,
+        variantId: variant?.id ?? null,
+        title,
+        quantity: item.quantity,
+        unitAmount: unit,
+        totalAmount: lineTotal,
+        type: p.type,
+      });
+    }
   }
 
   if (lineData.length === 0) throw new Error("No valid products in cart");
@@ -186,6 +249,10 @@ async function prepareOrder(
     : { amount: 0, label: null };
   let shippingAmount = shippingQuote.amount;
   if (auto.freeShipping && hasPhysical) shippingAmount = 0;
+  const customShipping = parseInt(String(body.shippingAmountCents ?? ""), 10);
+  if (Number.isFinite(customShipping) && customShipping >= 0 && hasPhysical) {
+    shippingAmount = customShipping;
+  }
 
   const shippingLabel =
     theme.shippingCarrierLabel?.trim() ||
@@ -194,6 +261,7 @@ async function prepareOrder(
 
   const stripeTaxEnabled = theme.stripeTaxEnabled === true;
   const stripeLinkEnabled = theme.stripeLinkEnabled !== false;
+  const stripePaypalEnabled = theme.stripePaypalEnabled === true;
   const taxAmount = stripeTaxEnabled
     ? 0
     : calcTax(
@@ -201,7 +269,20 @@ async function prepareOrder(
         settings?.taxRateBps ?? 0,
         settings?.taxIncluded ?? false
       );
-  const totalAmount = afterDiscount + shippingAmount + taxAmount;
+  let totalAmount = afterDiscount + shippingAmount + taxAmount;
+
+  let giftCardId: string | null = null;
+  let giftCardAmount = 0;
+  const giftCardCode = String(body.giftCardCode ?? "").trim();
+  if (giftCardCode) {
+    const gc = await validateGiftCard(tenantId, giftCardCode, totalAmount);
+    if (gc) {
+      giftCardAmount = gc.giftCardAmount;
+      giftCardId = gc.card.id;
+      totalAmount -= giftCardAmount;
+    }
+  }
+
   const feeBps = resolvePlatformFeeBps(tenant);
   const platformFeeAmount = calcPlatformFeeAmount(totalAmount, feeBps);
 
@@ -263,6 +344,8 @@ async function prepareOrder(
     totalAmount,
     platformFeeAmount,
     discountCodeId,
+    giftCardId,
+    giftCardAmount,
     country,
     hasPhysical,
     shippingName: hasPhysical ? shippingName || name : null,
@@ -275,13 +358,14 @@ async function prepareOrder(
     accessToken: newAccessToken(),
     stripeTaxEnabled,
     stripeLinkEnabled,
+    stripePaypalEnabled,
     shippingLabel,
     lineData,
   };
 }
 
 async function createPendingOrder(prepared: PreparedOrder) {
-  return prisma.order.create({
+  const order = await prisma.order.create({
     data: {
       tenantId: prepared.tenantId,
       customerId: prepared.customerId,
@@ -301,6 +385,8 @@ async function createPendingOrder(prepared: PreparedOrder) {
       shippingCity: prepared.shippingCity,
       shippingPostal: prepared.shippingPostal,
       discountCodeId: prepared.discountCodeId,
+      giftCardId: prepared.giftCardId,
+      giftCardAmount: prepared.giftCardAmount,
       accessToken: prepared.accessToken,
       guestEmail: prepared.email,
       items: {
@@ -323,6 +409,9 @@ async function createPendingOrder(prepared: PreparedOrder) {
       },
     },
   });
+  const { reserveInventoryForOrder } = await import("./inventory.js");
+  await reserveInventoryForOrder(order.id).catch(() => {});
+  return order;
 }
 
 async function createStripeCheckout(
@@ -330,8 +419,15 @@ async function createStripeCheckout(
   orderId: string,
   locale: string
 ) {
-  if (!prepared.stripeAccountId || !prepared.stripeChargesEnabled) {
+  const mor = isMorPaymentModel();
+  if (
+    !mor &&
+    (!prepared.stripeAccountId || !prepared.stripeChargesEnabled)
+  ) {
     throw new Error("This store has not connected Stripe payments yet");
+  }
+  if (mor && !isStripeConfigured()) {
+    throw new Error("Platform payments are not configured");
   }
   const stripe = getStripe();
   const base = process.env.STOREFRONT_URL ?? "http://localhost:3002";
@@ -346,15 +442,20 @@ async function createStripeCheckout(
   cancelUrl.searchParams.set("locale", locale);
 
   const applicationFee =
-    prepared.platformFeeAmount > 0 && prepared.platformFeeAmount < prepared.totalAmount
+    !mor &&
+    prepared.platformFeeAmount > 0 &&
+    prepared.platformFeeAmount < prepared.totalAmount
       ? prepared.platformFeeAmount
       : undefined;
 
-  const session = await stripe.checkout.sessions.create({
+  const paymentMethodTypes: Stripe.Checkout.SessionCreateParams.PaymentMethodType[] =
+    ["card"];
+  if (prepared.stripeLinkEnabled) paymentMethodTypes.push("link");
+  if (prepared.stripePaypalEnabled) paymentMethodTypes.push("paypal");
+
+  const sessionBase: Stripe.Checkout.SessionCreateParams = {
     mode: "payment",
-    ...(prepared.stripeLinkEnabled
-      ? { payment_method_types: ["card", "link"] }
-      : { payment_method_types: ["card"] }),
+    payment_method_types: paymentMethodTypes,
     customer_email: prepared.email,
     ...(prepared.stripeTaxEnabled
       ? {
@@ -382,26 +483,43 @@ async function createStripeCheckout(
           unit_amount: prepared.totalAmount,
           product_data: {
             name: `Order #${prepared.orderNumber}`,
+            ...(mor ? { description: `Store: ${prepared.tenantSlug}` } : {}),
           },
         },
         quantity: 1,
       },
     ],
-    payment_intent_data: {
-      application_fee_amount: applicationFee,
-      transfer_data: { destination: prepared.stripeAccountId },
-      metadata: {
-        orderId,
-        tenantId: prepared.tenantId,
-      },
-    },
     metadata: {
       orderId,
       tenantId: prepared.tenantId,
+      paymentModel: mor ? "mor" : "connect",
     },
     success_url: successUrl.toString(),
     cancel_url: cancelUrl.toString(),
-  });
+  };
+
+  const session = mor
+    ? await stripe.checkout.sessions.create({
+        ...sessionBase,
+        payment_intent_data: {
+          metadata: {
+            orderId,
+            tenantId: prepared.tenantId,
+            paymentModel: "mor",
+          },
+        },
+      })
+    : await stripe.checkout.sessions.create({
+        ...sessionBase,
+        payment_intent_data: {
+          application_fee_amount: applicationFee,
+          transfer_data: { destination: prepared.stripeAccountId! },
+          metadata: {
+            orderId,
+            tenantId: prepared.tenantId,
+          },
+        },
+      });
 
   await prisma.order.update({
     where: { id: orderId },
@@ -422,8 +540,8 @@ export async function placeStoreOrder(
 
   const useStripe =
     isStripeConfigured() &&
-    prepared.stripeAccountId &&
-    prepared.stripeChargesEnabled;
+    (isMorPaymentModel() ||
+      Boolean(prepared.stripeAccountId && prepared.stripeChargesEnabled));
 
   if (useStripe) {
     const order = await createPendingOrder(prepared);

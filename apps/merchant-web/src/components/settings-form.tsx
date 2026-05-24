@@ -2,6 +2,7 @@ import { useState } from "react";
 import { api } from "@/api/client";
 import { useAuth } from "@/context/auth";
 import { FormAlert } from "@/components/form-alert";
+import { ImageUrlField } from "@/components/image-url-field";
 import { SettingsSection } from "@/components/settings-section";
 import { CURRENCIES, LOCALES, TIMEZONES } from "@/lib/constants";
 
@@ -14,6 +15,12 @@ type SettingsData = {
   timezone: string;
   primaryColor: string;
   logoUrl: string;
+  faviconUrl: string;
+  contactEmail: string;
+  contactPhone: string;
+  businessAddress: string;
+  emailFromName: string;
+  emailReplyTo: string;
   privacyUrl: string;
   refundUrl: string;
   privacyPolicy: string;
@@ -44,6 +51,7 @@ export function SettingsForm({
   const [slug, setSlug] = useState(initial.slug);
   const [primaryColor, setPrimaryColor] = useState(initial.primaryColor);
   const [pending, setPending] = useState(false);
+  const [testEmailPending, setTestEmailPending] = useState(false);
   const slugChanged = slug !== initial.slug;
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -63,6 +71,12 @@ export function SettingsForm({
         timezone: fd.get("timezone"),
         primaryColor,
         logoUrl: fd.get("logoUrl"),
+        faviconUrl: fd.get("faviconUrl"),
+        contactEmail: fd.get("contactEmail"),
+        contactPhone: fd.get("contactPhone"),
+        businessAddress: fd.get("businessAddress"),
+        emailFromName: fd.get("emailFromName"),
+        emailReplyTo: fd.get("emailReplyTo"),
         privacyUrl: fd.get("privacyUrl"),
         refundUrl: fd.get("refundUrl"),
         privacyPolicy: fd.get("privacyPolicy"),
@@ -181,7 +195,7 @@ export function SettingsForm({
             </Field>
           </SettingsSection>
 
-          <SettingsSection title="Branding" description="Logo and accent color on your storefront.">
+          <SettingsSection title="Branding" description="Logo, favicon, and accent color on your storefront.">
             <div className="flex flex-wrap items-end gap-4">
               <div className="flex items-center gap-3">
                 <input
@@ -202,6 +216,102 @@ export function SettingsForm({
                 <input name="logoUrl" defaultValue={initial.logoUrl} className="ugclab-input" />
               </Field>
             </div>
+            <div className="mt-4">
+              <ImageUrlField
+                name="faviconUrl"
+                label="Favicon"
+                defaultValue={initial.faviconUrl}
+                placeholder="32×32 icon URL"
+              />
+            </div>
+          </SettingsSection>
+
+          <SettingsSection
+            title="Store contact"
+            description="Shown in the storefront footer and on invoices / packing slips."
+          >
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Contact email">
+                <input
+                  name="contactEmail"
+                  type="email"
+                  defaultValue={initial.contactEmail}
+                  className="ugclab-input"
+                  placeholder="hello@yourstore.com"
+                />
+              </Field>
+              <Field label="Phone (optional)">
+                <input
+                  name="contactPhone"
+                  defaultValue={initial.contactPhone}
+                  className="ugclab-input"
+                  placeholder="+1 555 0100"
+                />
+              </Field>
+            </div>
+            <Field label="Business address" className="mt-4">
+              <textarea
+                name="businessAddress"
+                defaultValue={initial.businessAddress}
+                rows={3}
+                className="ugclab-input text-sm"
+                placeholder="Street, city, country — one line per row"
+              />
+            </Field>
+          </SettingsSection>
+
+          <SettingsSection
+            title="Transactional email"
+            description="From name and reply-to for order receipts, shipping updates, and cart recovery."
+          >
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="From name">
+                <input
+                  name="emailFromName"
+                  defaultValue={initial.emailFromName}
+                  className="ugclab-input"
+                  placeholder={initial.name}
+                />
+              </Field>
+              <Field label="Reply-to email">
+                <input
+                  name="emailReplyTo"
+                  type="email"
+                  defaultValue={initial.emailReplyTo}
+                  className="ugclab-input"
+                  placeholder="support@yourstore.com"
+                />
+              </Field>
+            </div>
+            <p className="mt-2 text-xs text-zinc-500">
+              The sending address is configured by the platform (Resend / SendGrid). Customers see
+              your store name as the sender and can reply to the address above.
+            </p>
+            <button
+              type="button"
+              disabled={testEmailPending}
+              className="ugclab-btn mt-4 border border-zinc-200 bg-white px-4 py-2 text-sm"
+              onClick={async () => {
+                setTestEmailPending(true);
+                setAlert({});
+                try {
+                  const res = await api.sendTestStoreEmail();
+                  setAlert({
+                    ok: true,
+                    message: `Test email sent to ${res.sentTo}`,
+                  });
+                } catch (err) {
+                  setAlert({
+                    ok: false,
+                    message: err instanceof Error ? err.message : "Test email failed",
+                  });
+                } finally {
+                  setTestEmailPending(false);
+                }
+              }}
+            >
+              {testEmailPending ? "Sending…" : "Send test email to my account"}
+            </button>
           </SettingsSection>
 
           <SettingsSection title="Tax" description="Applied at checkout on subtotal and shipping.">
@@ -335,6 +445,12 @@ export function SettingsForm({
           <input type="hidden" name="timezone" value={initial.timezone} />
           <input type="hidden" name="primaryColor" value={primaryColor} />
           <input type="hidden" name="logoUrl" value={initial.logoUrl} />
+          <input type="hidden" name="faviconUrl" value={initial.faviconUrl} />
+          <input type="hidden" name="contactEmail" value={initial.contactEmail} />
+          <input type="hidden" name="contactPhone" value={initial.contactPhone} />
+          <input type="hidden" name="businessAddress" value={initial.businessAddress} />
+          <input type="hidden" name="emailFromName" value={initial.emailFromName} />
+          <input type="hidden" name="emailReplyTo" value={initial.emailReplyTo} />
           <input type="hidden" name="taxRate" value={(initial.taxRateBps / 100).toFixed(1)} />
           <input type="hidden" name="lowStockThreshold" value={initial.lowStockThreshold} />
           <input type="hidden" name="digitalLinkDays" value={initial.digitalLinkDays} />

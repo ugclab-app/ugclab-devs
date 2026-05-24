@@ -2,7 +2,8 @@ import { useEffect } from "react";
 import { useStore } from "@/context/store";
 
 export function StoreThemeHead() {
-  const { theme, tenant } = useStore();
+  const { theme, tenant, settings } = useStore();
+  const faviconUrl = settings?.faviconUrl ?? theme.faviconUrl;
 
   useEffect(() => {
     const base = window.location.origin;
@@ -19,7 +20,7 @@ export function StoreThemeHead() {
   }, [tenant.slug]);
 
   useEffect(() => {
-    if (theme.faviconUrl) {
+    if (faviconUrl) {
       let link = document.querySelector<HTMLLinkElement>('link[rel="icon"][data-store]');
       if (!link) {
         link = document.createElement("link");
@@ -27,7 +28,7 @@ export function StoreThemeHead() {
         link.setAttribute("data-store", "1");
         document.head.appendChild(link);
       }
-      link.href = theme.faviconUrl;
+      link.href = faviconUrl;
     }
     if (theme.customCss) {
       let style = document.getElementById("store-custom-css") as HTMLStyleElement | null;
@@ -38,7 +39,7 @@ export function StoreThemeHead() {
       }
       style.textContent = theme.customCss;
     }
-  }, [theme.faviconUrl, theme.customCss]);
+  }, [faviconUrl, theme.customCss]);
 
   return null;
 }

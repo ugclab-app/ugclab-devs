@@ -16,7 +16,11 @@ export function usePermissions() {
   return {
     loading: isLoading,
     isOwner: data?.isOwner ?? false,
+    role: data?.role ?? null,
     permissions: data?.permissions ?? [],
+    totpEnabled: data?.totpEnabled ?? false,
+    needs2faForOrders: data?.needs2faForOrders ?? false,
+    needs2faForPayouts: data?.needs2faForPayouts ?? false,
     can,
   };
 }

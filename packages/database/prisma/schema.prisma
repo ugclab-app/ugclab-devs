@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
@@ -10,6 +11,14 @@ datasource db {
 enum UserRole {
   MERCHANT
   SUPER_ADMIN
+  PLATFORM_OPS
+  PLATFORM_SUPPORT
+  PLATFORM_FINANCE
+}
+
+enum UserAccountStatus {
+  ACTIVE
+  BANNED
 }
 
 enum TenantStatus {
@@ -45,6 +54,20 @@ enum OrderStatus {
   REFUNDED
 }
 
+enum InventoryTransferStatus {
+  DRAFT
+  IN_TRANSIT
+  RECEIVED
+  CANCELLED
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  ORDERED
+  RECEIVED
+  CANCELLED
+}
+
 enum TenantMemberRole {
   OWNER
   ADMIN
@@ -66,18 +89,85 @@ model User {
   email        String   @unique
   passwordHash String?
   name         String?
+  avatarUrl    String?
   country      String?  @db.Char(2)
   timezone     String   @default("UTC")
-  role         UserRole @default(MERCHANT)
-  totpSecret   String?
-  totpEnabled  Boolean  @default(false)
-  createdAt    DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt    DateTime @updatedAt @db.Timestamptz(6)
+  role              UserRole          @default(MERCHANT)
+  accountStatus     UserAccountStatus @default(ACTIVE)
+  bannedAt          DateTime?         @db.Timestamptz(6)
+  lastLoginAt       DateTime?         @db.Timestamptz(6)
+  sessionVersion    Int               @default(0)
+  requireAdmin2fa   Boolean           @default(false)
+  totpSecret        String?
+  totpEnabled       Boolean           @default(false)
+  createdAt         DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime          @updatedAt @db.Timestamptz(6)
 
   tenants       Tenant[]
   tenantMembers TenantMember[]
   accounts      Account[]
   sessions      Session[]
+}
+
+model PlatformAuditLog {
+  id           String   @id @default(cuid())
+  actorUserId  String
+  actorEmail   String
+  action       String
+  targetUserId String?
+  summary      String
+  meta         Json?
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([createdAt])
+  @@index([targetUserId])
+}
+
+model PlatformSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+}
+
+model PlatformNote {
+  id          String   @id @default(cuid())
+  entityType  String
+  entityId    String
+  body        String   @db.Text
+  actorUserId String
+  actorEmail  String
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([entityType, entityId])
+}
+
+model PlatformAnnouncement {
+  id        String   @id @default(cuid())
+  active    Boolean  @default(false)
+  title     String
+  message   String   @db.Text
+  planSlugs String[] @default([])
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+}
+
+model PlatformEmailLog {
+  id        String   @id @default(cuid())
+  to        String
+  subject   String
+  template  String?
+  status    String   @default("sent")
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([createdAt])
+}
+
+model StoreThemeCatalog {
+  id        String  @id
+  label     String
+  published Boolean @default(true)
+  featured  Boolean @default(false)
+  sortOrder Int     @default(0)
 }
 
 model Account {
@@ -127,9 +217,20 @@ model SubscriptionPlan {
   stripePriceId   String?
   trialDays       Int      @default(14)
   features        Json?
+  archived        Boolean  @default(false)
   createdAt       DateTime @default(now()) @db.Timestamptz(6)
 
   tenants Tenant[]
+}
+
+model PlatformBlacklistEntry {
+  id        String   @id @default(cuid())
+  type      String
+  value     String   @unique
+  reason    String?
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([type])
 }
 
 model Tenant {
@@ -147,6 +248,8 @@ model Tenant {
   stripeChargesEnabled     Boolean   @default(false)
   stripeDetailsSubmitted   Boolean   @default(false)
   platformFeeBpsOverride   Int?
+  platformCreditCents      Int       @default(0)
+  featureFlags             Json?
   createdAt              DateTime  @default(now()) @db.Timestamptz(6)
   updatedAt              DateTime  @updatedAt @db.Timestamptz(6)
 
@@ -170,6 +273,30 @@ model Tenant {
   emailCampaigns   EmailCampaign[]
   emailAutomations EmailAutomation[]
   emailSubscribers EmailSubscriber[]
+  merchantPayouts  MerchantPayout[]
+  giftCards        GiftCard[]
+  productBundles   ProductBundle[]
+  warehouses       Warehouse[]
+  merchantWebhooks MerchantWebhook[]
+  merchantApiKeys  MerchantApiKey[]
+  inventoryTransfers InventoryTransfer[]
+  purchaseOrders     PurchaseOrder[]
+  inventoryMovements InventoryMovement[]
+}
+
+model MerchantPayout {
+  id        String   @id @default(cuid())
+  tenantId  String
+  amount    Int
+  currency  String   @default("USD") @db.Char(3)
+  status    String   @default("PENDING")
+  note      String?  @db.Text
+  paidAt    DateTime? @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
 }
 
 enum EmailCampaignStatus {
@@ -205,6 +332,12 @@ model StoreSettings {
   currency        String   @default("USD") @db.Char(3)
   timezone        String   @default("UTC")
   logoUrl         String?
+  faviconUrl      String?
+  contactEmail    String?
+  contactPhone    String?
+  businessAddress String?  @db.Text
+  emailFromName   String?
+  emailReplyTo    String?
   primaryColor    String   @default("#18181b")
   theme           Json?
   privacyUrl      String?
@@ -227,6 +360,14 @@ model StoreSettings {
   emailOrderSubject   String?
   emailOrderBody      String?  @db.Text
   themeDraft          Json?
+  payoutCurrency      String?  @db.Char(3)
+  taxFormType         String?
+  taxFormLegalName    String?
+  taxFormId           String?
+  notifyPayoutFailed  Boolean  @default(true)
+  integrations        Json?
+  postCheckoutUpsell  Json?
+  stripeTaxEnabled    Boolean  @default(false)
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
@@ -238,9 +379,10 @@ model TenantMember {
   email       String
   role        TenantMemberRole @default(STAFF)
   permissions String[]         @default([])
-  inviteToken String?          @unique
-  createdAt   DateTime         @default(now()) @db.Timestamptz(6)
-  acceptedAt  DateTime?        @db.Timestamptz(6)
+  inviteToken      String?          @unique
+  inviteExpiresAt  DateTime?        @db.Timestamptz(6)
+  createdAt        DateTime         @default(now()) @db.Timestamptz(6)
+  acceptedAt       DateTime?        @db.Timestamptz(6)
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   user   User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -335,11 +477,18 @@ model Product {
   translations Json?
   publishAt    DateTime?     @db.Timestamptz(6)
   costAmountCents Int?
+  subscriptionEnabled  Boolean @default(false)
+  subscriptionInterval String?
   createdAt    DateTime      @default(now()) @db.Timestamptz(6)
   updatedAt    DateTime      @updatedAt @db.Timestamptz(6)
 
   tenant       Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   variants     ProductVariant[]
+  bundleItems  ProductBundleItem[]
+  warehouseStock WarehouseStock[]
+  inventoryMovements InventoryMovement[]
+  transferLines      InventoryTransferLine[]
+  purchaseOrderLines PurchaseOrderLine[]
   images       ProductImage[]
   digitalAsset DigitalAsset?
   orderItems        OrderLineItem[]
@@ -418,20 +567,31 @@ model Collection {
 }
 
 model StorePage {
-  id        String   @id @default(cuid())
-  tenantId  String
-  title     String
-  slug      String
-  body      String   @db.Text
-  pageType  String   @default("PAGE")
-  published Boolean  @default(true)
-  createdAt DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+  id              String    @id @default(cuid())
+  tenantId        String
+  title           String
+  slug            String
+  body            String    @db.Text
+  excerpt         String?   @db.Text
+  featuredImageUrl String?
+  pageType        String    @default("PAGE")
+  published       Boolean   @default(true)
+  publishAt       DateTime? @db.Timestamptz(6)
+  authorName      String?
+  tags            String[]  @default([])
+  metaTitle       String?
+  metaDescription String?   @db.Text
+  ogImageUrl      String?
+  canonicalUrl    String?
+  noindex         Boolean   @default(false)
+  createdAt       DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @db.Timestamptz(6)
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, slug])
   @@index([tenantId, pageType])
+  @@index([tenantId, published, publishAt])
 }
 
 model ProductReview {
@@ -525,6 +685,9 @@ model Order {
   shippedAt       DateTime?   @db.Timestamptz(6)
   discountCodeId  String?
   discountAmount  Int         @default(0)
+  giftCardId      String?
+  giftCardAmount  Int         @default(0)
+  tags            String[]    @default([])
   accessToken     String?     @unique
   guestEmail      String?
   createdAt       DateTime    @default(now()) @db.Timestamptz(6)
@@ -533,6 +696,7 @@ model Order {
   tenant       Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   customer     Customer?       @relation(fields: [customerId], references: [id])
   discountCode DiscountCode?   @relation(fields: [discountCodeId], references: [id])
+  giftCard     GiftCard?       @relation(fields: [giftCardId], references: [id])
   items            OrderLineItem[]
   events           OrderEvent[]
   digitalDownloads DigitalDownload[]
@@ -595,7 +759,10 @@ model StripeWebhookEvent {
   id        String   @id
   type      String
   processed Boolean  @default(false)
+  error     String?  @db.Text
   createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([processed, createdAt])
 }
 
 model AbandonedCart {
@@ -699,4 +866,202 @@ model EmailAutomation {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, type])
+}
+
+model GiftCard {
+  id              String    @id @default(cuid())
+  tenantId        String
+  code            String
+  initialBalance  Int
+  balanceCents    Int
+  currency        String    @default("USD") @db.Char(3)
+  active          Boolean   @default(true)
+  expiresAt       DateTime? @db.Timestamptz(6)
+  recipientEmail  String?
+  note            String?   @db.Text
+  createdAt       DateTime  @default(now()) @db.Timestamptz(6)
+
+  tenant Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, active])
+}
+
+model ProductBundle {
+  id          String   @id @default(cuid())
+  tenantId    String
+  title       String
+  slug        String
+  description String?  @db.Text
+  priceAmount Int
+  currency    String   @default("USD") @db.Char(3)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(6)
+
+  tenant Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  items  ProductBundleItem[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId, active])
+}
+
+model ProductBundleItem {
+  id        String @id @default(cuid())
+  bundleId  String
+  productId String
+  quantity  Int    @default(1)
+
+  bundle  ProductBundle @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  product Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([bundleId, productId])
+}
+
+model Warehouse {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  tenant Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  stock  WarehouseStock[]
+  movements     InventoryMovement[]
+  transfersOut  InventoryTransfer[] @relation("TransferFrom")
+  transfersIn   InventoryTransfer[] @relation("TransferTo")
+  purchaseOrders PurchaseOrder[]
+
+  @@index([tenantId])
+}
+
+model WarehouseStock {
+  id          String  @id @default(cuid())
+  warehouseId String
+  productId   String
+  variantId   String?
+  quantity    Int     @default(0)
+  reservedQty Int     @default(0)
+
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([warehouseId, productId, variantId])
+  @@index([warehouseId])
+  @@index([productId])
+}
+
+model InventoryMovement {
+  id            String   @id @default(cuid())
+  tenantId      String
+  warehouseId   String?
+  productId     String
+  variantId     String?
+  type          String
+  quantityDelta Int
+  referenceType String?
+  referenceId   String?
+  note          String?  @db.Text
+  authorEmail   String?
+  createdAt     DateTime @default(now()) @db.Timestamptz(6)
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  warehouse Warehouse? @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
+  product   Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@index([productId])
+  @@index([warehouseId])
+}
+
+model InventoryTransfer {
+  id              String                  @id @default(cuid())
+  tenantId        String
+  fromWarehouseId String
+  toWarehouseId   String
+  status          InventoryTransferStatus @default(DRAFT)
+  note            String?                 @db.Text
+  createdAt       DateTime                @default(now()) @db.Timestamptz(6)
+  receivedAt      DateTime?               @db.Timestamptz(6)
+
+  tenant        Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  fromWarehouse Warehouse               @relation("TransferFrom", fields: [fromWarehouseId], references: [id])
+  toWarehouse   Warehouse               @relation("TransferTo", fields: [toWarehouseId], references: [id])
+  lines         InventoryTransferLine[]
+
+  @@index([tenantId, status])
+}
+
+model InventoryTransferLine {
+  id         String @id @default(cuid())
+  transferId String
+  productId  String
+  variantId  String?
+  quantity   Int
+
+  transfer InventoryTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  product  Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([transferId])
+}
+
+model PurchaseOrder {
+  id           String              @id @default(cuid())
+  tenantId     String
+  warehouseId  String
+  supplierName String
+  status       PurchaseOrderStatus @default(DRAFT)
+  note         String?             @db.Text
+  expectedAt   DateTime?           @db.Timestamptz(6)
+  receivedAt   DateTime?           @db.Timestamptz(6)
+  createdAt    DateTime            @default(now()) @db.Timestamptz(6)
+
+  tenant    Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  warehouse Warehouse           @relation(fields: [warehouseId], references: [id])
+  lines     PurchaseOrderLine[]
+
+  @@index([tenantId, status])
+}
+
+model PurchaseOrderLine {
+  id                String @id @default(cuid())
+  purchaseOrderId   String
+  productId         String
+  variantId         String?
+  quantityOrdered   Int
+  quantityReceived  Int    @default(0)
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  product       Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([purchaseOrderId])
+}
+
+model MerchantWebhook {
+  id        String   @id @default(cuid())
+  tenantId  String
+  url       String
+  secret    String
+  events    String[]
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, active])
+}
+
+model MerchantApiKey {
+  id         String    @id @default(cuid())
+  tenantId   String
+  name       String
+  keyPrefix  String
+  keyHash    String
+  lastUsedAt DateTime? @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
 }

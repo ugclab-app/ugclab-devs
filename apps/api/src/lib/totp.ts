@@ -67,7 +67,7 @@ export function verifyTotp(secret: string, token: string, window = 1): boolean {
   return false;
 }
 
-export function totpUri(email: string, secret: string, issuer = "UGCLab"): string {
+export function totpUri(email: string, secret: string, issuer = "Tescommerce"): string {
   const label = encodeURIComponent(`${issuer}:${email}`);
   return `otpauth://totp/${label}?secret=${secret}&issuer=${encodeURIComponent(issuer)}`;
 }

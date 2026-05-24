@@ -56,7 +56,7 @@ export async function createPlatformSubscriptionCheckout(
           currency: plan.currency.toLowerCase(),
           unit_amount: plan.priceMonthly,
           recurring: { interval: "month" },
-          product_data: { name: `${plan.name} — UGCLab Store` },
+          product_data: { name: `${plan.name} — Tescommerce` },
         },
         quantity: 1,
       };

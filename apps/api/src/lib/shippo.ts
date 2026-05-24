@@ -90,3 +90,67 @@ export async function createShippoLabel(params: {
     carrier: rate.provider,
   };
 }
+
+export type ShippoRateQuote = {
+  id: string;
+  provider: string;
+  service: string;
+  amountCents: number;
+  currency: string;
+  estimatedDays: number | null;
+};
+
+export async function getShippoRates(params: {
+  from: ShippoAddress;
+  to: ShippoAddress;
+  weightGrams: number;
+}): Promise<ShippoRateQuote[]> {
+  const token = process.env.SHIPPO_API_KEY?.trim();
+  if (!token) return [];
+
+  const weightLb = Math.max(0.1, params.weightGrams / 453.592);
+  const shipmentRes = await fetch(`${SHIPPO_API}/shipments/`, {
+    method: "POST",
+    headers: {
+      Authorization: `ShippoToken ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      address_from: params.from,
+      address_to: params.to,
+      parcels: [
+        {
+          length: "6",
+          width: "4",
+          height: "2",
+          distance_unit: "in",
+          weight: String(weightLb.toFixed(2)),
+          mass_unit: "lb",
+        },
+      ],
+      async: false,
+    }),
+  });
+
+  const shipment = (await shipmentRes.json()) as {
+    rates?: {
+      object_id: string;
+      provider: string;
+      servicelevel?: { name?: string };
+      amount: string;
+      currency: string;
+      estimated_days?: number;
+    }[];
+  };
+
+  if (!shipmentRes.ok || !shipment.rates?.length) return [];
+
+  return shipment.rates.slice(0, 8).map((r) => ({
+    id: r.object_id,
+    provider: r.provider,
+    service: r.servicelevel?.name ?? r.provider,
+    amountCents: Math.round(parseFloat(r.amount) * 100) || 0,
+    currency: (r.currency ?? "USD").toUpperCase(),
+    estimatedDays: r.estimated_days ?? null,
+  }));
+}

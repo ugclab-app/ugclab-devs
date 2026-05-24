@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import {
   OrderStatus,
+  Prisma,
   prisma,
   ProductStatus,
   ProductType,
@@ -24,7 +25,8 @@ import {
   syncProductVariants,
 } from "./merchant-p1.js";
 import { sendShippingNotification } from "../lib/shipping-email.js";
-import { parseStoreTheme } from "@ugclab/tenant/store-theme";
+import { parseStoreTheme, resolveHomeBlocks } from "@ugclab/tenant/store-theme";
+import { jsonForPrisma } from "../lib/theme-json.js";
 import { checkLowStockAfterInventoryChange } from "../lib/low-stock.js";
 import { logActivity } from "../lib/activity-log.js";
 import {
@@ -33,6 +35,14 @@ import {
   parseCollectionIds,
   syncProductCollections,
 } from "../lib/product-form-data.js";
+import {
+  computeCustomerMetrics,
+  customerMetricsToCsv,
+  matchesCustomerFilter,
+  sortCustomerRows,
+  type CustomerListFilter,
+  type CustomerListSort,
+} from "../lib/customer-metrics.js";
 
 function parseProductType(raw: unknown): ProductType {
   if (raw === "DIGITAL") return ProductType.DIGITAL;
@@ -50,15 +60,21 @@ function parseTagsField(raw: unknown): string[] {
     .filter(Boolean);
 }
 
+import { useOrderRouteGuards } from "../middleware/merchant-guards.js";
+
 const merchant = new Hono<AuthEnv>();
 merchant.use("*", requireAuth);
+useOrderRouteGuards(merchant);
 
 merchant.get("/dashboard", async (c) => {
   const { tenant } = await requireTenant(c.get("session"));
   const range = c.req.query("range") === "30" ? 30 : 7;
   const fullTenant = await prisma.tenant.findUnique({
     where: { id: tenant.id },
-    include: { subscriptionPlan: true },
+    include: {
+      subscriptionPlan: true,
+      _count: { select: { products: true, members: true } },
+    },
   });
   const feeBps = fullTenant ? resolvePlatformFeeBps(fullTenant) : 500;
   const metrics = await getDashboardMetrics(tenant.id, range, feeBps);
@@ -67,13 +83,75 @@ merchant.get("/dashboard", async (c) => {
     currency: tenant.settings?.currency ?? "USD",
     range,
     metrics,
+    planLimits: fullTenant
+      ? {
+          planName: fullTenant.subscriptionPlan?.name ?? "Starter",
+          productLimit: fullTenant.subscriptionPlan?.productLimit ?? null,
+          productCount: fullTenant._count.products,
+          staffCount: fullTenant._count.members,
+        }
+      : null,
+  });
+});
+
+merchant.get("/plan-limits", async (c) => {
+  const { tenant } = await requireTenant(c.get("session"));
+  const full = await prisma.tenant.findUnique({
+    where: { id: tenant.id },
+    include: {
+      subscriptionPlan: true,
+      _count: { select: { products: true, members: true } },
+    },
+  });
+  if (!full) return c.json({ error: "Not found" }, 404);
+  const limit = full.subscriptionPlan?.productLimit;
+  return c.json({
+    planName: full.subscriptionPlan?.name ?? "Starter",
+    productLimit: limit,
+    productCount: full._count.products,
+    staffCount: full._count.members,
+    atProductLimit: limit != null && full._count.products >= limit,
+  });
+});
+
+merchant.post("/support", async (c) => {
+  const { tenant, session } = await requireTenant(c.get("session"));
+  const body = await c.req.json<{ subject: string; message: string }>();
+  const subject = body.subject?.trim();
+  const message = body.message?.trim();
+  if (!subject || !message) {
+    return c.json({ error: "Subject and message required" }, 400);
+  }
+  const owner = await prisma.user.findUnique({ where: { id: session.sub } });
+  const { sendEmail } = await import("../lib/email.js");
+  const ops = process.env.PLATFORM_OPS_EMAIL?.trim();
+  if (ops) {
+    await sendEmail({
+      to: ops,
+      subject: `[Support] ${tenant.slug}: ${subject}`,
+      html: `<p><strong>${owner?.email ?? "merchant"}</strong> (${tenant.name})</p><p>${message}</p>`,
+    }).catch(() => {});
+  }
+  await logActivity({
+    tenantId: tenant.id,
+    userEmail: owner?.email ?? session.email,
+    action: "support.ticket",
+    summary: subject,
+    meta: { message: message.slice(0, 500) },
+  });
+  return c.json({
+    ok: true,
+    message: ops
+      ? "Message sent to support. We will reply by email."
+      : "Ticket logged. Configure PLATFORM_OPS_EMAIL for email delivery.",
   });
 });
 
 merchant.get("/notifications", async (c) => {
   const { tenant } = await requireTenant(c.get("session"));
   const threshold = tenant.settings?.lowStockThreshold ?? 5;
-  const [pendingOrders, lowStockCount] = await Promise.all([
+  const d90 = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+  const [pendingOrders, lowStockCount, openDisputes] = await Promise.all([
     prisma.order.count({
       where: { tenantId: tenant.id, status: OrderStatus.PENDING },
     }),
@@ -85,8 +163,15 @@ merchant.get("/notifications", async (c) => {
         inventory: { not: null, lte: threshold },
       },
     }),
+    prisma.orderEvent.count({
+      where: {
+        tenantId: tenant.id,
+        type: "STRIPE_DISPUTE",
+        createdAt: { gte: d90 },
+      },
+    }),
   ]);
-  return c.json({ pendingOrders, lowStockCount });
+  return c.json({ pendingOrders, lowStockCount, openDisputes });
 });
 
 merchant.get("/products/low-stock", async (c) => {
@@ -307,7 +392,12 @@ merchant.post("/products", async (c) => {
   if (translationsCreate !== undefined) {
     await prisma.product.update({
       where: { id: product.id },
-      data: { translations: translationsCreate },
+      data: {
+        translations:
+          translationsCreate === null
+            ? Prisma.JsonNull
+            : (translationsCreate as Prisma.InputJsonValue),
+      },
     });
   }
 
@@ -509,7 +599,12 @@ merchant.patch("/products/:id", async (c) => {
   if (translationsPatch !== undefined) {
     await prisma.product.update({
       where: { id: product.id },
-      data: { translations: translationsPatch },
+      data: {
+        translations:
+          translationsPatch === null
+            ? Prisma.JsonNull
+            : (translationsPatch as Prisma.InputJsonValue),
+      },
     });
   }
 
@@ -674,124 +769,120 @@ merchant.post("/products/:id/duplicate", async (c) => {
 
 merchant.get("/orders", async (c) => {
   const { tenant } = await requireTenant(c.get("session"));
-  const q = c.req.query("q")?.trim() ?? "";
   const sort = parseOrderSort(c.req.query("sort"));
-  const statusParam = c.req.query("status");
-  const statusFilter =
-    statusParam &&
-    Object.values(OrderStatus).includes(statusParam as OrderStatus)
-      ? (statusParam as OrderStatus)
-      : undefined;
-
-  const from = c.req.query("from");
-  const to = c.req.query("to");
-  const createdAtFilter =
-    from || to
-      ? {
-          ...(from ? { gte: new Date(from) } : {}),
-          ...(to
-            ? {
-                lte: new Date(
-                  to.length === 10 ? `${to}T23:59:59.999Z` : to
-                ),
-              }
-            : {}),
-        }
-      : undefined;
-
-  const orders = await prisma.order.findMany({
-    where: {
-      tenantId: tenant.id,
-      ...(statusFilter ? { status: statusFilter } : {}),
-      ...(createdAtFilter ? { createdAt: createdAtFilter } : {}),
-      ...(q
-        ? {
-            OR: [
-              { orderNumber: { contains: q, mode: "insensitive" } },
-              {
-                customer: {
-                  email: { contains: q, mode: "insensitive" },
-                },
-              },
-            ],
-          }
-        : {}),
-    },
-    include: { customer: true },
-    orderBy: orderOrderBy(sort),
-    take: 100,
+  const page = Math.max(1, parseInt(c.req.query("page") ?? "1", 10) || 1);
+  const pageSize = Math.min(100, Math.max(10, parseInt(c.req.query("pageSize") ?? "50", 10) || 50));
+  const { buildOrderListWhere, summarizeOrders } = await import(
+    "../lib/order-list-query.js"
+  );
+  const where = buildOrderListWhere(tenant.id, {
+    q: c.req.query("q"),
+    status: c.req.query("status"),
+    from: c.req.query("from"),
+    to: c.req.query("to"),
+    country: c.req.query("country"),
+    view: c.req.query("view"),
+    tag: c.req.query("tag"),
   });
+
+  const [orders, total, summary] = await Promise.all([
+    prisma.order.findMany({
+      where,
+      include: {
+        customer: true,
+        items: { include: { product: { select: { type: true } } } },
+      },
+      orderBy: orderOrderBy(sort),
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.order.count({ where }),
+    summarizeOrders(where),
+  ]);
+
+  const { mapOrderListRow } = await import("../lib/order-list.js");
+  const { getPaymentModel } = await import("../lib/payment-model.js");
 
   return c.json({
     currency: tenant.settings?.currency ?? "USD",
-    orders,
+    paymentModel: getPaymentModel(),
+    page,
+    pageSize,
+    total,
+    summary: {
+      count: summary.count,
+      totalCents: summary.totalCents,
+      platformFeesCents: summary.platformFeesCents,
+    },
+    orders: orders.map(mapOrderListRow),
   });
+});
+
+merchant.post("/orders/draft", async (c) => {
+  const { tenant } = await requireTenant(c.get("session"));
+  const body = await c.req.json<{
+    email: string;
+    name?: string;
+    lines: { productId: string; quantity?: number }[];
+    note?: string;
+  }>();
+  const { createMerchantDraftOrder } = await import("../lib/merchant-draft-order.js");
+  try {
+    const order = await createMerchantDraftOrder(tenant.id, body);
+    return c.json({ order }, 201);
+  } catch (e) {
+    return c.json(
+      { error: e instanceof Error ? e.message : "Failed to create draft" },
+      400
+    );
+  }
 });
 
 merchant.get("/orders/export", async (c) => {
   const { tenant } = await requireTenant(c.get("session"));
-  const status = c.req.query("status");
-  const q = c.req.query("q")?.trim() ?? "";
-  const from = c.req.query("from");
-  const to = c.req.query("to");
-  const createdAtFilter =
-    from || to
-      ? {
-          ...(from ? { gte: new Date(from) } : {}),
-          ...(to
-            ? {
-                lte: new Date(
-                  to.length === 10 ? `${to}T23:59:59.999Z` : to
-                ),
-              }
-            : {}),
-        }
-      : undefined;
+  const { buildOrderListWhere } = await import("../lib/order-list-query.js");
+  const where = buildOrderListWhere(tenant.id, {
+    q: c.req.query("q"),
+    status: c.req.query("status"),
+    from: c.req.query("from"),
+    to: c.req.query("to"),
+    country: c.req.query("country"),
+    view: c.req.query("view"),
+    tag: c.req.query("tag"),
+  });
+  const accounting = c.req.query("format") === "accounting";
   const orders = await prisma.order.findMany({
-    where: {
-      tenantId: tenant.id,
-      ...(status ? { status: status as OrderStatus } : {}),
-      ...(createdAtFilter ? { createdAt: createdAtFilter } : {}),
-      ...(q
-        ? {
-            OR: [
-              { orderNumber: { contains: q, mode: "insensitive" } },
-              {
-                customer: {
-                  email: { contains: q, mode: "insensitive" },
-                },
-              },
-            ],
-          }
-        : {}),
-    },
-    include: { customer: true },
+    where,
+    include: { customer: true, items: true },
     orderBy: { createdAt: "desc" },
     take: 5000,
   });
 
-  const header =
-    "orderNumber,status,email,total,currency,country,trackingNumber,shippedAt,createdAt";
-  const rows = orders.map((o) =>
-    [
-      o.orderNumber,
-      o.status,
-      o.customer?.email ?? "",
-      (o.totalAmount / 100).toFixed(2),
-      o.currency,
-      o.shippingCountry ?? "",
-      o.trackingNumber ?? "",
-      o.shippedAt?.toISOString() ?? "",
-      o.createdAt.toISOString(),
-    ]
-      .map((v) => `"${String(v).replace(/"/g, '""')}"`)
-      .join(",")
-  );
-  const csv = [header, ...rows].join("\n");
+  const csv = accounting
+    ? (await import("../lib/order-export.js")).ordersToAccountingCsv(orders)
+    : [
+        "orderNumber,status,email,total,currency,country,trackingNumber,shippedAt,createdAt",
+        ...orders.map((o) =>
+          [
+            o.orderNumber,
+            o.status,
+            o.customer?.email ?? o.guestEmail ?? "",
+            (o.totalAmount / 100).toFixed(2),
+            o.currency,
+            o.shippingCountry ?? "",
+            o.trackingNumber ?? "",
+            o.shippedAt?.toISOString() ?? "",
+            o.createdAt.toISOString(),
+          ]
+            .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+            .join(",")
+        ),
+      ].join("\n");
+
   return new Response(csv, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="orders-${tenant.slug}.csv"`,
+      "Content-Disposition": `attachment; filename="orders-${tenant.slug}${accounting ? "-accounting" : ""}.csv"`,
     },
   });
 });
@@ -807,7 +898,12 @@ merchant.get("/orders/:id", async (c) => {
     },
   });
   if (!order) return c.json({ error: "Not found" }, 404);
-  return c.json({ order, currency: order.currency });
+  const { getPaymentModel } = await import("../lib/payment-model.js");
+  return c.json({
+    order,
+    currency: order.currency,
+    paymentModel: getPaymentModel(),
+  });
 });
 
 merchant.patch("/orders/:id/status", async (c) => {
@@ -926,14 +1022,19 @@ merchant.post("/orders/:id/shipping-label", async (c) => {
     return c.json({ error: "Order has no shipping address" }, 400);
   }
 
-  const body = await c.req.json<{
+  let body: {
     fromName?: string;
     fromStreet1?: string;
     fromCity?: string;
     fromState?: string;
     fromZip?: string;
     fromCountry?: string;
-  }>().catch(() => ({}));
+  } = {};
+  try {
+    body = await c.req.json();
+  } catch {
+    /* empty body */
+  }
 
   const weightGrams = order.items.reduce((s, i) => s + i.quantity * 200, 200);
   const { createShippoLabel, isShippoConfigured } = await import("../lib/shippo.js");
@@ -1004,12 +1105,10 @@ merchant.post("/orders/:id/shipping-email", async (c) => {
   }
 });
 
-merchant.get("/customers", async (c) => {
-  const { tenant } = await requireTenant(c.get("session"));
-  const q = c.req.query("q")?.trim() ?? "";
-  const customers = await prisma.customer.findMany({
+async function loadMerchantCustomerRows(tenantId: string, q: string) {
+  const rows = await prisma.customer.findMany({
     where: {
-      tenantId: tenant.id,
+      tenantId,
       ...(q
         ? {
             OR: [
@@ -1022,16 +1121,93 @@ merchant.get("/customers", async (c) => {
     include: {
       _count: { select: { orders: true } },
       orders: {
+        select: { totalAmount: true, createdAt: true, status: true },
         orderBy: { createdAt: "desc" },
-        take: 1,
-        select: { totalAmount: true, createdAt: true },
       },
     },
     orderBy: { createdAt: "desc" },
   });
+
+  return rows.map((c) => {
+    const metrics = computeCustomerMetrics(c.orders, c._count.orders);
+    return {
+      id: c.id,
+      email: c.email,
+      name: c.name,
+      country: c.country,
+      createdAt: c.createdAt,
+      marketingOptOut: c.marketingOptOut,
+      emailBounced: c.emailBounced,
+      orderCount: metrics.orderCount,
+      paidOrderCount: metrics.paidOrderCount,
+      totalSpent: metrics.totalSpent,
+      aov: metrics.aov,
+      segment: metrics.segment,
+      lastOrderAt: metrics.lastOrderAt?.toISOString() ?? null,
+      firstOrderAt: metrics.firstOrderAt?.toISOString() ?? null,
+    };
+  });
+}
+
+merchant.get("/customers", async (c) => {
+  const { tenant } = await requireTenant(c.get("session"));
+  const q = c.req.query("q")?.trim() ?? "";
+  const filter = (c.req.query("filter") ?? "all") as CustomerListFilter;
+  const sort = (c.req.query("sort") ?? "newest") as CustomerListSort;
+
+  let rows = await loadMerchantCustomerRows(tenant.id, q);
+  if (filter !== "all") {
+    rows = rows.filter((row) =>
+      matchesCustomerFilter(row.segment, row.orderCount, filter)
+    );
+  }
+  const customers = sortCustomerRows(
+    rows.map((row) => ({
+      ...row,
+      createdAt: new Date(row.createdAt),
+      lastOrderAt: row.lastOrderAt ? new Date(row.lastOrderAt) : null,
+      firstOrderAt: row.firstOrderAt ? new Date(row.firstOrderAt) : null,
+    })),
+    sort
+  ).map(({ createdAt, lastOrderAt, firstOrderAt, ...row }) => ({
+    ...row,
+    createdAt: createdAt.toISOString(),
+    lastOrderAt: lastOrderAt?.toISOString() ?? null,
+    firstOrderAt: firstOrderAt?.toISOString() ?? null,
+  }));
+
   return c.json({
     currency: tenant.settings?.currency ?? "USD",
     customers,
+  });
+});
+
+merchant.get("/customers/export.csv", async (c) => {
+  const { tenant } = await requireTenant(c.get("session"));
+  const q = c.req.query("q")?.trim() ?? "";
+  const filter = (c.req.query("filter") ?? "all") as CustomerListFilter;
+  let rows = await loadMerchantCustomerRows(tenant.id, q);
+  if (filter !== "all") {
+    rows = rows.filter((row) =>
+      matchesCustomerFilter(row.segment, row.orderCount, filter)
+    );
+  }
+  const csv = customerMetricsToCsv(
+    rows.map((r) => ({
+      email: r.email,
+      name: r.name,
+      country: r.country,
+      orderCount: r.orderCount,
+      totalSpent: r.totalSpent,
+      lastOrderAt: r.lastOrderAt ? new Date(r.lastOrderAt) : null,
+      segment: r.segment,
+    }))
+  );
+  return new Response(csv, {
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="customers-${tenant.slug}.csv"`,
+    },
   });
 });
 
@@ -1039,13 +1215,120 @@ merchant.get("/customers/:id", async (c) => {
   const { tenant } = await requireTenant(c.get("session"));
   const customer = await prisma.customer.findFirst({
     where: { id: c.req.param("id"), tenantId: tenant.id },
-    include: { orders: { orderBy: { createdAt: "desc" } } },
+    include: {
+      orders: {
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          orderNumber: true,
+          status: true,
+          totalAmount: true,
+          createdAt: true,
+          shippingName: true,
+          shippingCity: true,
+          shippingCountry: true,
+        },
+      },
+    },
   });
   if (!customer) return c.json({ error: "Not found" }, 404);
-  return c.json({
-    customer,
-    currency: tenant.settings?.currency ?? "USD",
+
+  const metrics = computeCustomerMetrics(
+    customer.orders,
+    customer.orders.length
+  );
+
+  const openCart = await prisma.abandonedCart.findFirst({
+    where: {
+      tenantId: tenant.id,
+      email: customer.email,
+      convertedAt: null,
+    },
+    orderBy: { updatedAt: "desc" },
+    select: {
+      id: true,
+      subtotalAmount: true,
+      currency: true,
+      updatedAt: true,
+    },
   });
+
+  const emailSubscriber = await prisma.emailSubscriber.findUnique({
+    where: {
+      tenantId_email: { tenantId: tenant.id, email: customer.email },
+    },
+    select: { marketingOptOut: true },
+  });
+
+  return c.json({
+    currency: tenant.settings?.currency ?? "USD",
+    customer: {
+      id: customer.id,
+      email: customer.email,
+      name: customer.name,
+      country: customer.country,
+      createdAt: customer.createdAt.toISOString(),
+      marketingOptOut: customer.marketingOptOut,
+      emailBounced: customer.emailBounced,
+      orders: customer.orders.map((o) => ({
+        ...o,
+        createdAt: o.createdAt.toISOString(),
+      })),
+    },
+    summary: {
+      orderCount: metrics.orderCount,
+      paidOrderCount: metrics.paidOrderCount,
+      totalSpent: metrics.totalSpent,
+      aov: metrics.aov,
+      segment: metrics.segment,
+      lastOrderAt: metrics.lastOrderAt?.toISOString() ?? null,
+      firstOrderAt: metrics.firstOrderAt?.toISOString() ?? null,
+    },
+    openAbandonedCart: openCart
+      ? {
+          id: openCart.id,
+          subtotalAmount: openCart.subtotalAmount,
+          currency: openCart.currency,
+          updatedAt: openCart.updatedAt.toISOString(),
+        }
+      : null,
+    emailSubscriber: emailSubscriber
+      ? { marketingOptOut: emailSubscriber.marketingOptOut }
+      : null,
+  });
+});
+
+merchant.patch("/customers/:id", async (c) => {
+  const { tenant } = await requireTenant(c.get("session"));
+  const body = await c.req.json<{ marketingOptOut?: boolean }>();
+  const existing = await prisma.customer.findFirst({
+    where: { id: c.req.param("id"), tenantId: tenant.id },
+  });
+  if (!existing) return c.json({ error: "Not found" }, 404);
+
+  const customer = await prisma.customer.update({
+    where: { id: existing.id },
+    data: {
+      ...(typeof body.marketingOptOut === "boolean"
+        ? { marketingOptOut: body.marketingOptOut }
+        : {}),
+    },
+    select: {
+      id: true,
+      email: true,
+      marketingOptOut: true,
+      emailBounced: true,
+    },
+  });
+
+  if (typeof body.marketingOptOut === "boolean") {
+    await prisma.emailSubscriber.updateMany({
+      where: { tenantId: tenant.id, email: customer.email },
+      data: { marketingOptOut: body.marketingOptOut },
+    });
+  }
+
+  return c.json({ customer });
 });
 
 merchant.get("/settings", async (c) => {
@@ -1071,12 +1354,14 @@ merchant.patch("/settings", async (c) => {
   const enabledLocales =
     enabledLocalesRaw.length > 0 ? enabledLocalesRaw : ["en"];
 
-  const name = String(body.name ?? "").trim();
-  const slug = normalizeSlug(String(body.slug ?? ""));
+  const nameProvided = body.name != null;
+  const slugProvided = body.slug != null;
+  const name = nameProvided ? String(body.name).trim() : tenant.name;
+  const slug = slugProvided ? normalizeSlug(String(body.slug)) : tenant.slug;
   const slugConfirm = Boolean(body.slugConfirm);
 
-  if (!name) return c.json({ error: "Store name is required" }, 400);
-  if (!slug) return c.json({ error: "Store slug is required" }, 400);
+  if (nameProvided && !name) return c.json({ error: "Store name is required" }, 400);
+  if (slugProvided && !slug) return c.json({ error: "Store slug is required" }, 400);
 
   if (slug !== tenant.slug && !slugConfirm) {
     return c.json({
@@ -1097,9 +1382,12 @@ merchant.patch("/settings", async (c) => {
     body.themeDraft != null && typeof body.themeDraft === "object"
       ? body.themeDraft
       : undefined;
-  const theme = themeRaw !== undefined ? parseStoreTheme(themeRaw) : undefined;
+  const theme =
+    themeRaw !== undefined ? jsonForPrisma(parseStoreTheme(themeRaw)) : undefined;
   const themeDraft =
-    themeDraftRaw !== undefined ? parseStoreTheme(themeDraftRaw) : undefined;
+    themeDraftRaw !== undefined
+      ? jsonForPrisma(parseStoreTheme(themeDraftRaw))
+      : undefined;
 
   await prisma.$transaction([
     prisma.tenant.update({
@@ -1116,6 +1404,14 @@ merchant.patch("/settings", async (c) => {
         timezone: String(body.timezone ?? "UTC"),
         primaryColor: String(body.primaryColor ?? "#7c3aed"),
         logoUrl: body.logoUrl ? String(body.logoUrl) : null,
+        faviconUrl: body.faviconUrl ? String(body.faviconUrl) : null,
+        contactEmail: body.contactEmail ? String(body.contactEmail) : null,
+        contactPhone: body.contactPhone ? String(body.contactPhone) : null,
+        businessAddress: body.businessAddress
+          ? String(body.businessAddress)
+          : null,
+        emailFromName: body.emailFromName ? String(body.emailFromName) : null,
+        emailReplyTo: body.emailReplyTo ? String(body.emailReplyTo) : null,
         privacyUrl: body.privacyUrl ? String(body.privacyUrl) : null,
         refundUrl: body.refundUrl ? String(body.refundUrl) : null,
         privacyPolicy: body.privacyPolicy ? String(body.privacyPolicy) : null,
@@ -1155,6 +1451,14 @@ merchant.patch("/settings", async (c) => {
         timezone: String(body.timezone ?? "UTC"),
         primaryColor: String(body.primaryColor ?? "#7c3aed"),
         logoUrl: body.logoUrl ? String(body.logoUrl) : null,
+        faviconUrl: body.faviconUrl ? String(body.faviconUrl) : null,
+        contactEmail: body.contactEmail ? String(body.contactEmail) : null,
+        contactPhone: body.contactPhone ? String(body.contactPhone) : null,
+        businessAddress: body.businessAddress
+          ? String(body.businessAddress)
+          : null,
+        emailFromName: body.emailFromName ? String(body.emailFromName) : null,
+        emailReplyTo: body.emailReplyTo ? String(body.emailReplyTo) : null,
         privacyUrl: body.privacyUrl ? String(body.privacyUrl) : null,
         refundUrl: body.refundUrl ? String(body.refundUrl) : null,
         privacyPolicy: body.privacyPolicy ? String(body.privacyPolicy) : null,
@@ -1194,17 +1498,166 @@ merchant.patch("/settings", async (c) => {
   return c.json({ ok: true, tenant: updated.tenant });
 });
 
-merchant.post("/settings/publish-theme", async (c) => {
+/** Storefront / page builder: update theme draft without touching other settings columns. */
+merchant.patch("/settings/theme-draft", async (c) => {
   const { tenant } = await requireTenant(c.get("session"));
-  const settings = tenant.settings;
-  const draft = settings?.themeDraft ?? settings?.theme;
-  if (!draft) return c.json({ error: "Nothing to publish" }, 400);
-  await prisma.storeSettings.update({
+  const body = await c.req.json<{
+    themeDraft?: unknown;
+    primaryColor?: string;
+  }>();
+  if (body.themeDraft == null || typeof body.themeDraft !== "object") {
+    return c.json({ error: "themeDraft is required" }, 400);
+  }
+  const themeDraft = jsonForPrisma(parseStoreTheme(body.themeDraft));
+  await prisma.storeSettings.upsert({
     where: { tenantId: tenant.id },
-    data: { theme: draft },
+    create: {
+      tenantId: tenant.id,
+      themeDraft,
+      primaryColor: body.primaryColor
+        ? String(body.primaryColor).slice(0, 32)
+        : "#7c3aed",
+    },
+    update: {
+      themeDraft,
+      ...(body.primaryColor
+        ? { primaryColor: String(body.primaryColor).slice(0, 32) }
+        : {}),
+    },
   });
   const updated = await requireTenant(c.get("session"));
   return c.json({ ok: true, tenant: updated.tenant });
+});
+
+merchant.post("/settings/test-email", async (c) => {
+  const { tenant, session } = await requireTenant(c.get("session"));
+  const user = await prisma.user.findUnique({ where: { id: session.sub } });
+  if (!user?.email) return c.json({ error: "No email on your account" }, 400);
+  if (!process.env.RESEND_API_KEY && !process.env.SENDGRID_API_KEY) {
+    return c.json({ error: "Email provider not configured on server" }, 503);
+  }
+  const { sendStoreEmail } = await import("../lib/tenant-email.js");
+  await sendStoreEmail(tenant.id, {
+    to: user.email,
+    subject: `Test email from ${tenant.name}`,
+    html: `<p>This is a test of your store transactional email settings (From name and Reply-to).</p><p>If you received this, delivery works.</p>`,
+  });
+  return c.json({ ok: true, sentTo: user.email });
+});
+
+function pushThemeVersion(
+  history: unknown,
+  snapshot: {
+    id: string;
+    label: string;
+    savedAt: string;
+    homeBlocks: unknown;
+    globalBlocks?: unknown;
+  }
+) {
+  const list = Array.isArray(history) ? [...history] : [];
+  list.unshift(snapshot);
+  return list.slice(0, 15);
+}
+
+merchant.get("/settings/theme-versions", async (c) => {
+  const { tenant } = await requireTenant(c.get("session"));
+  const draft = parseStoreTheme(tenant.settings?.themeDraft ?? tenant.settings?.theme);
+  return c.json({ versions: draft.themeVersionHistory ?? [] });
+});
+
+merchant.post("/settings/theme-versions", async (c) => {
+  const { tenant } = await requireTenant(c.get("session"));
+  const body = await c.req.json<{ label?: string }>();
+  const label = String(body.label ?? "").trim() || "Manual snapshot";
+  const draft = parseStoreTheme(tenant.settings?.themeDraft ?? tenant.settings?.theme);
+  const homeBlocks = draft.homeBlocks ?? resolveHomeBlocks(draft);
+  const snapshot = {
+    id: `ver_${Date.now().toString(36)}`,
+    label,
+    savedAt: new Date().toISOString(),
+    homeBlocks,
+    globalBlocks: draft.globalBlocks,
+  };
+  const nextDraft = jsonForPrisma({
+    ...draft,
+    themeVersionHistory: pushThemeVersion(draft.themeVersionHistory, snapshot),
+  });
+  await prisma.storeSettings.update({
+    where: { tenantId: tenant.id },
+    data: { themeDraft: nextDraft },
+  });
+  return c.json({ ok: true, version: snapshot });
+});
+
+merchant.post("/settings/theme-versions/:id/restore", async (c) => {
+  const { tenant } = await requireTenant(c.get("session"));
+  const draft = parseStoreTheme(tenant.settings?.themeDraft ?? tenant.settings?.theme);
+  const id = c.req.param("id");
+  const match = (draft.themeVersionHistory ?? []).find((v) => v.id === id);
+  if (!match) return c.json({ error: "Version not found" }, 404);
+  const nextDraft = jsonForPrisma({
+    ...draft,
+    homeBlocks: match.homeBlocks,
+    ...(match.globalBlocks ? { globalBlocks: match.globalBlocks } : {}),
+  });
+  await prisma.storeSettings.update({
+    where: { tenantId: tenant.id },
+    data: { themeDraft: nextDraft },
+  });
+  return c.json({ ok: true });
+});
+
+merchant.post("/settings/publish-theme", async (c) => {
+  const { tenant } = await requireTenant(c.get("session"));
+  const settings = tenant.settings;
+  const draftRaw = settings?.themeDraft ?? settings?.theme;
+  if (!draftRaw) return c.json({ error: "Nothing to publish" }, 400);
+  const theme = parseStoreTheme(draftRaw);
+  const homeBlocks = theme.homeBlocks ?? resolveHomeBlocks(theme);
+  const publishSnapshot = {
+    id: `ver_${Date.now().toString(36)}`,
+    label: `Published ${new Date().toLocaleDateString()}`,
+    savedAt: new Date().toISOString(),
+    homeBlocks,
+    globalBlocks: theme.globalBlocks,
+  };
+  const themeWithHistory = jsonForPrisma({
+    ...theme,
+    themeVersionHistory: pushThemeVersion(theme.themeVersionHistory, publishSnapshot),
+  });
+  await prisma.storeSettings.update({
+    where: { tenantId: tenant.id },
+    data: {
+      theme: themeWithHistory,
+      themeDraft: themeWithHistory,
+    },
+  });
+  const updated = await requireTenant(c.get("session"));
+  return c.json({ ok: true, tenant: updated.tenant });
+});
+
+merchant.get("/platform-announcement", async (c) => {
+  const { tenant } = await requireTenant(c.get("session"));
+  const full = await prisma.tenant.findUnique({
+    where: { id: tenant.id },
+    include: { subscriptionPlan: { select: { slug: true } } },
+  });
+  const planSlug = full?.subscriptionPlan?.slug;
+  const items = await prisma.platformAnnouncement.findMany({
+    where: { active: true },
+    orderBy: { updatedAt: "desc" },
+  });
+  const match = items.find(
+    (a) =>
+      a.planSlugs.length === 0 ||
+      (planSlug != null && a.planSlugs.includes(planSlug))
+  );
+  return c.json({
+    announcement: match
+      ? { title: match.title, message: match.message }
+      : null,
+  });
 });
 
 export { merchant };

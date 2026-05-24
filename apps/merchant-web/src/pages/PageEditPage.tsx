@@ -2,13 +2,21 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
+import { AdminPageShell } from "@/components/admin-page-shell";
 import { FormAlert } from "@/components/form-alert";
-import { RichTextEditor } from "@/components/rich-text-editor";
+import {
+  PageFormFields,
+  formDataToPageBody,
+} from "@/components/page-form-fields";
+import { useAuth } from "@/context/auth";
+import { getPagePreviewUrl } from "@/lib/page-preview";
+import type { StorePageDetail } from "@/lib/store-page-types";
 
 export default function PageEditPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { tenant } = useAuth();
   const [alert, setAlert] = useState<{ ok?: boolean; message?: string }>({});
 
   const { data, isLoading } = useQuery({
@@ -16,24 +24,59 @@ export default function PageEditPage() {
     queryFn: () => api.pages(),
   });
 
-  const page = ((data?.pages ?? []) as Array<{
-    id: string;
-    title: string;
-    slug: string;
-    body: string;
-    pageType: string;
-    published: boolean;
-  }>).find((p) => p.id === id);
+  const page = ((data?.pages ?? []) as StorePageDetail[]).find((p) => p.id === id);
 
   if (isLoading) return <p className="text-zinc-500">Loading…</p>;
-  if (!page) return <p className="text-zinc-500">Page not found.</p>;
+  if (!page) {
+    return (
+      <AdminPageShell title="Page not found">
+        <Link to="/pages" className="text-sm text-violet-600">
+          ← Back
+        </Link>
+      </AdminPageShell>
+    );
+  }
+
+  const initial = {
+    title: page.title,
+    slug: page.slug,
+    pageType: page.pageType,
+    published: page.published,
+    publishAt: page.publishAt
+      ? new Date(page.publishAt).toISOString().slice(0, 16)
+      : "",
+    body: page.body,
+    excerpt: page.excerpt ?? "",
+    featuredImageUrl: page.featuredImageUrl ?? "",
+    authorName: page.authorName ?? "",
+    tags: page.tags.join(", "),
+    metaTitle: page.metaTitle ?? "",
+    metaDescription: page.metaDescription ?? "",
+    ogImageUrl: page.ogImageUrl ?? "",
+    canonicalUrl: page.canonicalUrl ?? "",
+    noindex: page.noindex,
+  };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <Link to="/pages" className="text-sm text-violet-600">
-        ← Pages & blog
-      </Link>
-      <h1 className="text-2xl font-bold">Edit {page.title}</h1>
+    <AdminPageShell
+      crumbs={[
+        { label: "Pages & blog", to: "/pages" },
+        { label: page.title },
+      ]}
+      title={`Edit ${page.title}`}
+      actions={
+        tenant ? (
+          <a
+            href={getPagePreviewUrl(tenant.slug, page)}
+            target="_blank"
+            rel="noreferrer"
+            className="ugclab-btn border border-zinc-200 bg-white text-sm"
+          >
+            Preview on store
+          </a>
+        ) : null
+      }
+    >
       <FormAlert ok={alert.ok} message={alert.message} />
       <form
         className="admin-card space-y-4 p-6"
@@ -41,13 +84,7 @@ export default function PageEditPage() {
           e.preventDefault();
           const fd = new FormData(e.currentTarget);
           try {
-            await api.updatePage(page.id, {
-              title: fd.get("title"),
-              slug: fd.get("slug"),
-              body: fd.get("body"),
-              pageType: fd.get("pageType"),
-              published: fd.get("published") === "on",
-            });
+            await api.updatePage(page.id, formDataToPageBody(fd));
             await qc.invalidateQueries({ queryKey: ["pages"] });
             setAlert({ ok: true, message: "Saved" });
           } catch (err) {
@@ -58,23 +95,8 @@ export default function PageEditPage() {
           }
         }}
       >
-        <input name="title" defaultValue={page.title} required className="ugclab-input" />
-        <input name="slug" defaultValue={page.slug} className="ugclab-input font-mono" />
-        <select name="pageType" defaultValue={page.pageType} className="ugclab-select">
-          <option value="PAGE">Page</option>
-          <option value="BLOG">Blog post</option>
-        </select>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" name="published" defaultChecked={page.published} />
-          Published
-        </label>
-        <div>
-          <span className="text-sm font-medium text-zinc-700">Content</span>
-          <div className="mt-1.5">
-            <RichTextEditor name="body" defaultValue={page.body} rows={14} />
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-3">
+        <PageFormFields initial={initial} />
+        <div className="flex flex-wrap gap-3 pt-2">
           <Link
             to={`/pages/${page.id}/builder`}
             className="ugclab-btn border border-violet-300 bg-violet-50 text-violet-800"
@@ -93,6 +115,6 @@ export default function PageEditPage() {
           </button>
         </div>
       </form>
-    </div>
+    </AdminPageShell>
   );
 }

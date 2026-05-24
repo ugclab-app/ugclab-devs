@@ -10,6 +10,7 @@ export function StripeConnectBanner() {
 
   if (!data?.configured) return null;
   if (data.paymentsReady) return null;
+  if (data.paymentModel === "mor") return null;
 
   return (
     <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">

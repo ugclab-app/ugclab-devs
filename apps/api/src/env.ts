@@ -17,3 +17,5 @@ export const MERCHANT_WEB_URL =
   process.env.MERCHANT_ADMIN_URL ?? "http://localhost:3001";
 export const PLATFORM_ADMIN_URL =
   process.env.PLATFORM_ADMIN_URL ?? "http://localhost:3003";
+export const PLATFORM_URL =
+  process.env.PLATFORM_URL ?? process.env.NEXT_PUBLIC_PLATFORM_URL ?? "http://localhost:3000";

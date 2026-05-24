@@ -18,14 +18,23 @@ import { StorefrontPreview } from "@/components/storefront-preview";
 import { SiteBuilder } from "@/components/site-builder/site-builder";
 import { SiteBuilderFullscreenShell } from "@/components/site-builder/site-builder-fullscreen";
 import { StoreNavMenuEditor } from "@/components/store-nav-menu-editor";
-import { parseStoreTheme, resolveHomeBlocks, type HomeBlock, type StoreTheme } from "@ugclab/tenant/store-theme";
+import {
+  cloneBlocks,
+  parseStoreTheme,
+  resolveHomeBlocks,
+  type HomeBlock,
+  type StoreTheme,
+} from "@ugclab/tenant/store-theme";
 import type { PageStyleState } from "@/components/site-builder/page-style-panel";
 import type { StoreThemePreset } from "@/components/site-builder/store-themes";
 import type { CustomThemePreset } from "@ugclab/tenant/store-theme";
-import { cloneBlocks } from "@ugclab/tenant/store-theme";
+import { ThemeVersionPanel } from "@/components/site-builder/theme-version-panel";
 
 const TABS = [
   { id: "home", label: "Site builder" },
+  // { id: "global", label: "Global sections" },
+  // { id: "product", label: "Product page" },
+  { id: "versions", label: "Versions" },
   { id: "appearance", label: "Appearance" },
   { id: "menu", label: "Menu" },
   { id: "announcement", label: "Announcement" },
@@ -44,6 +53,8 @@ export default function StorefrontPage() {
   const [builderFullscreen, setBuilderFullscreen] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const homeBlocksRef = useRef<HomeBlock[]>([]);
+  const globalBlocksRef = useRef<HomeBlock[]>([]);
+  const productBlocksRef = useRef<HomeBlock[]>([]);
   const pageStyleRef = useRef<PageStyleState>({
     pageBgColor: undefined,
     pageBgImage: undefined,
@@ -53,6 +64,7 @@ export default function StorefrontPage() {
   const themeExtrasRef = useRef<Partial<StoreTheme>>({});
   const [builderPrimary, setBuilderPrimary] = useState<string | null>(null);
   const [appliedThemeId, setAppliedThemeId] = useState<string | undefined>();
+  const [previewRevision, setPreviewRevision] = useState(0);
 
   const { data } = useQuery({ queryKey: ["settings"], queryFn: () => api.settings() });
   const { data: productsData } = useQuery({
@@ -66,6 +78,12 @@ export default function StorefrontPage() {
   const draftTheme = parseStoreTheme(s?.themeDraft ?? s?.theme);
   if (homeBlocksRef.current.length === 0) {
     homeBlocksRef.current = resolveHomeBlocks(draftTheme);
+  }
+  if (globalBlocksRef.current.length === 0 && draftTheme.globalBlocks?.length) {
+    globalBlocksRef.current = draftTheme.globalBlocks;
+  }
+  if (productBlocksRef.current.length === 0 && draftTheme.productPageBlocks?.length) {
+    productBlocksRef.current = draftTheme.productPageBlocks;
   }
   pageStyleRef.current = {
     pageBgColor: draftTheme.pageBgColor,
@@ -82,8 +100,8 @@ export default function StorefrontPage() {
     (productsData?.products ?? []) as { slug: string; status?: string }[]
   ).find((p) => p.status !== "DRAFT");
 
-  async function saveDraft(fd: FormData) {
-    setPending(true);
+  async function saveDraft(fd: FormData, opts?: { silent?: boolean }) {
+    if (!opts?.silent) setPending(true);
     try {
       const base = buildThemeFromForm(fd);
       const primaryFromForm = fd.get("primaryColor");
@@ -92,41 +110,62 @@ export default function StorefrontPage() {
           ? primaryFromForm
           : builderPrimary ?? settingsPrimary;
 
-      await api.updateSettings({
+      const themeDraftPayload = {
+        ...draftTheme,
+        ...base,
+        ...themeExtrasRef.current,
+        ...pageStyleRef.current,
+        homeBlocks: homeBlocksRef.current,
+        homeSections: homeBlocksRef.current.map((b) => b.type),
+        globalBlocks: globalBlocksRef.current,
+        productPageBlocks: productBlocksRef.current,
+        pageBlocks: draftTheme.pageBlocks,
+        collectionHeroes: draftTheme.collectionHeroes,
+        customThemePresets:
+          themeExtrasRef.current.customThemePresets ?? draftTheme.customThemePresets,
+        ...(appliedThemeId ? { catalogThemeId: appliedThemeId } : {}),
+      } as StoreTheme & { catalogThemeId?: string };
+
+      await api.updateThemeDraft({
+        themeDraft: themeDraftPayload,
         ...(primaryColor ? { primaryColor } : {}),
-        themeDraft: {
-          ...draftTheme,
-          ...base,
-          ...themeExtrasRef.current,
-          ...pageStyleRef.current,
-          homeBlocks: homeBlocksRef.current,
-          homeSections: homeBlocksRef.current.map((b) => b.type),
-          pageBlocks: draftTheme.pageBlocks,
-          collectionHeroes: draftTheme.collectionHeroes,
-          customThemePresets:
-            themeExtrasRef.current.customThemePresets ?? draftTheme.customThemePresets,
-        } as StoreTheme,
-        checkoutGuestLookup: fd.get("checkoutGuestLookup") === "on",
-        checkoutFooterText: fd.get("checkoutFooterText"),
-        emailOrderSubject: fd.get("emailOrderSubject"),
-        emailOrderBody: fd.get("emailOrderBody"),
       });
+      if (tab === "checkout") {
+        await api.updateSettings({
+          name: tenant.name,
+          slug: tenant.slug,
+          checkoutGuestLookup: fd.get("checkoutGuestLookup") === "on",
+          checkoutFooterText: fd.get("checkoutFooterText"),
+          emailOrderSubject: fd.get("emailOrderSubject"),
+          emailOrderBody: fd.get("emailOrderBody"),
+        });
+      }
       await refresh();
-      setAlert({ ok: true, message: "Draft saved" });
+      setPreviewRevision((n) => n + 1);
+      if (!opts?.silent) {
+        setAlert({
+          ok: true,
+          message:
+            "Draft saved. Click “Publish to live store” so buyers see changes (View my store shows the live theme).",
+        });
+      }
       qc.invalidateQueries({ queryKey: ["settings"] });
     } catch (e) {
       setAlert({ ok: false, message: e instanceof Error ? e.message : "Save failed" });
     } finally {
-      setPending(false);
+      if (!opts?.silent) setPending(false);
     }
   }
 
   async function publish() {
     setPending(true);
     try {
+      const fd = formRef.current ? new FormData(formRef.current) : new FormData();
+      await saveDraft(fd, { silent: true });
       await api.publishTheme();
       await refresh();
-      setAlert({ ok: true, message: "Storefront published" });
+      setPreviewRevision((n) => n + 1);
+      setAlert({ ok: true, message: "Published — your live store is updated." });
     } catch (e) {
       setAlert({ ok: false, message: e instanceof Error ? e.message : "Publish failed" });
     } finally {
@@ -134,7 +173,7 @@ export default function StorefrontPage() {
     }
   }
 
-  const isBuilder = tab === "home";
+  const isBuilder = tab === "home" || tab === "global" || tab === "product";
   const primaryColor = builderPrimary ?? settingsPrimary;
 
   useEffect(() => {
@@ -175,7 +214,7 @@ export default function StorefrontPage() {
       };
       const next = [...(draftTheme.customThemePresets ?? []), preset];
       themeExtrasRef.current = { ...themeExtrasRef.current, customThemePresets: next };
-      void api.updateSettings({
+      void api.updateThemeDraft({
         themeDraft: {
           ...draftTheme,
           ...themeExtrasRef.current,
@@ -236,6 +275,39 @@ export default function StorefrontPage() {
         {tab === "home" ? (
           <input type="hidden" name="primaryColor" value={primaryColor} />
         ) : null}
+
+        {tab === "global" ? (
+          <section className="admin-card p-4">
+            <p className="mb-4 text-sm text-zinc-600">
+              Blocks shown on every page (trust strip, promo). Save draft, then publish.
+            </p>
+            <SiteBuilder
+              {...builderProps}
+              theme={{ ...draftTheme, homeBlocks: globalBlocksRef.current }}
+              onBlocksChange={(blocks) => {
+                globalBlocksRef.current = blocks;
+              }}
+            />
+          </section>
+        ) : null}
+
+        {tab === "product" ? (
+          <section className="admin-card p-4">
+            <p className="mb-4 text-sm text-zinc-600">
+              Extra blocks below product details on every product page. Collection layouts: edit each
+              collection → hero & blocks.
+            </p>
+            <SiteBuilder
+              {...builderProps}
+              theme={{ ...draftTheme, homeBlocks: productBlocksRef.current }}
+              onBlocksChange={(blocks) => {
+                productBlocksRef.current = blocks;
+              }}
+            />
+          </section>
+        ) : null}
+
+        {tab === "versions" ? <ThemeVersionPanel /> : null}
 
         {tab === "home" ? (
           <SiteBuilderFullscreenShell
@@ -353,14 +425,22 @@ export default function StorefrontPage() {
 
       {isBuilder && !builderFullscreen ? (
         <div className="space-y-4">
-          <StorefrontPreview baseUrl={previewBase} productSlug={firstProduct?.slug ?? null} />
+          <StorefrontPreview
+            baseUrl={previewBase}
+            productSlug={firstProduct?.slug ?? null}
+            refreshKey={previewRevision}
+          />
           <p className="text-xs text-zinc-500">
-            Save draft to refresh preview. Publish when ready for buyers.
+            Preview uses your draft. Publish to update the live store (View my store).
           </p>
         </div>
       ) : (
         <div className="space-y-6">
-          <StorefrontPreview baseUrl={previewBase} productSlug={firstProduct?.slug ?? null} />
+          <StorefrontPreview
+            baseUrl={previewBase}
+            productSlug={firstProduct?.slug ?? null}
+            refreshKey={previewRevision}
+          />
           <section className="admin-card p-6 text-sm">
             <h2 className="font-semibold">Media library</h2>
             <p className="mt-1 text-zinc-500">
