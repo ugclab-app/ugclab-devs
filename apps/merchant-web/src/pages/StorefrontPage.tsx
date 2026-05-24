@@ -44,6 +44,12 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]["id"];
 
+const BUILDER_TABS: readonly TabId[] = ["home", "global", "product"];
+
+function isBuilderTab(id: TabId): boolean {
+  return BUILDER_TABS.includes(id);
+}
+
 export default function StorefrontPage() {
   const { tenant, refresh } = useAuth();
   const qc = useQueryClient();
@@ -74,7 +80,10 @@ export default function StorefrontPage() {
 
   if (!tenant) return null;
 
-  const s = tenant.settings as Record<string, unknown> | null | undefined;
+  const store = tenant;
+  const activeTab: TabId = tab;
+
+  const s = store.settings as Record<string, unknown> | null | undefined;
   const draftTheme = parseStoreTheme(s?.themeDraft ?? s?.theme);
   if (homeBlocksRef.current.length === 0) {
     homeBlocksRef.current = resolveHomeBlocks(draftTheme);
@@ -92,16 +101,15 @@ export default function StorefrontPage() {
     scrollAnimation: draftTheme.scrollAnimation ?? "none",
   };
 
-  const storeUrl = getStorefrontUrl(tenant.slug);
+  const storeUrl = getStorefrontUrl(store.slug);
   const previewBase = `${storeUrl}${storeUrl.includes("?") ? "&" : "?"}preview=1`;
   const settingsPrimary =
-    (tenant.settings as { primaryColor?: string } | null)?.primaryColor ?? "#7c3aed";
+    (store.settings as { primaryColor?: string } | null)?.primaryColor ?? "#7c3aed";
   const firstProduct = (
     (productsData?.products ?? []) as { slug: string; status?: string }[]
   ).find((p) => p.status !== "DRAFT");
 
   async function saveDraft(fd: FormData, opts?: { silent?: boolean }) {
-    if (!tenant) return;
     if (!opts?.silent) setPending(true);
     try {
       const base = buildThemeFromForm(fd);
@@ -131,10 +139,10 @@ export default function StorefrontPage() {
         themeDraft: themeDraftPayload,
         ...(primaryColor ? { primaryColor } : {}),
       });
-      if (tab === "checkout") {
+      if (activeTab === "checkout") {
         await api.updateSettings({
-          name: tenant.name,
-          slug: tenant.slug,
+          name: store.name,
+          slug: store.slug,
           checkoutGuestLookup: fd.get("checkoutGuestLookup") === "on",
           checkoutFooterText: fd.get("checkoutFooterText"),
           emailOrderSubject: fd.get("emailOrderSubject"),
@@ -174,12 +182,12 @@ export default function StorefrontPage() {
     }
   }
 
-  const isBuilder = tab === "home" || tab === "global" || tab === "product";
+  const isBuilder = isBuilderTab(activeTab);
   const primaryColor = builderPrimary ?? settingsPrimary;
 
   useEffect(() => {
-    if (tab !== "home" && builderFullscreen) setBuilderFullscreen(false);
-  }, [tab, builderFullscreen]);
+    if (activeTab !== "home" && builderFullscreen) setBuilderFullscreen(false);
+  }, [activeTab, builderFullscreen]);
 
   function submitDraft() {
     if (!formRef.current) return;
@@ -189,7 +197,7 @@ export default function StorefrontPage() {
   const builderProps = {
     theme: draftTheme,
     primaryColor,
-    storeName: tenant.name,
+    storeName: store.name,
     pageStyle: pageStyleRef.current,
     onPageStyleChange: (patch: Partial<PageStyleState>) => {
       Object.assign(pageStyleRef.current, patch);
@@ -261,7 +269,7 @@ export default function StorefrontPage() {
                   type="button"
                   onClick={() => setTab(t.id)}
                   className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-                    tab === t.id
+                    activeTab === t.id
                       ? "bg-white text-violet-800 shadow-sm"
                       : "text-zinc-600 hover:text-zinc-900"
                   }`}
@@ -273,11 +281,11 @@ export default function StorefrontPage() {
           </>
         ) : null}
 
-        {tab === "home" ? (
+        {activeTab === "home" ? (
           <input type="hidden" name="primaryColor" value={primaryColor} />
         ) : null}
 
-        {tab === "global" ? (
+        {activeTab === "global" ? (
           <section className="admin-card p-4">
             <p className="mb-4 text-sm text-zinc-600">
               Blocks shown on every page (trust strip, promo). Save draft, then publish.
@@ -292,7 +300,7 @@ export default function StorefrontPage() {
           </section>
         ) : null}
 
-        {tab === "product" ? (
+        {activeTab === "product" ? (
           <section className="admin-card p-4">
             <p className="mb-4 text-sm text-zinc-600">
               Extra blocks below product details on every product page. Collection layouts: edit each
@@ -308,13 +316,13 @@ export default function StorefrontPage() {
           </section>
         ) : null}
 
-        {tab === "versions" ? <ThemeVersionPanel /> : null}
+        {activeTab === "versions" ? <ThemeVersionPanel /> : null}
 
-        {tab === "home" ? (
+        {activeTab === "home" ? (
           <SiteBuilderFullscreenShell
             open={builderFullscreen}
             onClose={() => setBuilderFullscreen(false)}
-            storeName={tenant.name}
+            storeName={store.name}
             alert={alert}
             pending={pending}
             onSave={submitDraft}
@@ -325,7 +333,7 @@ export default function StorefrontPage() {
           </SiteBuilderFullscreenShell>
         ) : null}
 
-        {!builderFullscreen && tab === "appearance" ? (
+        {!builderFullscreen && activeTab === "appearance" ? (
           <>
             <StoreAppearanceFields theme={draftTheme} />
             <StoreLiveChatFields theme={draftTheme} />
@@ -333,18 +341,18 @@ export default function StorefrontPage() {
           </>
         ) : null}
 
-        {!builderFullscreen && tab === "menu" ? (
+        {!builderFullscreen && activeTab === "menu" ? (
           <StoreNavMenuEditor
             initialLinks={draftTheme.navLinks ?? []}
             hideDefaultNav={draftTheme.hideDefaultNav}
           />
         ) : null}
 
-        {!builderFullscreen && tab === "announcement" ? (
+        {!builderFullscreen && activeTab === "announcement" ? (
           <StoreAnnouncementFields theme={draftTheme} />
         ) : null}
 
-        {!builderFullscreen && tab === "checkout" ? (
+        {!builderFullscreen && activeTab === "checkout" ? (
           <>
             <StoreCheckoutThemeFields theme={draftTheme} />
             <section className="admin-card space-y-4 p-6">
@@ -394,7 +402,7 @@ export default function StorefrontPage() {
           </>
         ) : null}
 
-        {!builderFullscreen && tab === "advanced" ? (
+        {!builderFullscreen && activeTab === "advanced" ? (
           <StoreAdvancedFields theme={draftTheme} />
         ) : null}
 
