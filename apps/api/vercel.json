@@ -1,11 +1,15 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
   "installCommand": "cd ../.. && npm install",
   "buildCommand": "node scripts/vercel-build.mjs",
   "functions": {
     "api/index.ts": {
-      "includeFiles": "public/**",
-      "maxDuration": 60
+      "maxDuration": 60,
+      "includeFiles": [
+        "../../node_modules/.prisma/**",
+        "../../node_modules/@prisma/client/**"
+      ]
     },
     "api/health.ts": {
       "maxDuration": 10

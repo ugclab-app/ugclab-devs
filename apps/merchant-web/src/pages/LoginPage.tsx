@@ -116,9 +116,6 @@ export default function LoginPage() {
             {loading ? "Signing in…" : needs2fa ? "Verify & sign in" : "Sign in"}
           </Button>
         </form>
-        <p className="mt-4 text-center text-xs text-zinc-500">
-          Demo: demo@ugclab.store / demo1234
-        </p>
       </div>
     </div>
   );

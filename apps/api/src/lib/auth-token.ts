@@ -52,18 +52,33 @@ export async function verifySession(token: string): Promise<SessionPayload | nul
   }
 }
 
-export function setSessionCookie(c: Context, token: string) {
-  setCookie(c, COOKIE, token, {
+function sessionCookieBase(c: Context) {
+  const host = c.req.header("host") ?? "";
+  const domain =
+    process.env.SESSION_COOKIE_DOMAIN?.trim() ||
+    (host === "tescommerce.com" ||
+    host.endsWith(".tescommerce.com") ||
+    host === "www.tescommerce.com"
+      ? ".tescommerce.com"
+      : undefined);
+  return {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "Lax",
+    sameSite: "Lax" as const,
     path: "/",
+    ...(domain ? { domain } : {}),
+  };
+}
+
+export function setSessionCookie(c: Context, token: string) {
+  setCookie(c, COOKIE, token, {
+    ...sessionCookieBase(c),
     maxAge: 60 * 60 * 24 * 7,
   });
 }
 
 export function clearSessionCookie(c: Context) {
-  deleteCookie(c, COOKIE, { path: "/" });
+  deleteCookie(c, COOKIE, sessionCookieBase(c));
 }
 
 export function getSessionToken(c: Context): string | undefined {

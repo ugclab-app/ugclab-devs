@@ -35,6 +35,8 @@ export function createApiApp() {
           process.env.STOREFRONT_URL ?? "http://localhost:3002",
           "https://tescommerce.com",
           "https://www.tescommerce.com",
+          "https://admin.tescommerce.com",
+          "http://admin.tescommerce.com",
           "http://localhost:3000",
           "http://127.0.0.1:3000",
           "http://localhost:3001",

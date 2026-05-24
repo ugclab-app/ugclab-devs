@@ -17,13 +17,24 @@ function isApiPath(pathname: string): boolean {
 
 /** Single Vercel entry — avoid src/app.ts and src/index.ts (Vercel Hono auto-detect). */
 export default async function handler(req: Request): Promise<Response> {
-  const pathname = requestPath(req);
-  if (isApiPath(pathname)) {
-    const { app } = await import("../src/hono-app.js");
-    return handle(app)(req);
+  try {
+    const pathname = requestPath(req);
+    if (isApiPath(pathname)) {
+      const { app } = await import("../src/hono-app.js");
+      return handle(app)(req);
+    }
+    const { landingApp } = await import("../src/landing-app.js");
+    return handle(landingApp)(req);
+  } catch (err) {
+    console.error("[api] handler failed:", err);
+    return Response.json(
+      {
+        error: "Internal server error",
+        hint: "Check Vercel function logs for @ugclab/api",
+      },
+      { status: 500 }
+    );
   }
-  const { landingApp } = await import("../src/landing-app.js");
-  return handle(landingApp)(req);
 }
 
 export const config = {

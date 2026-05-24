@@ -21,7 +21,8 @@ Add at least:
 
 - `DATABASE_URL` — Postgres connection string (required; without it API routes time out)
 - `AUTH_SECRET` — JWT signing secret
-- `MERCHANT_ADMIN_URL` — merchant admin URL (CORS + signup redirect)
+- `MERCHANT_ADMIN_URL` — `https://admin.tescommerce.com` (CORS + signup redirect)
+- `SESSION_COOKIE_DOMAIN` — optional; defaults to `.tescommerce.com` on production hosts
 - `PLATFORM_URL` — `https://tescommerce.com`
 - `PLATFORM_ADMIN_URL` — platform admin URL (CORS)
 - `STOREFRONT_URL` — storefront origin (CORS)
@@ -38,7 +39,9 @@ npx vercel link --yes --scope ecommerce-mus --project ugclab-devs-api
 npm run deploy:api
 ```
 
-Do **not** run `vercel` from inside `apps/api` — the dashboard root path would double to `apps/api/apps/api`.
+`npm run deploy:api` runs Vercel from `apps/api` (via npm workspace). Do **not** run `cd ../.. && vercel` — that deploys the monorepo root and fails with “No entrypoint found”.
+
+In the Vercel dashboard, **Root Directory** must be `apps/api` and **Framework Preset** = Other (not Hono).
 
 Do **not** upload a local `apps/api/public/` folder (stale Vite hashes break the build). `.vercelignore` excludes it; the build recreates `public/` on Vercel.
 

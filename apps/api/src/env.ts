@@ -2,9 +2,13 @@ import { config } from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
-config({ path: path.join(root, ".env") });
-config({ path: path.join(root, ".env.local") });
+try {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+  config({ path: path.join(root, ".env") });
+  config({ path: path.join(root, ".env.local") });
+} catch {
+  /* Vercel uses dashboard env vars; local .env is optional */
+}
 
 export function getAuthSecret(): string {
   const s = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET;
