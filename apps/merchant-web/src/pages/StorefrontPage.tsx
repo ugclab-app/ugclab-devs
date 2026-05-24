@@ -32,8 +32,8 @@ import { ThemeVersionPanel } from "@/components/site-builder/theme-version-panel
 
 const TABS = [
   { id: "home", label: "Site builder" },
-  // { id: "global", label: "Global sections" },
-  // { id: "product", label: "Product page" },
+  { id: "global", label: "Global sections" },
+  { id: "product", label: "Product page" },
   { id: "versions", label: "Versions" },
   { id: "appearance", label: "Appearance" },
   { id: "menu", label: "Menu" },
@@ -101,6 +101,7 @@ export default function StorefrontPage() {
   ).find((p) => p.status !== "DRAFT");
 
   async function saveDraft(fd: FormData, opts?: { silent?: boolean }) {
+    if (!tenant) return;
     if (!opts?.silent) setPending(true);
     try {
       const base = buildThemeFromForm(fd);

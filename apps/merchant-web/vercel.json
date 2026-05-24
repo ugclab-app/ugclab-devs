@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "cd ../.. && npm install",
+  "buildCommand": "cd ../.. && npm run build -w @ugclab/database && npm run build -w @ugclab/i18n && npm run build -w @ugclab/tenant && npm run build -w @ugclab/merchant-web",
+  "outputDirectory": "dist",
+  "framework": "vite",
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "https://tescommerce.com/api/:path*" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

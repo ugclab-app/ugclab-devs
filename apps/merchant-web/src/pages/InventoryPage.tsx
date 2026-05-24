@@ -139,13 +139,13 @@ export default function InventoryPage() {
                 .split("\n")
                 .map((row) => {
                   const [productId, qty] = row.split(",").map((s) => s.trim());
-                  return productId ? { productId, quantity: parseInt(qty, 10) || 1 } : null;
+                  return productId ? { productId, quantity: parseInt(qty ?? "", 10) || 1 } : null;
                 })
                 .filter(Boolean) as { productId: string; quantity: number }[];
               try {
                 await api.createInventoryTransfer({
-                  fromWarehouseId: fd.get("fromId"),
-                  toWarehouseId: fd.get("toId"),
+                  fromWarehouseId: String(fd.get("fromId") ?? ""),
+                  toWarehouseId: String(fd.get("toId") ?? ""),
                   lines,
                 });
                 setAlert({ ok: true, message: "Transfer created" });
@@ -220,13 +220,13 @@ export default function InventoryPage() {
                 .split("\n")
                 .map((row) => {
                   const [productId, qty] = row.split(",").map((s) => s.trim());
-                  return productId ? { productId, quantity: parseInt(qty, 10) || 1 } : null;
+                  return productId ? { productId, quantity: parseInt(qty ?? "", 10) || 1 } : null;
                 })
                 .filter(Boolean) as { productId: string; quantity: number }[];
               try {
                 await api.createPurchaseOrder({
-                  warehouseId: fd.get("warehouseId"),
-                  supplierName: fd.get("supplier"),
+                  warehouseId: String(fd.get("warehouseId") ?? ""),
+                  supplierName: String(fd.get("supplier") ?? ""),
                   lines,
                 });
                 setAlert({ ok: true, message: "PO created" });

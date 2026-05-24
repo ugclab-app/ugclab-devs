@@ -31,7 +31,7 @@ export type BlockThumbLayout =
 export type BlockDesignVariant = {
   id: string;
   label: string;
-  description: string;
+  description?: string;
   thumb: BlockThumbLayout;
   patch: Partial<HomeBlock>;
 };
@@ -367,12 +367,14 @@ const VARIANTS: Partial<Record<HomeSection, BlockDesignVariant[]>> = {
     {
       id: "pricing-3",
       label: "3 plans",
+      description: "Three pricing tiers",
       thumb: "features-3",
       patch: { title: "Pricing" },
     },
     {
       id: "pricing-2",
       label: "2 plans",
+      description: "Two-column pricing",
       thumb: "columns-2",
       patch: {
         pricingItems: [
@@ -604,12 +606,14 @@ const VARIANTS: Partial<Record<HomeSection, BlockDesignVariant[]>> = {
     {
       id: "contact-boxed",
       label: "Boxed form",
+      description: "Centered contact card",
       thumb: "newsletter-card",
       patch: { title: "Contact us" },
     },
     {
       id: "contact-split",
       label: "With intro text",
+      description: "Intro text beside form",
       thumb: "text-image-left",
       patch: {
         subtitle: "We reply within one business day.",
