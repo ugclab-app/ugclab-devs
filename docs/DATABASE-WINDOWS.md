@@ -2,11 +2,22 @@
 
 Docker **не обязателен**. Нужен только PostgreSQL и строка `DATABASE_URL` в `.env`.
 
-## Вариант A — Neon (рекомендуется, ~5 минут, бесплатно)
+## Вариант A — Supabase (рекомендуется для прода)
+
+Пошагово: **[docs/SUPABASE.md](SUPABASE.md)** — pooler для Vercel, direct для миграций.
+
+```bash
+npm run db:deploy -w @ugclab/database
+npm run db:seed -w @ugclab/database
+```
+
+---
+
+## Вариант B — Neon (~5 минут, бесплатно)
 
 1. Зарегистрируйтесь на [https://neon.tech](https://neon.tech)
 2. Создайте проект → **PostgreSQL 16**
-3. Скопируйте **Connection string** (режим *pooled* или *direct* — подойдёт оба)
+3. Скопируйте **Connection string** → вкладка **Connection pooling** (для Vercel обязательно pooled; см. [PRODUCTION-LATENCY.md](PRODUCTION-LATENCY.md))
 4. В корне репозитория откройте `.env` и вставьте:
 
 ```env
@@ -26,7 +37,7 @@ npm run dev
 
 ---
 
-## Вариант B — PostgreSQL на Windows (локально)
+## Вариант C — PostgreSQL на Windows (локально)
 
 1. Скачайте установщик: [https://www.postgresql.org/download/windows/](https://www.postgresql.org/download/windows/) (EDB installer)
 2. Установите PostgreSQL 16, запомните пароль пользователя `postgres`
@@ -40,6 +51,7 @@ CREATE DATABASE ugclab;
 
 ```env
 DATABASE_URL="postgresql://postgres:ВАШ_ПАРОЛЬ@localhost:5432/ugclab?schema=public"
+DIRECT_URL="postgresql://postgres:ВАШ_ПАРОЛЬ@localhost:5432/ugclab?schema=public"
 ```
 
 5. Дальше те же команды:
@@ -52,7 +64,7 @@ npm run dev
 
 ---
 
-## Вариант C — Docker (если позже установите Docker Desktop)
+## Вариант D — Docker (если позже установите Docker Desktop)
 
 ```bash
 docker compose up -d

@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { formatMoney } from "@ugclab/i18n";
 import { storeApi } from "@/api/client";
 import { useStore } from "@/context/store";
 import { storeHref } from "@/lib/store-href";
 import { useStoreParams } from "@/hooks/use-store-params";
-
-const KEY = "ugclab_wishlist";
+import { readLocalWishlist } from "@/components/wishlist-button";
 
 type Item = { productId: string; title: string; slug: string; priceAmount: number };
 
@@ -16,12 +16,22 @@ export function WishlistClient() {
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const nav = { locale, tenant: tenant.slug };
+  const { data: session } = useQuery({
+    queryKey: ["account-session", tenantSlug],
+    queryFn: () => storeApi.accountSession(tenantSlug),
+  });
+  const signedIn = !!session?.customer;
+  const { data: remote } = useQuery({
+    queryKey: ["account-wishlist", tenantSlug],
+    queryFn: () => storeApi.accountWishlist(tenantSlug),
+    enabled: signedIn,
+  });
 
   useEffect(() => {
+    if (signedIn && remote === undefined) return;
     async function load() {
       try {
-        const raw = localStorage.getItem(KEY);
-        const ids = raw ? (JSON.parse(raw) as string[]) : [];
+        const ids = signedIn ? remote?.productIds ?? [] : readLocalWishlist();
         if (ids.length === 0) {
           setItems([]);
           setLoading(false);
@@ -36,7 +46,7 @@ export function WishlistClient() {
       }
     }
     load();
-  }, [tenantSlug]);
+  }, [tenantSlug, signedIn, remote]);
 
   if (loading) return <p className="mt-8 text-zinc-500">Loading…</p>;
 

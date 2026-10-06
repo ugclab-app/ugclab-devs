@@ -10,14 +10,24 @@ import UsersPage from "@/pages/UsersPage";
 import UserDetailPage from "@/pages/UserDetailPage";
 import PayoutsPage from "@/pages/PayoutsPage";
 import OrdersPage from "@/pages/OrdersPage";
+import OrderDetailPage from "@/pages/OrderDetailPage";
+import LocalPaymentsPage from "@/pages/LocalPaymentsPage";
 import ActivityPage from "@/pages/ActivityPage";
 import RevenuePage from "@/pages/RevenuePage";
 import DisputesPage from "@/pages/DisputesPage";
 import AuditPage from "@/pages/AuditPage";
 import SettingsPage from "@/pages/SettingsPage";
 import ThemesPage from "@/pages/ThemesPage";
+import BlocksPage from "@/pages/BlocksPage";
+import SectionsPage from "@/pages/SectionsPage";
+import EmailTemplatesPage from "@/pages/EmailTemplatesPage";
+import OutreachPage from "@/pages/OutreachPage";
 import DomainsPage from "@/pages/DomainsPage";
+import AffiliatesPage from "@/pages/AffiliatesPage";
+import PlatformPartnersPage from "@/pages/PlatformPartnersPage";
+import MarketingPage from "@/pages/MarketingPage";
 import AnnouncementsPage from "@/pages/AnnouncementsPage";
+import MerchantMessagesPage from "@/pages/MerchantMessagesPage";
 import ReportsPage from "@/pages/ReportsPage";
 import CreateTenantPage from "@/pages/CreateTenantPage";
 import InboxPage from "@/pages/InboxPage";
@@ -25,6 +35,7 @@ import SearchPage from "@/pages/SearchPage";
 import IntegrationsPage from "@/pages/IntegrationsPage";
 import ModerationPage from "@/pages/ModerationPage";
 import CompliancePage from "@/pages/CompliancePage";
+import SystemPage from "@/pages/SystemPage";
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -65,17 +76,27 @@ export default function App() {
         <Route path="tenants/:id" element={<TenantDetailPage />} />
         <Route path="payouts" element={<PayoutsPage />} />
         <Route path="orders" element={<OrdersPage />} />
+        <Route path="orders/:id" element={<OrderDetailPage />} />
+        <Route path="payments-local" element={<LocalPaymentsPage />} />
         <Route path="activity" element={<ActivityPage />} />
         <Route path="plans" element={<PlansPage />} />
         <Route path="users" element={<UsersPage />} />
         <Route path="users/:id" element={<UserDetailPage />} />
         <Route path="domains" element={<DomainsPage />} />
+        <Route path="affiliates" element={<AffiliatesPage />} />
+        <Route path="platform-partners" element={<PlatformPartnersPage />} />
         <Route path="themes" element={<ThemesPage />} />
+        <Route path="marketing" element={<MarketingPage />} />
+        <Route path="blocks" element={<BlocksPage />} />
+        <Route path="sections" element={<SectionsPage />} />
+        <Route path="email-templates" element={<EmailTemplatesPage />} />
+        <Route path="outreach" element={<OutreachPage />} />
         <Route path="audit" element={<AuditPage />} />
         <Route path="announcements" element={<AnnouncementsPage />} />
+        <Route path="merchant-messages" element={<MerchantMessagesPage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="settings" element={<SettingsPage />} />
-        <Route path="system" element={<SettingsPage />} />
+        <Route path="system" element={<SystemPage />} />
       </Route>
     </Routes>
   );

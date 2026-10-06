@@ -7,10 +7,11 @@
 }
 
 .store-container {
-  width: min(96vw, var(--store-container-max));
+  width: 100%;
   max-width: var(--store-container-max);
   margin-inline: auto;
   padding-inline: clamp(1rem, 3vw, 2rem);
+  box-sizing: border-box;
 }
 
 body {
@@ -64,7 +65,7 @@ body {
 
 .product-card-media {
   position: relative;
-  aspect-ratio: 4 / 5;
+  aspect-ratio: 1 / 1;
   overflow: hidden;
   background: linear-gradient(160deg, #f4f4f5 0%, #e4e4e7 100%);
 }
@@ -77,12 +78,14 @@ body {
 .product-card-image {
   height: 100%;
   width: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center;
+  padding: 0.75rem;
   transition: transform 0.45s ease;
 }
 
 .product-card:hover .product-card-image {
-  transform: scale(1.04);
+  transform: scale(1.03);
 }
 
 .product-card-placeholder {
@@ -175,7 +178,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  margin-top: 0.5rem;
+  margin-top: auto;
+  padding-top: 0.5rem;
 }
 
 .product-card-add {
@@ -213,6 +217,18 @@ body {
 .store-home-gap-none > * + * {
   margin-top: 0;
 }
+
+.store-home-stack {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.store-home-stack > * {
+  width: 100%;
+  min-width: 0;
+}
+
 .store-home-gap-sm > * + * {
   margin-top: 1.5rem;
 }
@@ -220,10 +236,10 @@ body {
   margin-top: 2.5rem;
 }
 .store-home-gap-lg > * + * {
-  margin-top: 4rem;
+  margin-top: 3.5rem;
 }
 .store-home-gap-xl > * + * {
-  margin-top: 6rem;
+  margin-top: 4.5rem;
 }
 
 .store-reveal-fade {
@@ -362,3 +378,92 @@ body {
 body.store-has-sticky-cta {
   padding-bottom: 4.5rem;
 }
+
+/* Review “Helpful” vote button */
+.review-helpful-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: 9999px;
+  border: 1px solid rgb(228 228 231);
+  background: #fff;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgb(63 63 70);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+.review-helpful-btn:hover:not(:disabled) {
+  border-color: rgb(212 212 216);
+  background: rgb(250 250 250);
+  color: rgb(24 24 27);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.06);
+}
+.review-helpful-btn:active:not(:disabled) {
+  transform: translateY(0) scale(0.97);
+}
+.review-helpful-btn__icon {
+  flex-shrink: 0;
+  transition: transform 0.25s ease;
+}
+.review-helpful-btn:hover:not(:disabled) .review-helpful-btn__icon {
+  transform: translateY(-1px) rotate(-8deg);
+}
+.review-helpful-btn--done {
+  border-color: rgb(167 243 208);
+  background: rgb(236 253 245);
+  color: rgb(4 120 87);
+  cursor: default;
+}
+.review-helpful-btn--pop {
+  animation: review-helpful-pop 0.55s cubic-bezier(0.22, 1.4, 0.36, 1);
+}
+.review-helpful-btn--pop .review-helpful-btn__icon {
+  animation: review-helpful-thumb 0.55s cubic-bezier(0.22, 1.4, 0.36, 1);
+}
+
+@keyframes review-helpful-pop {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes review-helpful-thumb {
+  0% {
+    transform: scale(1) rotate(0deg);
+  }
+  40% {
+    transform: scale(1.35) rotate(-12deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .review-helpful-btn,
+  .review-helpful-btn__icon {
+    transition: none;
+  }
+  .review-helpful-btn:hover:not(:disabled),
+  .review-helpful-btn:active:not(:disabled) {
+    transform: none;
+  }
+  .review-helpful-btn--pop,
+  .review-helpful-btn--pop .review-helpful-btn__icon {
+    animation: none;
+  }
+}
+

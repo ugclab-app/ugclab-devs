@@ -5,8 +5,10 @@ import { formatMoney } from "@ugclab/i18n";
 import { api } from "@/api/client";
 import { AdminPageShell } from "@/components/admin-page-shell";
 import { EmptyState } from "@/components/empty-state";
+import { useAdminT } from "@/hooks/use-admin-t";
 
 export default function AbandonedCartsPage() {
+  const { ta, c, t } = useAdminT();
   const qc = useQueryClient();
   const [alert, setAlert] = useState("");
   const [sending, setSending] = useState<string | null>(null);
@@ -19,7 +21,7 @@ export default function AbandonedCartsPage() {
     queryFn: () => api.abandonedCarts(),
   });
 
-  if (isLoading) return <p className="text-zinc-500">Loading…</p>;
+  if (isLoading) return <p className="text-zinc-500">{c.loading}</p>;
 
   const carts = (data?.carts ?? []) as {
     id: string;
@@ -36,9 +38,9 @@ export default function AbandonedCartsPage() {
 
   return (
     <AdminPageShell
-      crumbs={[{ label: "Abandoned carts" }]}
-      title="Abandoned carts"
-      description="Recovery emails send after 1h and 24h when the shopper left an email."
+      crumbs={[{ label: t.nav.abandonedCarts }]}
+      title={ta("abandonedPage.title")}
+      description={ta("abandonedPage.description")}
       actions={
         <Link
           to="/marketing"

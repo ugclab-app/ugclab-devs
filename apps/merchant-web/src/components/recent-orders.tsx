@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { formatMoney } from "@ugclab/i18n";
 import { OrderStatusBadge } from "@/components/status-badge";
 import type { OrderStatus } from "@/lib/database-types";
+import { useAdminT } from "@/hooks/use-admin-t";
 
 type RecentOrder = {
   id: string;
@@ -19,16 +20,18 @@ export function RecentOrders({
   orders: RecentOrder[];
   currency: string;
 }) {
+  const { ta } = useAdminT();
+
   if (orders.length === 0) {
     return (
       <section className="admin-card p-6">
-        <h2 className="font-semibold text-zinc-900">Recent orders</h2>
-        <p className="mt-2 text-sm text-zinc-500">No orders yet.</p>
+        <h2 className="font-semibold text-zinc-900">{ta("dashboard.recentOrders")}</h2>
+        <p className="mt-2 text-sm text-zinc-500">{ta("dashboard.noRecentOrders")}</p>
         <Link
           to="/orders"
           className="mt-4 inline-block text-sm font-semibold text-violet-600"
         >
-          View orders →
+          {ta("dashboard.viewAllOrders")} →
         </Link>
       </section>
     );
@@ -37,9 +40,9 @@ export function RecentOrders({
   return (
     <section className="admin-card overflow-hidden">
       <div className="flex items-center justify-between border-b border-zinc-100 px-6 py-4">
-        <h2 className="font-semibold text-zinc-900">Recent orders</h2>
+        <h2 className="font-semibold text-zinc-900">{ta("dashboard.recentOrders")}</h2>
         <Link to="/orders" className="text-sm font-semibold text-violet-600">
-          View all
+          {ta("dashboard.viewAllOrders")}
         </Link>
       </div>
       <ul className="divide-y divide-zinc-100">

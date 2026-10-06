@@ -3,9 +3,11 @@ import type { HomeSection } from "@ugclab/tenant/store-theme";
 import {
   BLOCK_CATALOG,
   catalogByCategory,
+  isContentBlock,
   type BlockCatalogItem,
   type BlockCategory,
 } from "./block-catalog";
+import { filterPublishedBlocks, useBlockCatalog } from "@/hooks/use-block-catalog";
 import { BlockPickerThumb } from "./block-picker-thumb";
 import {
   getBlockVariants,
@@ -64,7 +66,9 @@ function VariantCard({
         <BlockPickerThumb layout={variant.thumb} />
       </div>
       <span className="block-picker-variant-label">{variant.label}</span>
-      <span className="block-picker-variant-desc">{variant.description}</span>
+      {variant.description ? (
+        <span className="block-picker-variant-desc">{variant.description}</span>
+      ) : null}
     </button>
   );
 }
@@ -84,6 +88,8 @@ export function BlockPickerModal({
   const [category, setCategory] = useState<BlockCategory | "all">("all");
   const [step, setStep] = useState<"catalog" | "variants">("catalog");
   const [pickedType, setPickedType] = useState<HomeSection | null>(null);
+  const blockCatalogQ = useBlockCatalog(open);
+  const allowedBlockIds = blockCatalogQ.data?.blockIds;
 
   useEffect(() => {
     if (!open) return;
@@ -112,7 +118,8 @@ export function BlockPickerModal({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return BLOCK_CATALOG.filter((item) => {
+    const base = filterPublishedBlocks(BLOCK_CATALOG, allowedBlockIds);
+    return base.filter((item) => {
       if (category !== "all" && item.category !== category) return false;
       if (!q) return true;
       return (
@@ -121,24 +128,36 @@ export function BlockPickerModal({
         item.type.includes(q)
       );
     });
-  }, [query, category]);
+  }, [query, category, allowedBlockIds]);
 
-  const grouped =
-    category === "all" && !query.trim()
-      ? catalogByCategory()
-      : [
-          {
-            category: "all" as BlockCategory,
-            label: "Results",
-            items: filtered,
-          },
-        ].filter((g) => g.items.length > 0);
+  const grouped = useMemo(() => {
+    if (category === "all" && !query.trim()) {
+      return catalogByCategory()
+        .map((g) => ({
+          ...g,
+          items: filterPublishedBlocks(g.items, allowedBlockIds),
+        }))
+        .filter((g) => g.items.length > 0);
+    }
+    return [
+      {
+        category: "all" as BlockCategory,
+        label: "Results",
+        items: filtered,
+      },
+    ].filter((g) => g.items.length > 0);
+  }, [category, query, filtered, allowedBlockIds]);
 
   const variants = pickedType ? getBlockVariants(pickedType) : [];
   const pickedCatalog = pickedType ? catalogItem(pickedType) : undefined;
 
-  function pickType(type: HomeSection) {
-    setPickedType(type);
+  function pickBlock(item: BlockCatalogItem) {
+    if (!isContentBlock(item)) {
+      onPick(item.type);
+      onClose();
+      return;
+    }
+    setPickedType(item.type);
     setStep("variants");
   }
 
@@ -239,7 +258,7 @@ export function BlockPickerModal({
                         <BlockPickerCard
                           key={item.type}
                           item={item}
-                          onPick={() => pickType(item.type)}
+                          onPick={() => pickBlock(item)}
                         />
                       ))}
                     </div>
@@ -250,7 +269,11 @@ export function BlockPickerModal({
           </>
         ) : (
           <div className="block-picker-scroll block-picker-variants-step">
-            <div className="block-picker-variant-grid">
+            <div
+              className={`block-picker-variant-grid${
+                variants.length <= 3 ? " block-picker-variant-grid--few" : ""
+              }`}
+            >
               {variants.map((variant) => (
                 <VariantCard
                   key={variant.id}

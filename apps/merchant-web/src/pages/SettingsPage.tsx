@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "@/api/client";
 import { useAuth } from "@/context/auth";
+import { CaRegionSetupBanner } from "@/components/ca-region-setup-banner";
 import { SettingsForm } from "@/components/settings-form";
 import { StorefrontPreview } from "@/components/storefront-preview";
 import { StoreQrCode } from "@/components/store-qr-code";
@@ -15,16 +16,17 @@ import { PaymentsPanel } from "@/components/payments-panel";
 import { BillingPanel } from "@/components/billing-panel";
 import { SettingsPanelShell } from "@/components/settings-section";
 import { SettingsTabs, type SettingsTabId } from "@/components/settings-tabs";
+import { MarketsPanel } from "@/components/markets-panel";
+import { TaxPanel } from "@/components/tax-panel";
 import { CopyStoreUrl } from "@/components/copy-store-url";
 import { getStorefrontUrl } from "@/lib/storefront";
 import { AdminPageShell } from "@/components/admin-page-shell";
-import { useAdminLocale } from "@/context/admin-locale";
-import type { Locale } from "@ugclab/i18n";
+import { useAdminT } from "@/hooks/use-admin-t";
 
 export default function SettingsPage() {
+  const { ta } = useAdminT();
   const { tenant } = useAuth();
   const { isOwner, can } = usePermissions();
-  const { locale, setLocale, t } = useAdminLocale();
   const { data } = useQuery({ queryKey: ["settings"], queryFn: () => api.settings() });
   const [params] = useSearchParams();
   const tabParam = params.get("tab");
@@ -33,7 +35,9 @@ export default function SettingsPage() {
     tabParam === "payments" ||
     tabParam === "domain" ||
     tabParam === "team" ||
-    tabParam === "policies"
+    tabParam === "policies" ||
+    tabParam === "markets" ||
+    tabParam === "tax"
       ? tabParam
       : "general";
   const [tab, setTab] = useState<SettingsTabId>(initialTab as SettingsTabId);
@@ -44,7 +48,9 @@ export default function SettingsPage() {
       tabParam === "payments" ||
       tabParam === "domain" ||
       tabParam === "team" ||
-      tabParam === "policies"
+      tabParam === "policies" ||
+      tabParam === "markets" ||
+      tabParam === "tax"
     ) {
       setTab(tabParam);
     }
@@ -70,29 +76,39 @@ export default function SettingsPage() {
     businessAddress: (s as { businessAddress?: string })?.businessAddress ?? "",
     emailFromName: (s as { emailFromName?: string })?.emailFromName ?? "",
     emailReplyTo: (s as { emailReplyTo?: string })?.emailReplyTo ?? "",
+    emailDoubleOptIn: (s as { emailDoubleOptIn?: boolean })?.emailDoubleOptIn === true,
     privacyUrl: s?.privacyUrl ?? "",
     refundUrl: s?.refundUrl ?? "",
     privacyPolicy: (s as { privacyPolicy?: string })?.privacyPolicy ?? "",
     refundPolicy: (s as { refundPolicy?: string })?.refundPolicy ?? "",
+    termsOfService: (s as { termsOfService?: string })?.termsOfService ?? "",
+    termsUrl: (s as { termsUrl?: string })?.termsUrl ?? "",
+    shippingPolicy: (s as { shippingPolicy?: string })?.shippingPolicy ?? "",
+    shippingUrl: (s as { shippingUrl?: string })?.shippingUrl ?? "",
+    legalNotice: (s as { legalNotice?: string })?.legalNotice ?? "",
+    legalNoticeUrl: (s as { legalNoticeUrl?: string })?.legalNoticeUrl ?? "",
+    contactPolicy: (s as { contactPolicy?: string })?.contactPolicy ?? "",
+    returnRules: (s as { returnRules?: string })?.returnRules ?? "",
     digitalLinkDays: (s as { digitalLinkDays?: number })?.digitalLinkDays ?? 30,
     notifyNewOrders: (s as { notifyNewOrders?: boolean })?.notifyNewOrders !== false,
     notifyLowStock: (s as { notifyLowStock?: boolean })?.notifyLowStock !== false,
     abandonedCartEnabled:
       (s as { abandonedCartEnabled?: boolean })?.abandonedCartEnabled !== false,
-    taxRateBps: (s as { taxRateBps?: number })?.taxRateBps ?? 0,
-    taxIncluded: (s as { taxIncluded?: boolean })?.taxIncluded ?? false,
     seoTitle: (s as { seoTitle?: string })?.seoTitle ?? tenant.name,
     seoDescription: (s as { seoDescription?: string })?.seoDescription ?? "",
     seoOgImageUrl: (s as { seoOgImageUrl?: string })?.seoOgImageUrl ?? "",
     lowStockThreshold: (s as { lowStockThreshold?: number })?.lowStockThreshold ?? 5,
+    emailTemplates:
+      ((s as { emailTemplates?: Record<string, { subject?: string; html?: string }> })
+        .emailTemplates ?? {}),
   };
 
   return (
     <AdminPageShell
       wide
-      crumbs={[{ label: "Settings" }]}
-      title="Settings"
-      description="Store identity, payments, domain, and policies."
+      crumbs={[{ label: ta("nav.settings") }]}
+      title={ta("settingsPage.title")}
+      description={ta("settingsPage.description")}
       actions={
         <div className="flex flex-wrap items-center gap-2">
           <CopyStoreUrl url={storeUrl} />
@@ -102,37 +118,31 @@ export default function SettingsPage() {
             rel="noreferrer"
             className="ugclab-btn border border-zinc-200 bg-white px-3 py-2 text-sm"
           >
-            Open store
+            {ta("settingsPage.openStore")}
           </a>
         </div>
       }
     >
       <p className="mb-4 truncate font-mono text-sm text-violet-700">{storeUrl}</p>
-      <label className="mb-4 flex items-center gap-2 text-sm text-zinc-600">
-        {t.language ?? "Language"}
-        <select
-          className="ugclab-select"
-          value={locale}
-          onChange={(e) => setLocale(e.target.value as Locale)}
-        >
-          <option value="en">English</option>
-          <option value="ru">Русский</option>
-        </select>
-      </label>
       <SettingsTabs
         active={tab}
         onChange={setTab}
-        visibleIds={
+          visibleIds={
           isOwner
             ? undefined
-            : ["general", "team", "policies"]
+            : ["general", "markets", "tax", "team", "policies"]
         }
       />
 
       <div className="mt-6">
         {tab === "general" && (
-          <SettingsForm storeUrl={storeUrl} initial={formInitial} mode="general" />
+          <>
+            <CaRegionSetupBanner />
+            <SettingsForm storeUrl={storeUrl} initial={formInitial} mode="general" />
+          </>
         )}
+        {tab === "markets" && <MarketsPanel />}
+        {tab === "tax" && <TaxPanel />}
         {tab === "billing" && isOwner && <BillingPanel />}
         {tab === "payments" && (isOwner || can("payments")) && <PaymentsPanel />}
         {tab === "domain" && isOwner && (

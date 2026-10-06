@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatMoney } from "@ugclab/i18n";
 import { api } from "@/api/client";
 import { FormAlert } from "@/components/form-alert";
+import { useAdminT } from "@/hooks/use-admin-t";
 
 type Zone = {
   id: string;
@@ -14,6 +15,7 @@ type Zone = {
 };
 
 export default function ShippingPage() {
+  const { ta, c } = useAdminT();
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ["shipping"],
@@ -51,13 +53,50 @@ export default function ShippingPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Shipping zones</h1>
-      <p className="text-sm text-zinc-500">
-        Flat rates by country group. Free shipping threshold is optional (order subtotal in {currency}).
+      <h1 className="text-2xl font-bold">{ta("shippingPage.title")}</h1>
+      <p className="text-sm text-zinc-500">{ta("shippingPage.description")}</p>
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm text-emerald-950">
+        <p>
+          Kyrgyzstan checkout uses your store rate named as a local courier. Shippo is skipped for
+          KG addresses.
+        </p>
+        <button
+          type="button"
+          disabled={pending || zones.some((z) => z.countries.includes("KG"))}
+          onClick={async () => {
+            setPending(true);
+            try {
+              await api.createShippingZone({
+                name: "Курьер по Кыргызстану",
+                countries: "KG",
+                flatRate: currency === "KGS" ? 250 : 5,
+              });
+              setAlert({ ok: true, message: "Kyrgyzstan courier zone added" });
+              await queryClient.invalidateQueries({ queryKey: ["shipping"] });
+            } catch (err) {
+              setAlert({
+                ok: false,
+                message: err instanceof Error ? err.message : "Failed",
+              });
+            } finally {
+              setPending(false);
+            }
+          }}
+          className="ugclab-btn ugclab-btn-primary shrink-0"
+        >
+          {zones.some((z) => z.countries.includes("KG"))
+            ? "Kyrgyzstan zone added"
+            : "Add Kyrgyzstan courier"}
+        </button>
+      </div>
+      <p className="rounded-lg border border-sky-100 bg-sky-50 px-3 py-2 text-sm text-sky-950">
+        At checkout, <strong>live carrier rates</strong> (Shippo) are offered first when{" "}
+        <code className="text-xs">SHIPPO_API_KEY</code> is set. Store flat-rate zones stay
+        available as a fallback option.
       </p>
       <FormAlert ok={alert.ok} message={alert.message} />
       {isLoading ? (
-        <p className="text-zinc-500">Loading…</p>
+        <p className="text-zinc-500">{c.loading}</p>
       ) : (
         <div className="admin-card overflow-hidden">
           <table className="w-full text-sm">

@@ -1,10 +1,10 @@
 import { getMessages } from "@ugclab/i18n";
 import type { ProductCardProduct } from "@/lib/product-card-types";
 
-export function productTypeLabel(type: string): string {
-  const sf = getMessages().storefront;
+export function productTypeLabel(type: string, locale?: string): string {
+  const sf = getMessages(locale).storefront;
   if (type === "DIGITAL") return sf.digital;
-  if (type === "SERVICE") return "Service";
+  if (type === "SERVICE") return sf.service;
   return sf.physical;
 }
 

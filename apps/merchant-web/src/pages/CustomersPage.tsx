@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { formatMoney } from "@ugclab/i18n";
 import { api } from "@/api/client";
@@ -6,6 +6,7 @@ import { AdminPageShell } from "@/components/admin-page-shell";
 import { CustomerSegmentBadges } from "@/components/customer-segment-badges";
 import { EmptyState } from "@/components/empty-state";
 import { useState } from "react";
+import { useAdminT } from "@/hooks/use-admin-t";
 
 const FILTERS = [
   { id: "all", label: "All" },
@@ -37,12 +38,17 @@ function formatShortDate(iso: string | null) {
 }
 
 export default function CustomersPage() {
+  const { ta, c, t } = useAdminT();
+  const navigate = useNavigate();
   const [q, setQ] = useState("");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterId>("all");
   const [sort, setSort] = useState<SortId>("newest");
   const [importMsg, setImportMsg] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
+  const [addPending, setAddPending] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["customers", search, filter, sort],
@@ -60,21 +66,52 @@ export default function CustomersPage() {
     segment: string[];
   }[];
 
+  async function onAddCustomer(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setAddError(null);
+    setAddPending(true);
+    const fd = new FormData(e.currentTarget);
+    try {
+      const res = await api.createCustomer({
+        email: String(fd.get("email") ?? ""),
+        name: String(fd.get("name") ?? "").trim() || undefined,
+        country: String(fd.get("country") ?? "").trim() || undefined,
+      });
+      setShowAdd(false);
+      await refetch();
+      navigate(`/customers/${res.customer.id}`);
+    } catch (err) {
+      setAddError(err instanceof Error ? err.message : "Could not create customer");
+    } finally {
+      setAddPending(false);
+    }
+  }
+
   if (isLoading) {
     return (
-      <AdminPageShell crumbs={[{ label: "Customers" }]}>
-        <p className="text-zinc-500">Loading…</p>
+      <AdminPageShell crumbs={[{ label: t.nav.customers }]}>
+        <p className="text-zinc-500">{ta("customersPage.loading")}</p>
       </AdminPageShell>
     );
   }
 
   return (
     <AdminPageShell
-      crumbs={[{ label: "Customers" }]}
-      title="Customers"
-      description="Shopper accounts, spend, and order history."
+      crumbs={[{ label: t.nav.customers }]}
+      title={ta("customersPage.title")}
+      description={ta("customersPage.description")}
       actions={
         <>
+          <button
+            type="button"
+            className="ugclab-btn ugclab-btn-primary text-sm"
+            onClick={() => {
+              setAddError(null);
+              setShowAdd(true);
+            }}
+          >
+            {ta("customersPage.add")}
+          </button>
           <Link
             to="/customers/segments"
             className="ugclab-btn border border-zinc-200 bg-white text-sm"
@@ -126,6 +163,79 @@ export default function CustomersPage() {
         </>
       }
     >
+      {showAdd ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="add-customer-title"
+          onClick={() => !addPending && setShowAdd(false)}
+        >
+          <form
+            className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={onAddCustomer}
+          >
+            <h2 id="add-customer-title" className="text-lg font-semibold text-zinc-900">
+              {ta("customersPage.addTitle")}
+            </h2>
+            <p className="mt-1 text-sm text-zinc-500">{ta("customersPage.addDesc")}</p>
+            <div className="mt-5 space-y-4">
+              <label className="block text-sm">
+                <span className="mb-1 block text-zinc-600">{ta("customersPage.email")}</span>
+                <input
+                  name="email"
+                  type="email"
+                  required
+                  autoFocus
+                  className="ugclab-input w-full"
+                  placeholder="customer@example.com"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-zinc-600">{ta("customersPage.name")}</span>
+                <input
+                  name="name"
+                  className="ugclab-input w-full"
+                  placeholder={ta("customersPage.nameOptional")}
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-zinc-600">{ta("customersPage.country")}</span>
+                <input
+                  name="country"
+                  className="ugclab-input w-24 uppercase"
+                  maxLength={2}
+                  placeholder="US"
+                />
+              </label>
+            </div>
+            {addError ? (
+              <p className="mt-3 text-sm text-red-600" role="alert">
+                {addError}
+              </p>
+            ) : null}
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                className="ugclab-btn border border-zinc-200 bg-white text-sm"
+                disabled={addPending}
+                onClick={() => setShowAdd(false)}
+              >
+                {c.cancel}
+              </button>
+              <button
+                type="submit"
+                disabled={addPending}
+                className="ugclab-btn ugclab-btn-primary text-sm disabled:opacity-50"
+              >
+                {addPending ? ta("customersPage.saving") : ta("customersPage.add")}
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
+
       {importMsg ? (
         <p className="mb-4 text-sm text-violet-700">{importMsg}</p>
       ) : null}

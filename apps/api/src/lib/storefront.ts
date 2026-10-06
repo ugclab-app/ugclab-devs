@@ -1,6 +1,14 @@
 export function getStorefrontUrl(tenantSlug: string): string {
-  const base = process.env.STOREFRONT_URL ?? "http://localhost:3002";
+  const configured = process.env.STOREFRONT_URL?.trim();
+  const base =
+    configured && !configured.includes("localhost") && !configured.includes("127.0.0.1")
+      ? configured
+      : process.env.VERCEL
+        ? "https://tescommerce.com"
+        : (configured || "http://localhost:3002");
   const url = new URL(base);
+  url.pathname = "/";
+  url.search = "";
   url.searchParams.set("tenant", tenantSlug);
   return url.toString();
 }

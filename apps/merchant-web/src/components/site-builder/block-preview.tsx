@@ -1,17 +1,25 @@
 import type { HomeBlock } from "@ugclab/tenant/store-theme";
 import { BLOCK_CATALOG } from "./block-catalog";
+import { resolveDesignVariantId } from "./block-variants";
+import { FeaturesBlockLayout } from "./features-block-layout";
 import { InlineEdit } from "./inline-edit";
+import { ReviewsBlockPreview } from "./reviews-block-preview";
+import { ProductsBlockPreview } from "./products-block-preview";
 
 export function BlockPreview({
   block,
   primaryColor,
   storeName,
   onPatch,
+  selectedProductId,
+  onSelectProduct,
 }: {
   block: HomeBlock;
   primaryColor: string;
   storeName: string;
   onPatch?: (patch: Partial<HomeBlock>) => void;
+  selectedProductId?: string | null;
+  onSelectProduct?: (product: { id: string; slug: string }) => void;
 }) {
   const meta = BLOCK_CATALOG.find((b) => b.type === block.type);
   const bg = block.bgColor;
@@ -19,37 +27,37 @@ export function BlockPreview({
   const edit = onPatch;
 
   if (block.type === "hero") {
+    const heroBg = block.imageUrl
+      ? `linear-gradient(rgba(0,0,0,.45),rgba(0,0,0,.4)), url(${block.imageUrl}) center/cover`
+      : `linear-gradient(rgba(15,23,42,.45),rgba(15,23,42,.35)), url(https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1400&q=60) center/cover`;
     return (
       <div
-        className="relative overflow-hidden rounded-lg text-white"
+        className="relative overflow-hidden text-white"
         style={{
-          background: block.imageUrl
-            ? `linear-gradient(rgba(0,0,0,.5),rgba(0,0,0,.5)), url(${block.imageUrl}) center/cover`
-            : `linear-gradient(135deg, ${primaryColor}, #1e1b4b)`,
-          minHeight: 200,
+          background: heroBg,
+          minHeight: 240,
         }}
       >
-        <div className="p-8">
-          <p className="text-xs uppercase tracking-widest text-white/70">Welcome</p>
+        <div className="flex min-h-[240px] flex-col items-center justify-center px-8 py-12 text-center">
           <InlineEdit
             tag="h2"
-            className="mt-1 block text-2xl font-bold"
+            className="mt-1 block text-3xl font-bold tracking-tight"
             value={block.title}
             placeholder={storeName}
             onChange={edit ? (title) => edit({ title }) : undefined}
           />
           <InlineEdit
             tag="p"
-            className="mt-2 block text-sm text-white/85"
+            className="mt-3 block max-w-md text-sm text-white/90"
             value={block.subtitle}
-            placeholder="Hero subtitle"
+            placeholder="Browse our latest products"
             onChange={edit ? (subtitle) => edit({ subtitle }) : undefined}
           />
           {block.ctaLabel || edit ? (
             <InlineEdit
-              className="mt-4 inline-block rounded-lg bg-white px-4 py-2 text-xs font-semibold text-violet-800"
+              className="mt-6 inline-block rounded-md bg-white px-5 py-2.5 text-xs font-semibold text-zinc-900"
               value={block.ctaLabel}
-              placeholder="Button label"
+              placeholder="Shop all"
               onChange={edit ? (ctaLabel) => edit({ ctaLabel }) : undefined}
             />
           ) : null}
@@ -90,15 +98,15 @@ export function BlockPreview({
   }
 
   if (block.type === "image_text") {
-    return (
-      <div className="grid overflow-hidden rounded-lg border border-zinc-200 bg-white md:grid-cols-2">
-        {block.imageUrl ? (
-          <img src={block.imageUrl} alt="" className="h-32 w-full object-cover md:h-full" />
-        ) : (
-          <div className="flex h-32 items-center justify-center bg-zinc-100 text-xs text-zinc-400">
-            Image
-          </div>
-        )}
+    const stacked = block.imageLayout === "stacked";
+    const image = block.imageUrl ? (
+      <img src={block.imageUrl} alt="" className="h-32 w-full object-cover md:h-full" />
+    ) : (
+      <div className="flex h-32 items-center justify-center bg-zinc-100 text-xs text-zinc-400">
+        Image
+      </div>
+    );
+    const copy = (
         <div className="p-5">
           <InlineEdit
             tag="h3"
@@ -114,6 +122,16 @@ export function BlockPreview({
             onChange={edit ? (subtitle) => edit({ subtitle }) : undefined}
           />
         </div>
+    );
+    return stacked ? (
+      <div className="flex flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white">
+        {image}
+        {copy}
+      </div>
+    ) : (
+      <div className="grid overflow-hidden rounded-lg border border-zinc-200 bg-white md:grid-cols-2">
+        {image}
+        {copy}
       </div>
     );
   }
@@ -288,26 +306,40 @@ export function BlockPreview({
   }
 
   if (block.type === "features") {
-    const items = block.features ?? [];
     return (
       <div>
-        <InlineEdit
-          tag="p"
-          className="mb-3 block text-center font-bold"
-          value={block.title}
-          placeholder="Features"
-          onChange={edit ? (title) => edit({ title }) : undefined}
-        />
-        <div className="grid grid-cols-3 gap-2">
-          {(items.length ? items : [{ title: "—", text: "—" }]).slice(0, 3).map((f, i) => (
-            <div key={i} className="rounded border border-zinc-100 p-2 text-center text-xs">
+        <FeaturesBlockLayout
+          block={block}
+          renderTitle={
+            <InlineEdit
+              tag="p"
+              className="mb-3 block text-center font-bold"
+              value={block.title}
+              placeholder="Features"
+              onChange={edit ? (title) => edit({ title }) : undefined}
+            />
+          }
+          renderItem={(f, i) => (
+            <div className="text-xs">
+              {resolveDesignVariantId(block) === "features-icons" ? (
+                <span
+                  className="mx-auto mb-1 flex h-6 w-6 items-center justify-center rounded-full bg-violet-100 text-[10px] text-violet-700"
+                  aria-hidden
+                >
+                  ✓
+                </span>
+              ) : null}
               <p className="font-semibold">{f.title}</p>
               <p className="text-zinc-500">{f.text}</p>
             </div>
-          ))}
-        </div>
+          )}
+        />
       </div>
     );
+  }
+
+  if (block.type === "reviews") {
+    return <ReviewsBlockPreview block={block} onPatch={edit} />;
   }
 
   if (block.type === "spacer") {
@@ -327,14 +359,12 @@ export function BlockPreview({
 
   if (block.type === "products" || block.type === "new_arrivals" || block.type === "sale") {
     return (
-      <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-6 text-center">
-        <p className="text-sm font-semibold text-zinc-700">{meta?.label ?? block.type}</p>
-        <div className="mt-4 grid grid-cols-4 gap-2">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="aspect-[3/4] rounded bg-white shadow-sm" />
-          ))}
-        </div>
-      </div>
+      <ProductsBlockPreview
+        block={block}
+        onPatch={onPatch}
+        selectedProductId={selectedProductId}
+        onSelectProduct={onSelectProduct}
+      />
     );
   }
 

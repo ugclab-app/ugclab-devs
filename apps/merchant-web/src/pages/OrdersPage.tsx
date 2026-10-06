@@ -7,18 +7,18 @@ import { OrdersToolbar } from "@/components/orders-toolbar";
 import { OrdersTable, type OrderListRow } from "@/components/orders-table";
 import { EmptyState } from "@/components/empty-state";
 import { AdminPageShell } from "@/components/admin-page-shell";
-import { TwoFaRequiredBanner } from "@/components/two-fa-required-banner";
 import { FormAlert } from "@/components/form-alert";
 import type { OrderStatus } from "@/lib/database-types";
-
-const SORT_OPTIONS = [
-  { value: "newest", label: "Newest first" },
-  { value: "oldest", label: "Oldest first" },
-  { value: "total-desc", label: "Total high–low" },
-  { value: "total-asc", label: "Total low–high" },
-];
+import { useAdminT } from "@/hooks/use-admin-t";
 
 export default function OrdersPage() {
+  const { ta, c, t } = useAdminT();
+  const SORT_OPTIONS = [
+    { value: "newest", label: ta("sort.newest") },
+    { value: "oldest", label: ta("sort.oldest") },
+    { value: "total-desc", label: ta("sort.totalDesc") },
+    { value: "total-asc", label: ta("sort.totalAsc") },
+  ];
   const [banner, setBanner] = useState<{ ok?: boolean; message?: string } | null>(
     null
   );
@@ -27,7 +27,7 @@ export default function OrdersPage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
 
-  const { data, isLoading, isFetching } = useQuery({
+  const { data, isLoading, isFetching, isError, error } = useQuery({
     queryKey: ["orders", params.toString()],
     queryFn: () => api.orders(params),
   });
@@ -63,26 +63,27 @@ export default function OrdersPage() {
       ? [...selected].filter((id) => orders.find((o) => o.id === id)?.status === "PAID")
       : paidIds;
     if (!ids.length) {
-      setBanner({ ok: false, message: "No paid orders to fulfill" });
+      setBanner({ ok: false, message: ta("ordersPage.noPaidToFulfill") });
       return;
     }
     try {
       const r = await api.bulkFulfillOrders(ids);
-      setBanner({ ok: true, message: `Marked ${r.updated} order(s) as fulfilled` });
+      setBanner({ ok: true, message: ta("ordersPage.bulkFulfillSuccess", { count: r.updated }) });
       setSelected(new Set());
       await qc.invalidateQueries({ queryKey: ["orders"] });
     } catch (err) {
       setBanner({
         ok: false,
-        message: err instanceof Error ? err.message : "Bulk fulfill failed",
+        message: err instanceof Error ? err.message : ta("ordersPage.bulkFulfillFailed"),
       });
     }
   }
 
   return (
     <AdminPageShell
-      crumbs={[{ label: "Orders" }]}
-      title="Orders"
+      crumbs={[{ label: t.nav.orders }]}
+      title={ta("ordersPage.title")}
+      description={ta("ordersPage.description")}
       actions={
         <>
           <button
@@ -90,17 +91,17 @@ export default function OrdersPage() {
             onClick={() => api.downloadOrdersCsv(params)}
             className="ugclab-btn border border-zinc-200 bg-white text-sm"
           >
-            Export CSV
+            {ta("ordersPage.exportCsv")}
           </button>
           <button
             type="button"
             onClick={() => api.downloadOrdersCsv(params, true)}
             className="ugclab-btn border border-zinc-200 bg-white text-sm"
           >
-            Accounting export
+            {c.export}
           </button>
           <label className="ugclab-btn cursor-pointer border border-zinc-200 bg-white text-sm">
-            Import CSV
+            {ta("ordersPage.importCsv")}
             <input
               type="file"
               accept=".csv"
@@ -131,13 +132,14 @@ export default function OrdersPage() {
             onClick={() => bulkFulfill()}
             className="ugclab-btn border border-zinc-200 bg-white text-sm disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Bulk fulfill {someSelected ? `(${selected.size})` : "paid"}
+            {someSelected
+              ? ta("ordersPage.bulkFulfillSelected", { count: selected.size })
+              : ta("ordersPage.bulkFulfill")}
           </button>
         </>
       }
     >
       <OrdersToolbar sortOptions={SORT_OPTIONS} />
-      <TwoFaRequiredBanner area="orders" />
 
       {banner ? (
         <div className="mt-4">
@@ -242,14 +244,18 @@ export default function OrdersPage() {
       ) : null}
 
       {isLoading ? (
-        <p className="mt-6 text-zinc-500">Loading orders…</p>
+        <p className="mt-6 text-zinc-500">{ta("ordersPage.loading")}</p>
+      ) : isError ? (
+        <p className="mt-6 text-sm text-red-700">
+          {error instanceof Error ? error.message : ta("ordersPage.loadFailed")}
+        </p>
       ) : orders.length === 0 ? (
         <div className="mt-6">
           <EmptyState
-            title="No orders"
-            description="Orders appear after customers complete checkout."
+            title={ta("ordersPage.empty")}
+            description={ta("ordersPage.emptyDesc")}
             actionHref="/products"
-            actionLabel="Products"
+            actionLabel={t.nav.products}
           />
         </div>
       ) : (

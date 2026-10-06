@@ -10,12 +10,12 @@ import { CheckoutSteps } from "@/components/checkout-steps";
 import { CartEmailCapture } from "@/components/cart-email-capture";
 import { ExpressPayHint } from "@/components/express-pay-hint";
 import { StoreTrustStrip } from "@/components/store-trust-strip";
+import { StoreBlockRenderer } from "@/components/store-block-renderer";
 import { buildStoreTitle, useDocumentSeo } from "@/hooks/use-document-seo";
-
-const sf = getMessages().storefront;
 
 export function CartPage() {
   const ctx = useStore();
+  const sf = getMessages(ctx.locale).storefront;
   const { tenant } = useStoreParams();
   const qc = useQueryClient();
   const nav = { locale: ctx.locale, tenant: ctx.tenant.slug };
@@ -45,6 +45,21 @@ export function CartPage() {
 
   const lines = data?.lines ?? [];
   const total = data?.total ?? 0;
+
+  const suggestions = useQuery({
+    queryKey: ["cart-suggestions", tenant, lines.map((l) => l.productId).join(",")],
+    queryFn: () => storeApi.cartSuggestions(tenant),
+    enabled: lines.length > 0,
+  });
+
+  const addSuggestion = useMutation({
+    mutationFn: (productId: string) => storeApi.addToCart(tenant, { productId, quantity: 1 }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cart"] });
+      qc.invalidateQueries({ queryKey: ["store-context"] });
+      qc.invalidateQueries({ queryKey: ["cart-suggestions"] });
+    },
+  });
 
   useDocumentSeo({
     title: buildStoreTitle(
@@ -153,6 +168,51 @@ export function CartPage() {
           </aside>
         </div>
       )}
+      {(suggestions.data?.products.length ?? 0) > 0 ? (
+        <section className="mt-12">
+          <h2 className="text-xl font-bold">Often bought together</h2>
+          <ul className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {suggestions.data!.products.map((p) => (
+              <li key={p.id} className="rounded-2xl border border-zinc-200 bg-white p-4">
+                <Link to={storeHref(`/products/${p.slug}`, nav)} className="block">
+                  {p.imageKey ? (
+                    <img
+                      src={productImageUrl(p.imageKey)}
+                      alt=""
+                      className="mb-3 h-36 w-full rounded-lg object-cover"
+                    />
+                  ) : (
+                    <div className="mb-3 flex h-36 items-center justify-center rounded-lg bg-zinc-100 text-zinc-300">
+                      ◇
+                    </div>
+                  )}
+                  <p className="font-medium">{p.title}</p>
+                  <p className="mt-1 text-sm text-zinc-500">
+                    {formatMoney(p.priceAmount, p.currency)}
+                  </p>
+                </Link>
+                <button
+                  type="button"
+                  disabled={addSuggestion.isPending}
+                  onClick={() => addSuggestion.mutate(p.id)}
+                  className="mt-3 w-full rounded-lg border border-zinc-300 py-2 text-sm font-medium hover:bg-zinc-50 disabled:opacity-50"
+                >
+                  Add to cart
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+      {(ctx.theme.cartBlocks?.length ?? 0) > 0 ? (
+        <div className="mt-12">
+          <StoreBlockRenderer
+            blocks={ctx.theme.cartBlocks!}
+            theme={ctx.theme}
+            pageContext="page"
+          />
+        </div>
+      ) : null}
     </>
   );
 }

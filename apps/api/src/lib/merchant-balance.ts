@@ -1,4 +1,6 @@
 import { OrderStatus, prisma } from "@ugclab/database";
+import { sumOwedToCreatorsCents } from "./affiliate.js";
+import { RESERVE_BPS } from "./buyer-protection.js";
 
 const PAID_STATUSES = [OrderStatus.PAID, OrderStatus.FULFILLED] as const;
 
@@ -19,15 +21,30 @@ export async function getMerchantBalance(tenantId: string) {
 
   const orders = await prisma.order.findMany({
     where: { tenantId, status: { in: [...PAID_STATUSES] } },
-    select: { totalAmount: true, platformFeeAmount: true },
+    select: {
+      totalAmount: true,
+      platformFeeAmount: true,
+      buyerProtection: true,
+      fundsReleasedAt: true,
+      payoutBlocked: true,
+    },
   });
 
   let earnedCents = 0;
   let platformFeesCents = 0;
+  let heldCents = 0;
+  let releasedProtectedCents = 0;
+  let releasedOpenCents = 0;
   for (const o of orders) {
-    earnedCents += merchantNetFromOrder(o.totalAmount, o.platformFeeAmount);
+    const net = merchantNetFromOrder(o.totalAmount, o.platformFeeAmount);
     platformFeesCents += o.platformFeeAmount;
+    if (o.payoutBlocked) continue;
+    earnedCents += net;
+    if (o.buyerProtection && !o.fundsReleasedAt) heldCents += net;
+    else if (o.buyerProtection) releasedProtectedCents += net;
+    else releasedOpenCents += net;
   }
+  const reserveCents = Math.floor((releasedProtectedCents * RESERVE_BPS) / 10000);
 
   const payouts = await prisma.merchantPayout.findMany({
     where: { tenantId },
@@ -43,16 +60,29 @@ export async function getMerchantBalance(tenantId: string) {
     .filter((p) => p.status === "PENDING" || p.status === "PROCESSING")
     .reduce((s, p) => s + p.amount, 0);
 
-  const availableCents = Math.max(0, earnedCents - paidOutCents - pendingPayoutCents);
+  const owedToCreatorsCents = await sumOwedToCreatorsCents(tenantId);
+
+  const availableCents = Math.max(
+    0,
+    releasedOpenCents +
+      releasedProtectedCents -
+      reserveCents -
+      paidOutCents -
+      pendingPayoutCents -
+      owedToCreatorsCents
+  );
 
   return {
     currency: payoutCurrency,
     storefrontCurrency,
     payoutCurrency,
     earnedCents,
+    heldCents,
+    reserveCents,
     platformFeesCents,
     paidOutCents,
     pendingPayoutCents,
+    owedToCreatorsCents,
     availableCents,
     payouts,
   };

@@ -165,8 +165,10 @@ p4.post("/orders/bulk-fulfill", async (c) => {
   });
 
   const { fulfillInventoryForOrder } = await import("../lib/inventory.js");
+  const { sendReviewRequestOnce } = await import("../lib/transactional-email.js");
   for (const o of paid) {
     await fulfillInventoryForOrder(o.id).catch(() => {});
+    sendReviewRequestOnce(o.id).catch(() => {});
   }
 
   return c.json({ updated: result.count });
@@ -195,8 +197,10 @@ p4.post("/orders/bulk-cancel", async (c) => {
   });
 
   const { releaseInventoryForOrder } = await import("../lib/inventory.js");
+  const { emailCustomerAboutOrder } = await import("../lib/transactional-email.js");
   for (const o of toCancel) {
     await releaseInventoryForOrder(o.id).catch(() => {});
+    emailCustomerAboutOrder(o.id, "orderCancelled").catch(() => {});
   }
 
   return c.json({ updated: result.count });

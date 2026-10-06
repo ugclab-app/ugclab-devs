@@ -1,10 +1,18 @@
-import { EmailAutomationType, OrderStatus, prisma } from "@ugclab/database";
+import {
+  EmailAutomationType,
+  OrderStatus,
+  prisma,
+} from "@ugclab/database";
 import { sendStoreEmail } from "./tenant-email.js";
 import {
   buildCampaignEmail,
   buildPersonalizeContext,
 } from "./campaign-personalize.js";
 import { getStorefrontUrl } from "./storefront.js";
+import {
+  getSegmentRecipients,
+  type CampaignSegment,
+} from "./email-segments.js";
 
 const WINBACK_DAYS = 60;
 
@@ -43,9 +51,12 @@ export async function ensureDefaultAutomations(tenantId: string) {
   ];
 
   for (const d of defaults) {
-    await prisma.emailAutomation.upsert({
-      where: { tenantId_type: { tenantId, type: d.type } },
-      create: {
+    const existing = await prisma.emailAutomation.findFirst({
+      where: { tenantId, type: d.type },
+    });
+    if (existing) continue;
+    await prisma.emailAutomation.create({
+      data: {
         tenantId,
         type: d.type,
         enabled: false,
@@ -53,26 +64,24 @@ export async function ensureDefaultAutomations(tenantId: string) {
         bodyHtml: d.bodyHtml,
         delayHours: d.delayHours,
       },
-      update: {},
     });
   }
 }
 
-async function sendAutomation(
-  tenantId: string,
-  type: EmailAutomationType,
+async function sendAutomationById(
+  automationId: string,
   email: string,
   name: string | null
 ) {
   const auto = await prisma.emailAutomation.findUnique({
-    where: { tenantId_type: { tenantId, type } },
+    where: { id: automationId },
     include: { tenant: true },
   });
   if (!auto?.enabled) return;
 
-  const ctx = await buildPersonalizeContext(tenantId, email, name, {
-    campaignId: `auto_${type}`,
-    utmCampaign: `automation_${type.toLowerCase()}`,
+  const ctx = await buildPersonalizeContext(auto.tenantId, email, name, {
+    campaignId: `auto_${auto.id}`,
+    utmCampaign: `automation_${auto.type.toLowerCase()}`,
   });
   const { subject, html, text } = await buildCampaignEmail(
     ctx,
@@ -81,12 +90,25 @@ async function sendAutomation(
     null
   );
   const storeUrl = getStorefrontUrl(auto.tenant.slug);
-  await sendStoreEmail(tenantId, {
+  await sendStoreEmail(auto.tenantId, {
     to: email,
     subject,
     html: wrapShell(auto.tenant.name, html, storeUrl),
     text,
   });
+}
+
+async function sendAutomation(
+  tenantId: string,
+  type: EmailAutomationType,
+  email: string,
+  name: string | null
+) {
+  const auto = await prisma.emailAutomation.findFirst({
+    where: { tenantId, type },
+  });
+  if (!auto?.enabled) return;
+  await sendAutomationById(auto.id, email, name);
 }
 
 export async function triggerWelcomeEmail(tenantId: string, email: string, name: string | null) {
@@ -98,19 +120,17 @@ export async function triggerPostPurchaseEmail(
   email: string,
   name: string | null
 ) {
-  const auto = await prisma.emailAutomation.findUnique({
-    where: { tenantId_type: { tenantId, type: EmailAutomationType.POST_PURCHASE } },
+  const auto = await prisma.emailAutomation.findFirst({
+    where: { tenantId, type: EmailAutomationType.POST_PURCHASE },
   });
   if (!auto?.enabled) return;
   const delayMs = (auto.delayHours ?? 0) * 60 * 60 * 1000;
   if (delayMs <= 0) {
-    await sendAutomation(tenantId, EmailAutomationType.POST_PURCHASE, email, name);
+    await sendAutomationById(auto.id, email, name);
     return;
   }
   setTimeout(() => {
-    sendAutomation(tenantId, EmailAutomationType.POST_PURCHASE, email, name).catch(
-      console.error
-    );
+    sendAutomationById(auto.id, email, name).catch(console.error);
   }, delayMs);
 }
 
@@ -145,10 +165,47 @@ export async function processWinbackAutomations() {
       const last = c.orders[0];
       if (!last || last.createdAt > cutoff) continue;
       try {
-        await sendAutomation(auto.tenantId, EmailAutomationType.WINBACK, c.email, c.name);
+        await sendAutomationById(auto.id, c.email, c.name);
         await new Promise((r) => setTimeout(r, 200));
       } catch (e) {
         console.error("[winback]", c.email, e);
+      }
+    }
+
+    await prisma.emailAutomation.update({
+      where: { id: auto.id },
+      data: { lastRunAt: new Date() },
+    });
+  }
+}
+
+/** Custom automations: weekly send to a chosen audience segment. */
+export async function processCustomAutomations() {
+  const automations = await prisma.emailAutomation.findMany({
+    where: {
+      enabled: true,
+      type: EmailAutomationType.CUSTOM,
+      segment: { not: null },
+    },
+  });
+
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+  for (const auto of automations) {
+    if (auto.lastRunAt && auto.lastRunAt > weekAgo) continue;
+    if (!auto.segment) continue;
+
+    const recipients = await getSegmentRecipients(
+      auto.tenantId,
+      auto.segment as CampaignSegment
+    );
+
+    for (const r of recipients) {
+      try {
+        await sendAutomationById(auto.id, r.email, r.name);
+        await new Promise((r) => setTimeout(r, 200));
+      } catch (e) {
+        console.error("[custom-auto]", auto.id, r.email, e);
       }
     }
 

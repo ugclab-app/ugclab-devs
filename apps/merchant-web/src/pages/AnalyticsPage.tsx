@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { formatMoney } from "@ugclab/i18n";
 import { api } from "@/api/client";
 import { AdminPageShell } from "@/components/admin-page-shell";
+import { useAdminT } from "@/hooks/use-admin-t";
 
 type AnalyticsData = {
   rangeDays: number;
@@ -92,6 +93,7 @@ function RevenueLineChart({
 }
 
 export default function AnalyticsPage() {
+  const { ta, c, t } = useAdminT();
   const [preset, setPreset] = useState<"7" | "30" | "90" | "custom">("7");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -112,23 +114,50 @@ export default function AnalyticsPage() {
     queryFn: () => api.analytics(queryString),
   });
 
+  const { data: cohortsData } = useQuery({
+    queryKey: ["analytics-cohorts", queryString],
+    queryFn: () => api.analyticsCohorts(queryString),
+  });
+
+  const { data: attributionData } = useQuery({
+    queryKey: ["analytics-attribution", queryString],
+    queryFn: () => api.analyticsAttribution(queryString),
+  });
+
+  const { data: funnelData } = useQuery({
+    queryKey: ["analytics-funnel", queryString],
+    queryFn: () => api.analyticsSessionFunnel(queryString),
+  });
+
   const currency = data?.currency ?? "USD";
   const a = data?.analytics as AnalyticsData | undefined;
   const maxRevenue = Math.max(...(a?.revenueByDay.map((d) => d.revenue) ?? [0]), 1);
+  const funnelMax = Math.max(
+    ...(funnelData?.steps.map((s) => s.sessions) ?? [0]),
+    1
+  );
 
   return (
     <AdminPageShell
-      crumbs={[{ label: "Analytics" }]}
-      title="Analytics"
-      description="Sales trends, customers, marketing, and recovery — paid & fulfilled orders."
+      crumbs={[{ label: t.nav.analytics }]}
+      title={ta("analyticsPage.title")}
+      description={ta("analyticsPage.description")}
       actions={
-        <button
-          type="button"
-          className="ugclab-btn border border-zinc-200 bg-white text-sm"
-          onClick={() => api.exportAnalyticsCsv(queryString)}
-        >
-          Export CSV
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            to="/analytics/live"
+            className="ugclab-btn border border-zinc-200 bg-white text-sm"
+          >
+            Live View
+          </Link>
+          <button
+            type="button"
+            className="ugclab-btn border border-zinc-200 bg-white text-sm"
+            onClick={() => api.exportAnalyticsCsv(queryString)}
+          >
+            {c.export}
+          </button>
+        </div>
       }
     >
       <div className="mb-6 flex flex-wrap items-end gap-3">
@@ -172,7 +201,7 @@ export default function AnalyticsPage() {
       </div>
 
       {isLoading ? (
-        <p className="text-zinc-500">Loading analytics…</p>
+        <p className="text-zinc-500">{ta("analyticsPage.loading")}</p>
       ) : !a ? (
         <p className="text-zinc-500">No data</p>
       ) : (
@@ -414,6 +443,156 @@ export default function AnalyticsPage() {
                       : "—"}
                   </strong>
                 </span>
+              </div>
+            </section>
+          </div>
+
+          <section className="admin-card p-6">
+            <h2 className="font-semibold">Session funnel</h2>
+            <p className="mt-1 text-xs text-zinc-500">
+              Deepest stage reached per storefront session ({funnelData?.sessionCount ?? 0}{" "}
+              sessions in range).
+            </p>
+            <ul className="mt-4 space-y-3">
+              {(funnelData?.steps ?? []).map((step) => (
+                <li key={step.stage} className="text-sm">
+                  <div className="flex justify-between gap-2">
+                    <span className="font-medium">{step.label}</span>
+                    <span className="text-zinc-600">
+                      {step.sessions}
+                      {step.conversionFromPrevPct != null
+                        ? ` · ${step.conversionFromPrevPct}% from prev`
+                        : ""}
+                    </span>
+                  </div>
+                  <div className="mt-1 h-2 overflow-hidden rounded-full bg-zinc-100">
+                    <div
+                      className="h-full rounded-full bg-sky-500"
+                      style={{
+                        width: `${(step.sessions / funnelMax) * 100}%`,
+                      }}
+                    />
+                  </div>
+                </li>
+              ))}
+            </ul>
+            {(funnelData?.topEntrySources?.length ?? 0) > 0 ? (
+              <div className="mt-4 border-t border-zinc-100 pt-3">
+                <p className="text-xs font-medium uppercase text-zinc-500">
+                  Entry sources
+                </p>
+                <ul className="mt-2 space-y-1 text-sm">
+                  {funnelData!.topEntrySources.map((s) => (
+                    <li key={s.source} className="flex justify-between">
+                      <span>{s.source}</span>
+                      <span className="font-medium">{s.count}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </section>
+
+          <div className="grid gap-6 lg:grid-cols-2">
+            <section className="admin-card p-6">
+              <h2 className="font-semibold">Attribution</h2>
+              <p className="mt-1 text-xs text-zinc-500">
+                Paid orders by UTM source / affiliate
+                {attributionData
+                  ? ` · ${attributionData.totalOrders} orders`
+                  : ""}
+              </p>
+              <ul className="mt-4 divide-y text-sm">
+                {(attributionData?.bySource ?? []).length === 0 ? (
+                  <li className="py-3 text-zinc-500">No attributed orders yet</li>
+                ) : (
+                  attributionData!.bySource.map((row) => (
+                    <li key={row.source} className="flex justify-between gap-4 py-3">
+                      <span className="font-medium">{row.source}</span>
+                      <span className="text-zinc-600">
+                        {row.orders} · {formatMoney(row.revenue, currency)}
+                      </span>
+                    </li>
+                  ))
+                )}
+              </ul>
+              {(attributionData?.byAffiliate?.length ?? 0) > 0 ? (
+                <div className="mt-4 border-t border-zinc-100 pt-3">
+                  <p className="text-xs font-medium uppercase text-zinc-500">
+                    Affiliates
+                  </p>
+                  <ul className="mt-2 space-y-1 text-sm">
+                    {attributionData!.byAffiliate.map((row) => (
+                      <li key={row.code} className="flex justify-between gap-2">
+                        <span>
+                          {row.partner}{" "}
+                          <span className="text-zinc-400">({row.code})</span>
+                        </span>
+                        <span>{formatMoney(row.revenue, currency)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {(attributionData?.byCampaign?.length ?? 0) > 0 ? (
+                <div className="mt-4 border-t border-zinc-100 pt-3">
+                  <p className="text-xs font-medium uppercase text-zinc-500">
+                    Campaigns
+                  </p>
+                  <ul className="mt-2 space-y-1 text-sm">
+                    {attributionData!.byCampaign.slice(0, 8).map((row) => (
+                      <li key={row.campaign} className="flex justify-between gap-2">
+                        <span className="truncate">{row.campaign}</span>
+                        <span>{row.orders}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </section>
+
+            <section className="admin-card p-6">
+              <h2 className="font-semibold">Purchase cohorts</h2>
+              <p className="mt-1 text-xs text-zinc-500">
+                First-order week · % who bought again within 1 / 2 / 4 weeks
+              </p>
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b text-xs uppercase text-zinc-500">
+                      <th className="py-2 pr-3">Cohort</th>
+                      <th className="py-2 pr-3">Buyers</th>
+                      <th className="py-2 pr-3">W+1</th>
+                      <th className="py-2 pr-3">W+2</th>
+                      <th className="py-2">W+4</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {(cohortsData?.cohorts ?? []).length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="py-4 text-zinc-500">
+                          No cohort data in this period
+                        </td>
+                      </tr>
+                    ) : (
+                      cohortsData!.cohorts.map((row) => (
+                        <tr key={row.cohort}>
+                          <td className="py-2 pr-3 font-medium">{row.cohort}</td>
+                          <td className="py-2 pr-3">{row.customers}</td>
+                          <td className="py-2 pr-3">
+                            {row.retentionW1Pct != null ? `${row.retentionW1Pct}%` : "—"}
+                          </td>
+                          <td className="py-2 pr-3">
+                            {row.retentionW2Pct != null ? `${row.retentionW2Pct}%` : "—"}
+                          </td>
+                          <td className="py-2">
+                            {row.retentionW4Pct != null ? `${row.retentionW4Pct}%` : "—"}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
               </div>
             </section>
           </div>

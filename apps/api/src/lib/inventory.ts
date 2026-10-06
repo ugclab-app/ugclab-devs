@@ -55,12 +55,16 @@ export async function reserveInventoryForOrder(orderId: string) {
     include: { items: { include: { product: true } } },
   });
   if (!order) return;
-  const wh = await getDefaultWarehouse(order.tenantId);
-  if (!wh) return;
 
   for (const line of order.items) {
     if (line.product?.type !== ProductType.PHYSICAL || !line.productId) continue;
-    const stock = await upsertStock(wh.id, line.productId, line.variantId);
+    const whId =
+      line.warehouseId ||
+      order.pickupWarehouseId ||
+      (await getDefaultWarehouse(order.tenantId))?.id;
+    if (!whId) continue;
+
+    const stock = await upsertStock(whId, line.productId, line.variantId);
     const available = stock.quantity - stock.reservedQty;
     if (stock.quantity > 0 && available < line.quantity) {
       throw new Error(`Insufficient stock for ${line.title}`);
@@ -71,7 +75,7 @@ export async function reserveInventoryForOrder(orderId: string) {
     });
     await logInventoryMovement({
       tenantId: order.tenantId,
-      warehouseId: wh.id,
+      warehouseId: whId,
       productId: line.productId,
       variantId: line.variantId,
       type: "ORDER_RESERVE",

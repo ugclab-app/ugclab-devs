@@ -4,6 +4,16 @@ import { useQuery } from "@tanstack/react-query";
 import { storeApi } from "@/api/client";
 import { useStoreParams } from "@/hooks/use-store-params";
 
+const TITLES: Record<string, string> = {
+  privacy: "Privacy policy",
+  refund: "Return and refund policy",
+  terms: "Terms of service",
+  shipping: "Shipping policy",
+  legal: "Legal notice",
+  contact: "Contact information",
+  returns: "Return and cancellation rules",
+};
+
 export function PolicyPage() {
   const { kind } = useParams<{ kind: string }>();
   const { tenant } = useStoreParams();
@@ -22,7 +32,10 @@ export function PolicyPage() {
   if (!data) return <p className="text-zinc-500">Loading…</p>;
   if (data.externalUrl) return <p className="text-zinc-500">Redirecting…</p>;
 
-  const title = kind === "privacy" ? "Privacy policy" : "Refund policy";
+  const title =
+    (data as { title?: string }).title ||
+    (kind ? TITLES[kind] : null) ||
+    "Policy";
 
   return (
     <article className="prose prose-zinc max-w-3xl">

@@ -1,8 +1,23 @@
-"use client";
-
 import { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { storeApi } from "@/api/client";
+import { useStoreParams } from "@/hooks/use-store-params";
 
-const KEY = "ugclab_wishlist";
+export const WISHLIST_KEY = "ugclab_wishlist";
+
+export function readLocalWishlist(): string[] {
+  try {
+    const raw = localStorage.getItem(WISHLIST_KEY);
+    const list = raw ? (JSON.parse(raw) as string[]) : [];
+    return Array.isArray(list) ? list.filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function writeLocalWishlist(ids: string[]) {
+  localStorage.setItem(WISHLIST_KEY, JSON.stringify(ids));
+}
 
 export function WishlistButton({
   productId,
@@ -11,43 +26,60 @@ export function WishlistButton({
   productId: string;
   title: string;
 }) {
-  const [saved, setSaved] = useState(false);
+  const { tenant } = useStoreParams();
+  const qc = useQueryClient();
+  const { data: session } = useQuery({
+    queryKey: ["account-session", tenant],
+    queryFn: () => storeApi.accountSession(tenant),
+  });
+  const signedIn = !!session?.customer;
+  const { data: remote } = useQuery({
+    queryKey: ["account-wishlist", tenant],
+    queryFn: () => storeApi.accountWishlist(tenant),
+    enabled: signedIn,
+  });
+  const [localSaved, setLocalSaved] = useState(false);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(KEY);
-      const list = raw ? (JSON.parse(raw) as string[]) : [];
-      setSaved(list.includes(productId));
-    } catch {
-      setSaved(false);
-    }
+    setLocalSaved(readLocalWishlist().includes(productId));
   }, [productId]);
 
-  function toggle() {
-    try {
-      const raw = localStorage.getItem(KEY);
-      let list = raw ? (JSON.parse(raw) as string[]) : [];
-      if (list.includes(productId)) {
-        list = list.filter((id) => id !== productId);
-        setSaved(false);
-      } else {
-        list.push(productId);
-        setSaved(true);
+  const saved = signedIn
+    ? (remote?.productIds ?? []).includes(productId)
+    : localSaved;
+
+  const toggle = useMutation({
+    mutationFn: async () => {
+      if (signedIn) {
+        if (saved) await storeApi.wishlistRemove(tenant, productId);
+        else await storeApi.wishlistAdd(tenant, [productId]);
+        return;
       }
-      localStorage.setItem(KEY, JSON.stringify(list));
-    } catch {
-      /* ignore */
-    }
-  }
+      const list = readLocalWishlist();
+      const next = list.includes(productId)
+        ? list.filter((id) => id !== productId)
+        : [...list, productId];
+      writeLocalWishlist(next);
+      setLocalSaved(next.includes(productId));
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["account-wishlist", tenant] });
+    },
+  });
 
   return (
     <button
       type="button"
-      onClick={toggle}
-      className="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50"
-      title={title}
+      aria-pressed={saved}
+      aria-label={saved ? `Remove ${title} from wishlist` : `Save ${title}`}
+      onClick={() => toggle.mutate()}
+      className={`rounded-full border px-3 py-1 text-sm ${
+        saved
+          ? "border-[var(--store-primary)] bg-violet-50 text-[var(--store-primary)]"
+          : "border-zinc-200 text-zinc-600"
+      }`}
     >
-      {saved ? "♥ Saved" : "♡ Wishlist"}
+      {saved ? "Saved" : "Save"}
     </button>
   );
 }

@@ -1,5 +1,14 @@
+/** Public store on tescommerce.com when the admin is not running locally. */
+function publicStorefrontOrigin(): string | null {
+  if (typeof window === "undefined") return null;
+  const host = window.location.hostname;
+  if (host === "localhost" || host === "127.0.0.1") return null;
+  if (host.startsWith("admin.")) return `https://${host.slice("admin.".length)}`;
+  return "https://tescommerce.com";
+}
+
 /** Storefront link for merchant admin (local dev uses ?tenant=slug). */
-export function getStorefrontUrl(tenantSlug: string): string {
+export function getStorefrontUrl(tenantSlug: string, locale?: string): string {
   const slug = tenantSlug.trim().toLowerCase();
   if (!slug) return "http://localhost:3002/?tenant=tescommerce";
 
@@ -32,6 +41,19 @@ export function getStorefrontUrl(tenantSlug: string): string {
     url.pathname = "/";
     url.search = "";
     url.searchParams.set("tenant", slug);
+    if (locale) url.searchParams.set("locale", locale);
+    return url.toString();
+  }
+
+  const liveOrigin = publicStorefrontOrigin();
+  const configuredIsLocal =
+    configuredBase.includes("localhost") || configuredBase.includes("127.0.0.1");
+  if (liveOrigin && (configuredIsLocal || !configuredBase)) {
+    const url = new URL(liveOrigin);
+    url.pathname = "/";
+    url.search = "";
+    url.searchParams.set("tenant", slug);
+    if (locale) url.searchParams.set("locale", locale);
     return url.toString();
   }
 
@@ -57,10 +79,26 @@ export function getStorefrontUrl(tenantSlug: string): string {
   url.pathname = "/";
   url.search = "";
   url.searchParams.set("tenant", slug);
+  if (locale) url.searchParams.set("locale", locale);
+  return url.toString();
+}
+
+export function getAffiliateStorefrontUrl(tenantSlug: string, code: string): string {
+  const base = getStorefrontUrl(tenantSlug);
+  const url = new URL(base);
+  url.searchParams.set("ref", code.trim().toLowerCase());
   return url.toString();
 }
 
 export function getStorefrontDisplayHost(tenantSlug: string): string {
+  const live = publicStorefrontOrigin();
+  if (live) {
+    try {
+      return new URL(live).host;
+    } catch {
+      return live.replace(/^https?:\/\//, "");
+    }
+  }
   const baseDomain = (
     import.meta.env.VITE_STOREFRONT_BASE_DOMAIN ??
     import.meta.env.STOREFRONT_BASE_DOMAIN

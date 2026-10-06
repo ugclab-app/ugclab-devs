@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Input } from "@ugclab/ui";
 import { storeApi } from "@/api/client";
 import { useStore } from "@/context/store";
@@ -8,27 +8,35 @@ import { useStoreParams } from "@/hooks/use-store-params";
 import { storeHref } from "@/lib/store-href";
 import { ExpressPayHint } from "@/components/express-pay-hint";
 import { StoreTrustStrip } from "@/components/store-trust-strip";
+import { getStoredAttribution } from "@/hooks/use-live-presence";
 
 export function CheckoutForm({
   subtotalAmount,
   showPolicies,
   privacyHref,
   refundHref,
+  productIds,
 }: {
   subtotalAmount: number;
   showPolicies?: boolean;
   privacyHref?: string;
   refundHref?: string;
+  productIds?: string[];
 }) {
   const { tenant, locale } = useStoreParams();
-  const { currency, settings, checkoutFooterText, payments, theme } = useStore();
+  const { currency, settings, checkoutFooterText, payments, theme, addons, giftWrap: giftWrapOffer, baseCurrency } = useStore();
   const stripeLive = payments?.stripeLive ?? false;
+  const finikLive = payments?.finikLive ?? false;
+  const gopayLive = payments?.gopayLive ?? false;
   const navigate = useNavigate();
   const qc = useQueryClient();
   const taxRateBps = settings?.taxRateBps ?? 0;
+  const stripeTaxEnabled = theme.stripeTaxEnabled === true;
 
   const [discountCode, setDiscountCode] = useState("");
   const [discountPreview, setDiscountPreview] = useState<number | null>(null);
+  const [giftWrap, setGiftWrap] = useState(false);
+  const [giftMessage, setGiftMessage] = useState("");
   const [giftCardCode, setGiftCardCode] = useState("");
   const [giftCardPreview, setGiftCardPreview] = useState<number | null>(null);
   const [shippingRates, setShippingRates] = useState<
@@ -37,14 +45,42 @@ export function CheckoutForm({
   const [selectedRateId, setSelectedRateId] = useState<string>("flat");
   const [error, setError] = useState<string | null>(null);
   const [createAccount, setCreateAccount] = useState(false);
+  const [fulfillmentMethod, setFulfillmentMethod] = useState<"SHIP" | "PICKUP">(
+    "SHIP"
+  );
+  const [pickupWarehouseId, setPickupWarehouseId] = useState("");
+
+  const { data: accountSession } = useQuery({
+    queryKey: ["account-session", tenant],
+    queryFn: () => storeApi.accountSession(tenant),
+  });
+  const { data: savedAddresses } = useQuery({
+    queryKey: ["account-addresses", tenant],
+    queryFn: () => storeApi.addresses(tenant),
+    enabled: !!accountSession?.customer,
+  });
+  const [addressKey, setAddressKey] = useState("new");
+  const saved = savedAddresses?.addresses ?? [];
+  const chosen = saved.find((a) => a.id === addressKey);
+
+  const { data: pickupData } = useQuery({
+    queryKey: ["pickup-locations", tenant, productIds?.join(",") ?? ""],
+    queryFn: () => storeApi.pickupLocations(tenant, productIds),
+    enabled: fulfillmentMethod === "PICKUP",
+  });
+
+  const pickupLocations = pickupData?.locations ?? [];
+
+  useEffect(() => {
+    if (fulfillmentMethod === "PICKUP" && pickupLocations.length && !pickupWarehouseId) {
+      setPickupWarehouseId(pickupLocations[0]!.id);
+    }
+  }, [fulfillmentMethod, pickupLocations, pickupWarehouseId]);
 
   async function previewGiftCard() {
     if (!giftCardCode.trim()) return;
     try {
-      const estTotal = Math.max(
-        0,
-        subtotalAmount - (discountPreview ?? 0)
-      );
+      const estTotal = Math.max(0, subtotalAmount - (discountPreview ?? 0));
       const data = await storeApi.validateGiftCard(tenant, giftCardCode, estTotal);
       setGiftCardPreview(data.giftCardAmount);
       setError(null);
@@ -72,7 +108,12 @@ export function CheckoutForm({
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ["store-context"] });
       qc.invalidateQueries({ queryKey: ["cart"] });
-      if (result.mode === "stripe" && result.checkoutUrl) {
+      if (
+        (result.mode === "stripe" ||
+          result.mode === "gopay" ||
+          result.mode === "finik") &&
+        result.checkoutUrl
+      ) {
         window.location.href = result.checkoutUrl;
         return;
       }
@@ -93,22 +134,41 @@ export function CheckoutForm({
         e.preventDefault();
         setError(null);
         const fd = new FormData(e.currentTarget);
+        const attr = getStoredAttribution();
         const body: Record<string, unknown> = {
           email: fd.get("email"),
           name: fd.get("name"),
-          shippingName: fd.get("shippingName"),
-          shippingAddress1: fd.get("shippingAddress1"),
-          shippingAddress2: fd.get("shippingAddress2"),
-          shippingCity: fd.get("shippingCity"),
-          shippingPostal: fd.get("shippingPostal"),
-          country: fd.get("country"),
           acceptPolicies: fd.get("acceptPolicies") === "on",
           createAccount: createAccount,
+          fulfillmentMethod,
+          utmSource: attr.utmSource,
+          utmMedium: attr.utmMedium,
+          utmCampaign: attr.utmCampaign,
+          landingPath: attr.landingPath,
+          liveSessionId: attr.sessionId,
+          giftWrap,
+          giftMessage: giftWrap ? giftMessage : "",
         };
+        if (fulfillmentMethod === "PICKUP") {
+          if (!pickupWarehouseId) {
+            setError("Select a pickup location");
+            return;
+          }
+          body.pickupWarehouseId = pickupWarehouseId;
+          body.shippingName = fd.get("name");
+          body.country = "US";
+        } else {
+          body.shippingName = fd.get("shippingName");
+          body.shippingAddress1 = fd.get("shippingAddress1");
+          body.shippingAddress2 = fd.get("shippingAddress2");
+          body.shippingCity = fd.get("shippingCity");
+          body.shippingPostal = fd.get("shippingPostal");
+          body.country = fd.get("country");
+          const rate = shippingRates.find((r) => r.id === selectedRateId);
+          if (rate) body.shippingAmountCents = rate.amountCents;
+        }
         if (discountCode) body.discountCode = discountCode;
         if (giftCardCode) body.giftCardCode = giftCardCode;
-        const rate = shippingRates.find((r) => r.id === selectedRateId);
-        if (rate) body.shippingAmountCents = rate.amountCents;
         if (createAccount) body.password = fd.get("password");
         place.mutate(body);
       }}
@@ -129,69 +189,204 @@ export function CheckoutForm({
           type="text"
           required={theme.checkoutRequireName}
         />
-      {theme.checkoutRequirePhone ? (
-        <Input name="phone" label="Phone" type="tel" required />
-      ) : null}
+        {theme.checkoutRequirePhone ? (
+          <Input name="phone" label="Phone" type="tel" required />
+        ) : null}
       </fieldset>
 
-      <fieldset className="space-y-4 rounded-xl border border-zinc-100 p-4">
-        <legend className="px-1 text-sm font-semibold text-zinc-800">Shipping</legend>
-        <Input name="shippingName" label="Shipping name" type="text" />
-        <Input name="shippingAddress1" label="Address line 1" type="text" />
-        <Input name="shippingAddress2" label="Address line 2 (optional)" type="text" />
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Input name="shippingCity" label="City" type="text" />
-          <Input name="shippingPostal" label="Postal code" type="text" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-zinc-700">Country</label>
-          <select
-            name="country"
-            defaultValue="US"
-            className="ugclab-select mt-1.5 w-full"
-            onChange={async (e) => {
-              const country = e.target.value;
-              const city = (document.querySelector('[name="shippingCity"]') as HTMLInputElement)?.value;
-              const postal = (document.querySelector('[name="shippingPostal"]') as HTMLInputElement)?.value;
-              try {
-                const data = await storeApi.shippingRates(tenant, { country, city, postal });
-                setShippingRates(data.rates);
-                setSelectedRateId(data.rates[0]?.id ?? "flat");
-              } catch {
-                setShippingRates([]);
-              }
-            }}
-          >
-            <option value="US">United States</option>
-            <option value="CA">Canada</option>
-            <option value="GB">United Kingdom</option>
-            <option value="DE">Germany</option>
-            <option value="FR">France</option>
-            <option value="NL">Netherlands</option>
-            <option value="PL">Poland</option>
-          </select>
-        </div>
+      <fieldset className="space-y-3 rounded-xl border border-zinc-100 p-4">
+        <legend className="px-1 text-sm font-semibold text-zinc-800">
+          Fulfillment
+        </legend>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="radio"
+            name="fulfillmentMethod"
+            checked={fulfillmentMethod === "SHIP"}
+            onChange={() => setFulfillmentMethod("SHIP")}
+          />
+          Ship to me
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="radio"
+            name="fulfillmentMethod"
+            checked={fulfillmentMethod === "PICKUP"}
+            onChange={() => setFulfillmentMethod("PICKUP")}
+          />
+          Pickup in store
+        </label>
       </fieldset>
 
-      {shippingRates.length > 1 ? (
-        <fieldset className="space-y-2 rounded-xl border border-zinc-100 p-4">
-          <legend className="px-1 text-sm font-semibold text-zinc-800">Shipping method</legend>
-          {shippingRates.map((r) => (
-            <label key={r.id} className="flex items-center gap-2 text-sm">
-              <input
-                type="radio"
-                name="shippingRate"
-                checked={selectedRateId === r.id}
-                onChange={() => setSelectedRateId(r.id)}
-              />
-              <span className="flex-1">{r.label}</span>
-              <span className="font-medium">
-                {(r.amountCents / 100).toFixed(2)} {currency}
-              </span>
-            </label>
-          ))}
+      {fulfillmentMethod === "PICKUP" ? (
+        <fieldset className="space-y-3 rounded-xl border border-zinc-100 p-4">
+          <legend className="px-1 text-sm font-semibold text-zinc-800">
+            Pickup location
+          </legend>
+          {pickupLocations.length === 0 ? (
+            <p className="text-sm text-zinc-500">
+              No pickup locations available. Choose shipping instead.
+            </p>
+          ) : (
+            pickupLocations.map((loc) => (
+              <label key={loc.id} className="flex items-start gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="pickupWarehouse"
+                  checked={pickupWarehouseId === loc.id}
+                  onChange={() => setPickupWarehouseId(loc.id)}
+                  className="mt-1"
+                />
+                <span>
+                  <span className="font-medium">{loc.name}</span>
+                  {(loc.address1 || loc.city) && (
+                    <span className="mt-0.5 block text-zinc-500">
+                      {[loc.address1, loc.city, loc.postal, loc.country]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </span>
+                  )}
+                  {loc.pickupInstructions ? (
+                    <span className="mt-0.5 block text-xs text-zinc-400">
+                      {loc.pickupInstructions}
+                    </span>
+                  ) : null}
+                  {loc.inStock === false ? (
+                    <span className="mt-0.5 block text-xs text-amber-700">
+                      Some items may be out of stock here
+                    </span>
+                  ) : null}
+                </span>
+              </label>
+            ))
+          )}
         </fieldset>
-      ) : null}
+      ) : (
+        <>
+          <fieldset key={addressKey} className="space-y-4 rounded-xl border border-zinc-100 p-4">
+            <legend className="px-1 text-sm font-semibold text-zinc-800">
+              Shipping
+            </legend>
+            {saved.length > 0 ? (
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium text-zinc-700">Saved address</span>
+                <select
+                  className="w-full rounded-lg border border-zinc-200 px-3 py-2"
+                  value={addressKey}
+                  onChange={(e) => setAddressKey(e.target.value)}
+                >
+                  <option value="new">New address</option>
+                  {saved.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.label || a.name} · {a.city}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            <Input
+              name="shippingName"
+              label="Shipping name"
+              type="text"
+              defaultValue={chosen?.name ?? ""}
+            />
+            <Input
+              name="shippingAddress1"
+              label="Address line 1"
+              type="text"
+              defaultValue={chosen?.address1 ?? ""}
+            />
+            <Input
+              name="shippingAddress2"
+              label="Address line 2 (optional)"
+              type="text"
+              defaultValue={chosen?.address2 ?? ""}
+            />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Input
+                name="shippingCity"
+                label="City"
+                type="text"
+                defaultValue={chosen?.city ?? ""}
+              />
+              <Input
+                name="shippingPostal"
+                label="Postal code"
+                type="text"
+                defaultValue={chosen?.postal ?? ""}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-zinc-700">
+                Country
+              </label>
+              <select
+                name="country"
+                defaultValue={chosen?.country ?? "US"}
+                className="ugclab-select mt-1.5 w-full"
+                onChange={async (e) => {
+                  const country = e.target.value;
+                  const city = (
+                    document.querySelector(
+                      '[name="shippingCity"]'
+                    ) as HTMLInputElement
+                  )?.value;
+                  const postal = (
+                    document.querySelector(
+                      '[name="shippingPostal"]'
+                    ) as HTMLInputElement
+                  )?.value;
+                  try {
+                    const data = await storeApi.shippingRates(tenant, {
+                      country,
+                      city,
+                      postal,
+                    });
+                    setShippingRates(data.rates);
+                    setSelectedRateId(data.rates[0]?.id ?? "flat");
+                  } catch {
+                    setShippingRates([]);
+                  }
+                }}
+              >
+                {chosen?.country &&
+                !["US", "CA", "GB", "DE", "FR", "NL", "PL"].includes(chosen.country) ? (
+                  <option value={chosen.country}>{chosen.country}</option>
+                ) : null}
+                <option value="US">United States</option>
+                <option value="CA">Canada</option>
+                <option value="GB">United Kingdom</option>
+                <option value="DE">Germany</option>
+                <option value="FR">France</option>
+                <option value="NL">Netherlands</option>
+                <option value="PL">Poland</option>
+              </select>
+            </div>
+          </fieldset>
+
+          {shippingRates.length > 1 ? (
+            <fieldset className="space-y-2 rounded-xl border border-zinc-100 p-4">
+              <legend className="px-1 text-sm font-semibold text-zinc-800">
+                Shipping method
+              </legend>
+              {shippingRates.map((r) => (
+                <label key={r.id} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="shippingRate"
+                    checked={selectedRateId === r.id}
+                    onChange={() => setSelectedRateId(r.id)}
+                  />
+                  <span className="flex-1">{r.label}</span>
+                  <span className="font-medium">
+                    {(r.amountCents / 100).toFixed(2)} {currency}
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+          ) : null}
+        </>
+      )}
 
       <div className="rounded-lg border border-zinc-200 p-4 space-y-2">
         <label className="block text-sm font-medium">Discount code</label>
@@ -250,7 +445,12 @@ export function CheckoutForm({
         Create an account for faster checkout next time
       </label>
       {createAccount ? (
-        <Input name="password" label="Password (min 8 characters)" type="password" minLength={8} />
+        <Input
+          name="password"
+          label="Password (min 8 characters)"
+          type="password"
+          minLength={8}
+        />
       ) : null}
 
       {showPolicies ? (
@@ -283,21 +483,51 @@ export function CheckoutForm({
         </label>
       ) : null}
 
-      {theme.shippingCarrierLabel ? (
+      {fulfillmentMethod === "SHIP" && theme.shippingCarrierLabel ? (
         <p className="text-xs text-zinc-600">
           Shipping: <span className="font-medium">{theme.shippingCarrierLabel}</span>
         </p>
       ) : null}
 
-      {theme.stripeTaxEnabled ? (
+      {stripeTaxEnabled ? (
         <p className="text-xs text-amber-800 rounded-lg bg-amber-50 px-3 py-2">
-          Tax is calculated automatically by Stripe at checkout (Stripe Tax must be enabled on your
-          Stripe account).
+          Tax is calculated automatically by Stripe at checkout (Stripe Tax must be
+          enabled on your Stripe account).
         </p>
       ) : taxRateBps > 0 ? (
         <p className="text-xs text-zinc-500">
           Tax rate {(taxRateBps / 100).toFixed(1)}% applied to order total.
         </p>
+      ) : null}
+
+      {addons?.includes("gift-wrap") && giftWrapOffer ? (
+        <div className="space-y-2">
+          <label className="flex items-start gap-2 text-sm text-zinc-700">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={giftWrap}
+              onChange={(e) => setGiftWrap(e.target.checked)}
+            />
+            <span>
+              {giftWrapOffer.label} (+
+              {new Intl.NumberFormat(undefined, {
+                style: "currency",
+                currency: baseCurrency || currency || "USD",
+              }).format(giftWrapOffer.priceCents / 100)}
+              )
+            </span>
+          </label>
+          {giftWrap && giftWrapOffer.cardEnabled ? (
+            <textarea
+              value={giftMessage}
+              onChange={(e) => setGiftMessage(e.target.value.slice(0, 280))}
+              rows={2}
+              placeholder="Gift card message"
+              className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
+            />
+          ) : null}
+        </div>
       ) : null}
 
       <ExpressPayHint
@@ -314,10 +544,24 @@ export function CheckoutForm({
         {place.isPending
           ? "Processing…"
           : theme.checkoutButtonText?.trim() ||
-            (stripeLive ? "Pay with card" : "Complete order")}
+            (finikLive
+              ? "Pay with Finik"
+              : gopayLive
+                ? "Pay with GoPay"
+                : stripeLive
+                  ? "Pay with card"
+                  : "Complete order")}
       </button>
       {checkoutFooterText ? (
         <p className="text-center text-xs text-zinc-500">{checkoutFooterText}</p>
+      ) : finikLive ? (
+        <p className="text-center text-xs text-zinc-400">
+          You will be redirected to Finik (QR pay via Kyrgyz bank apps).
+        </p>
+      ) : gopayLive ? (
+        <p className="text-center text-xs text-zinc-400">
+          You will be redirected to GoPay (MBank, MegaPay, and other KG apps).
+        </p>
       ) : stripeLive ? (
         <p className="text-center text-xs text-zinc-400">
           Secure payment via Stripe. You will be redirected to complete your purchase.

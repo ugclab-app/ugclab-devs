@@ -10,7 +10,11 @@ const STATUS_CHIPS = [
   { value: "CANCELLED", label: "Cancelled" },
 ] as const;
 
-const VIEW_CHIPS = [{ value: "paid-unfulfilled", label: "Paid · not shipped" }] as const;
+const VIEW_CHIPS = [
+  { value: "paid-unfulfilled", label: "Paid · not shipped" },
+  { value: "on-hold", label: "On hold" },
+  { value: "high-risk", label: "High risk" },
+] as const;
 
 type SortOption = { value: string; label: string };
 

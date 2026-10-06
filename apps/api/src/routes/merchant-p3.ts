@@ -57,6 +57,68 @@ p3.get("/analytics/export.csv", async (c) => {
   });
 });
 
+p3.get("/analytics/live", async (c) => {
+  const { tenant, session } = await requireTenant(c.get("session"));
+  const access = await getMerchantAccess(session, tenant.id);
+  if (!hasPermission(access.permissions, "analytics")) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+  const { getLiveViewMetrics } = await import("../lib/live-view.js");
+  const live = await getLiveViewMetrics(tenant.id);
+  return c.json({
+    currency: tenant.settings?.currency ?? "USD",
+    live,
+  });
+});
+
+p3.get("/analytics/cohorts", async (c) => {
+  const { tenant, session } = await requireTenant(c.get("session"));
+  const access = await getMerchantAccess(session, tenant.id);
+  if (!hasPermission(access.permissions, "analytics")) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+  const rangeInput = parseAnalyticsRange({
+    range: c.req.query("range"),
+    from: c.req.query("from"),
+    to: c.req.query("to"),
+  });
+  const { getMerchantCohorts } = await import("../lib/analytics-insights.js");
+  const data = await getMerchantCohorts(tenant.id, rangeInput);
+  return c.json({ currency: tenant.settings?.currency ?? "USD", ...data });
+});
+
+p3.get("/analytics/attribution", async (c) => {
+  const { tenant, session } = await requireTenant(c.get("session"));
+  const access = await getMerchantAccess(session, tenant.id);
+  if (!hasPermission(access.permissions, "analytics")) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+  const rangeInput = parseAnalyticsRange({
+    range: c.req.query("range"),
+    from: c.req.query("from"),
+    to: c.req.query("to"),
+  });
+  const { getMerchantAttribution } = await import("../lib/analytics-insights.js");
+  const data = await getMerchantAttribution(tenant.id, rangeInput);
+  return c.json({ currency: tenant.settings?.currency ?? "USD", ...data });
+});
+
+p3.get("/analytics/session-funnel", async (c) => {
+  const { tenant, session } = await requireTenant(c.get("session"));
+  const access = await getMerchantAccess(session, tenant.id);
+  if (!hasPermission(access.permissions, "analytics")) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+  const rangeInput = parseAnalyticsRange({
+    range: c.req.query("range"),
+    from: c.req.query("from"),
+    to: c.req.query("to"),
+  });
+  const { getMerchantSessionFunnel } = await import("../lib/analytics-insights.js");
+  const data = await getMerchantSessionFunnel(tenant.id, rangeInput);
+  return c.json({ ...data });
+});
+
 p3.get("/promotions", async (c) => {
   const { tenant } = await requireTenant(c.get("session"));
   const promotions = await prisma.storePromotion.findMany({

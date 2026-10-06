@@ -1,15 +1,20 @@
+import "./env.js";
+import { prisma } from "@ugclab/database";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { authRoutes } from "./routes/auth.js";
 import { merchant } from "./routes/merchant.js";
 import { p1 } from "./routes/merchant-p1.js";
 import { p15 } from "./routes/merchant-p15.js";
+import { p16 } from "./routes/merchant-p16.js";
 import { p2 } from "./routes/merchant-p2.js";
 import { p3 } from "./routes/merchant-p3.js";
 import { p4 } from "./routes/merchant-p4.js";
 import { p5 } from "./routes/merchant-p5.js";
 import { p6 } from "./routes/merchant-p6.js";
 import { p7 } from "./routes/merchant-p7.js";
+import { p17 } from "./routes/merchant-p17.js";
+import { p18 } from "./routes/merchant-p18.js";
 import { marketing } from "./routes/merchant-marketing.js";
 import { marketingPublic } from "./routes/marketing-public.js";
 import { platform } from "./routes/platform.js";
@@ -17,6 +22,12 @@ import { publicRoutes } from "./routes/public.js";
 import { files } from "./routes/files.js";
 import { store } from "./routes/storefront.js";
 import { stripeRoutes, merchantStripe } from "./routes/stripe.js";
+import { gopayRoutes } from "./routes/gopay.js";
+import { finikRoutes } from "./routes/finik.js";
+import { telegram } from "./routes/telegram.js";
+import { merchantApiV1 } from "./routes/merchant-api-v1.js";
+import { merchantDisputes } from "./routes/merchant-disputes.js";
+import { marketplace } from "./routes/merchant-marketplace.js";
 import { MERCHANT_WEB_URL, PLATFORM_ADMIN_URL, PLATFORM_URL } from "./env.js";
 import { merchantMaintenanceGuard } from "./middleware/maintenance.js";
 
@@ -53,27 +64,73 @@ export function createApiApp() {
     })
   );
 
-  app.get("/health", (c) => c.json({ ok: true, service: "tescommerce-api" }));
+  app.get("/health", (c) => {
+    const url = process.env.DATABASE_URL?.trim() ?? "";
+    return c.json({
+      ok: true,
+      service: "tescommerce-api",
+      db: {
+        hasUrl: Boolean(url),
+        viaAccelerate: url.startsWith("prisma://") || url.startsWith("prisma+postgres://"),
+      },
+    });
+  });
+
+  /** DB + function warm-up (Vercel Cron or external ping). Set CRON_SECRET to restrict. */
+  app.get("/api/health/ready", async (c) => {
+    const cronSecret = process.env.CRON_SECRET?.trim();
+    if (cronSecret) {
+      const auth = c.req.header("authorization");
+      if (auth !== `Bearer ${cronSecret}`) {
+        return c.json({ error: "Unauthorized" }, 401);
+      }
+    }
+    const t0 = Date.now();
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      return c.json({
+        ok: true,
+        db: true,
+        ms: Date.now() - t0,
+        service: "tescommerce-api",
+      });
+    } catch (err) {
+      console.error("[health/ready]", err);
+      return c.json(
+        { ok: false, db: false, ms: Date.now() - t0, service: "tescommerce-api" },
+        503
+      );
+    }
+  });
 
   app.route("/api/public", publicRoutes);
   app.route("/api/marketing", marketingPublic);
   app.route("/api/stripe", stripeRoutes);
+  app.route("/api/gopay", gopayRoutes);
+  app.route("/api/finik", finikRoutes);
+  app.route("/api/telegram", telegram);
   app.route("/api/auth", authRoutes);
   app.use("/api/merchant/*", merchantMaintenanceGuard);
   app.route("/api/merchant", merchant);
   app.route("/api/merchant", p1);
   app.route("/api/merchant", p15);
+  app.route("/api/merchant", p16);
   app.route("/api/merchant", p2);
   app.route("/api/merchant", p3);
   app.route("/api/merchant", p4);
   app.route("/api/merchant", p5);
   app.route("/api/merchant", p6);
   app.route("/api/merchant", p7);
+  app.route("/api/merchant", p17);
+  app.route("/api/merchant", p18);
   app.route("/api/merchant", marketing);
+  app.route("/api/merchant", merchantDisputes);
+  app.route("/api/merchant", marketplace);
   app.route("/api/merchant/stripe", merchantStripe);
   app.route("/api/platform", platform);
   app.route("/api/files", files);
   app.route("/api/store", store);
+  app.route("/api/v1", merchantApiV1);
 
   return app;
 }

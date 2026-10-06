@@ -1,0 +1,5 @@
+ALTER TABLE "StoreThemeCatalog" ADD COLUMN IF NOT EXISTS "category" TEXT;
+ALTER TABLE "StoreThemeCatalog" ADD COLUMN IF NOT EXISTS "description" TEXT;
+ALTER TABLE "StoreThemeCatalog" ADD COLUMN IF NOT EXISTS "previewUrl" TEXT;
+ALTER TABLE "StoreThemeCatalog" ADD COLUMN IF NOT EXISTS "minPlan" TEXT;
+ALTER TABLE "StoreThemeCatalog" ADD COLUMN IF NOT EXISTS "deprecated" BOOLEAN NOT NULL DEFAULT false;

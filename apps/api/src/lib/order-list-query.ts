@@ -10,6 +10,8 @@ export function buildOrderListWhere(
     country?: string;
     view?: string;
     tag?: string;
+    hold?: string;
+    risk?: string;
   }
 ): Prisma.OrderWhereInput {
   const statusParam = query.status;
@@ -45,6 +47,12 @@ export function buildOrderListWhere(
     ...(query.tag?.trim()
       ? { tags: { has: query.tag.trim().toLowerCase() } }
       : {}),
+    ...(query.hold === "1" || query.hold === "true"
+      ? { paymentHold: true }
+      : {}),
+    ...(query.risk === "high" || query.risk === "medium"
+      ? { riskLevel: query.risk }
+      : {}),
     ...(q
       ? {
           OR: [
@@ -65,6 +73,14 @@ export function buildOrderListWhere(
         { OR: [{ trackingNumber: null }, { shippedAt: null }] },
       ],
     };
+  }
+
+  if (query.view === "on-hold") {
+    return { AND: [base, { paymentHold: true }] };
+  }
+
+  if (query.view === "high-risk") {
+    return { AND: [base, { riskLevel: "high" }] };
   }
 
   return base;

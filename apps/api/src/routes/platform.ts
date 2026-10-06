@@ -2,10 +2,12 @@ import { Hono } from "hono";
 import {
   OrderStatus,
   prisma,
+  ProductStatus,
   TenantStatus,
   UserAccountStatus,
   UserRole,
 } from "@ugclab/database";
+import { uploadPublicUrl } from "../lib/uploads.js";
 import type { AuthEnv } from "../middleware/session.js";
 import { requireSuperAdmin } from "../middleware/super-admin.js";
 import { getStorefrontUrl } from "../lib/storefront.js";
@@ -27,11 +29,33 @@ import {
 } from "../lib/platform-users.js";
 import { registerPlatformV2Routes } from "./platform-v2.js";
 import { registerPlatformV3Routes } from "./platform-v3.js";
+import { registerPlatformDomainsRoutes } from "./platform-domains.js";
+import { registerPlatformThemesRoutes } from "./platform-themes.js";
+import { registerPlatformBlocksRoutes } from "./platform-blocks.js";
+import { registerPlatformSectionsRoutes } from "./platform-sections.js";
+import { registerPlatformEmailTemplateRoutes } from "./platform-email-templates.js";
+import { registerPlatformOpsRoutes } from "./platform-ops.js";
+import { registerPlatformOutreachRoutes } from "./platform-outreach.js";
+import { registerPlatformAffiliatesRoutes } from "./platform-affiliates.js";
+import { registerPlatformMarketingRoutes } from "./platform-marketing.js";
+import { registerPlatformMerchantMessageRoutes } from "./platform-merchant-messages.js";
+import { registerPlatformPartnerAdminRoutes } from "./platform-partners.js";
 
 const platform = new Hono<AuthEnv>();
 platform.use("*", requireSuperAdmin);
 registerPlatformV2Routes(platform);
 registerPlatformV3Routes(platform);
+registerPlatformDomainsRoutes(platform);
+registerPlatformThemesRoutes(platform);
+registerPlatformBlocksRoutes(platform);
+registerPlatformSectionsRoutes(platform);
+registerPlatformEmailTemplateRoutes(platform);
+registerPlatformOpsRoutes(platform);
+registerPlatformOutreachRoutes(platform);
+registerPlatformAffiliatesRoutes(platform);
+registerPlatformPartnerAdminRoutes(platform);
+registerPlatformMarketingRoutes(platform);
+registerPlatformMerchantMessageRoutes(platform);
 
 platform.get("/dashboard", async (c) => {
   const now = new Date();
@@ -281,6 +305,442 @@ platform.get("/orders", async (c) => {
   });
 });
 
+platform.get("/orders/:id", async (c) => {
+  const order = await prisma.order.findUnique({
+    where: { id: c.req.param("id") },
+    include: {
+      tenant: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          ownerId: true,
+          owner: { select: { id: true, email: true, name: true } },
+        },
+      },
+      customer: { select: { id: true, email: true, name: true } },
+      items: true,
+      events: { orderBy: { createdAt: "desc" }, take: 40 },
+    },
+  });
+  if (!order) return c.json({ error: "Not found" }, 404);
+
+  const siblingOrders =
+    order.customerId || order.guestEmail
+      ? await prisma.order.findMany({
+          where: {
+            tenantId: order.tenantId,
+            id: { not: order.id },
+            OR: [
+              ...(order.customerId ? [{ customerId: order.customerId }] : []),
+              ...(order.guestEmail
+                ? [{ guestEmail: { equals: order.guestEmail, mode: "insensitive" as const } }]
+                : []),
+            ],
+          },
+          orderBy: { createdAt: "desc" },
+          take: 8,
+          select: {
+            id: true,
+            orderNumber: true,
+            status: true,
+            totalAmount: true,
+            currency: true,
+            createdAt: true,
+          },
+        })
+      : [];
+
+  const events = [
+    {
+      id: `created-${order.id}`,
+      type: "CREATED",
+      body: "Order created",
+      createdAt: order.createdAt.toISOString(),
+      authorEmail: null as string | null,
+    },
+    ...order.events.map((e) => ({
+      id: e.id,
+      type: e.type,
+      body: e.body,
+      createdAt: e.createdAt.toISOString(),
+      authorEmail: e.authorEmail,
+    })),
+  ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  return c.json({
+    order: {
+      id: order.id,
+      tenantId: order.tenantId,
+      tenantName: order.tenant.name,
+      tenantSlug: order.tenant.slug,
+      ownerId: order.tenant.ownerId,
+      ownerEmail: order.tenant.owner.email,
+      orderNumber: order.orderNumber,
+      status: order.status,
+      currency: order.currency,
+      subtotalAmount: order.subtotalAmount,
+      shippingAmount: order.shippingAmount,
+      taxAmount: order.taxAmount,
+      discountAmount: order.discountAmount,
+      totalAmount: order.totalAmount,
+      platformFeeAmount: order.platformFeeAmount,
+      paymentProvider: order.paymentProvider,
+      stripePaymentId: order.stripePaymentId,
+      stripeCheckoutSessionId: order.stripeCheckoutSessionId,
+      gopayPaymentId: order.gopayPaymentId,
+      finikPaymentId: order.finikPaymentId,
+      guestEmail: order.guestEmail,
+      customerId: order.customerId,
+      customerEmail: order.customer?.email ?? order.guestEmail,
+      customerName: order.customer?.name ?? order.shippingName,
+      shippingCountry: order.shippingCountry,
+      shippingName: order.shippingName,
+      shippingAddress1: order.shippingAddress1,
+      shippingAddress2: order.shippingAddress2,
+      shippingCity: order.shippingCity,
+      shippingPostal: order.shippingPostal,
+      trackingNumber: order.trackingNumber,
+      shippedAt: order.shippedAt?.toISOString() ?? null,
+      createdAt: order.createdAt.toISOString(),
+      items: order.items.map((i) => ({
+        id: i.id,
+        title: i.title,
+        quantity: i.quantity,
+        unitAmount: i.unitAmount,
+        totalAmount: i.totalAmount,
+        fulfilledQuantity: i.fulfilledQuantity,
+      })),
+      events,
+      siblingOrders: siblingOrders.map((o) => ({
+        id: o.id,
+        orderNumber: o.orderNumber,
+        status: o.status,
+        totalAmount: o.totalAmount,
+        currency: o.currency,
+        createdAt: o.createdAt.toISOString(),
+      })),
+    },
+  });
+});
+
+platform.post("/orders/:id/mark-paid", async (c) => {
+  const session = c.get("session");
+  const order = await prisma.order.findUnique({ where: { id: c.req.param("id") } });
+  if (!order) return c.json({ error: "Not found" }, 404);
+  if (order.status !== OrderStatus.DRAFT && order.status !== OrderStatus.PENDING) {
+    return c.json({ error: "Order cannot be marked paid" }, 400);
+  }
+  if (order.status === OrderStatus.DRAFT) {
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { status: OrderStatus.PENDING },
+    });
+  }
+  const { fulfillPaidOrder } = await import("../lib/fulfill-order.js");
+  const updated = await fulfillPaidOrder(order.id, {
+    platformFeeAmount: order.platformFeeAmount,
+  });
+  if (!updated) return c.json({ error: "Fulfillment failed" }, 500);
+  await prisma.orderEvent.create({
+    data: {
+      tenantId: order.tenantId,
+      orderId: order.id,
+      type: "NOTE",
+      body: "Marked as paid by platform admin",
+      authorEmail: session.email,
+    },
+  });
+  await logPlatformAudit({
+    actorUserId: session.sub,
+    actorEmail: session.email,
+    action: "order.mark_paid",
+    summary: `Order ${order.orderNumber} marked paid`,
+  });
+  return c.json({ order: { id: updated.id, status: updated.status } });
+});
+
+platform.post("/orders/:id/refund", async (c) => {
+  const session = c.get("session");
+  const body = (await c.req
+    .json<{ amountCents?: number; reason?: string }>()
+    .catch(() => ({}))) as { amountCents?: number; reason?: string };
+  const order = await prisma.order.findUnique({ where: { id: c.req.param("id") } });
+  if (!order) return c.json({ error: "Not found" }, 404);
+  if (
+    order.status !== OrderStatus.PAID &&
+    order.status !== OrderStatus.FULFILLED
+  ) {
+    return c.json({ error: "Only paid or fulfilled orders can be refunded" }, 400);
+  }
+  const { refundOrderInStripe, markOrderRefunded } = await import(
+    "../lib/stripe-refund.js"
+  );
+  let stripeRefund = false;
+  let refundAmountCents = body.amountCents;
+  try {
+    const r = await refundOrderInStripe(order.id, {
+      amountCents: body.amountCents,
+    });
+    refundAmountCents = r.amountCents || body.amountCents || order.totalAmount;
+    stripeRefund = Boolean(r.refundId);
+  } catch {
+    refundAmountCents = refundAmountCents ?? order.totalAmount;
+  }
+  const updated = await markOrderRefunded(order.id, {
+    refundAmountCents: refundAmountCents ?? order.totalAmount,
+    reason: body.reason ?? "Platform admin refund",
+    authorEmail: session.email,
+  });
+  if (!updated) return c.json({ error: "Refund failed" }, 500);
+  await logPlatformAudit({
+    actorUserId: session.sub,
+    actorEmail: session.email,
+    action: "order.refund",
+    summary: `Refunded order ${order.orderNumber} (${refundAmountCents ?? order.totalAmount})`,
+  });
+  return c.json({
+    order: { id: updated.id, status: updated.status },
+    stripeRefund,
+    refundAmountCents,
+  });
+});
+
+platform.post("/orders/:id/cancel", async (c) => {
+  const session = c.get("session");
+  const order = await prisma.order.findUnique({ where: { id: c.req.param("id") } });
+  if (!order) return c.json({ error: "Not found" }, 404);
+  if (order.status !== OrderStatus.PENDING && order.status !== OrderStatus.DRAFT) {
+    return c.json({ error: "Only pending/draft orders can be cancelled" }, 400);
+  }
+  const updated = await prisma.order.update({
+    where: { id: order.id },
+    data: { status: OrderStatus.CANCELLED },
+  });
+  const { releaseInventoryForOrder } = await import("../lib/inventory.js");
+  await releaseInventoryForOrder(order.id).catch(() => {});
+  await prisma.orderEvent.create({
+    data: {
+      tenantId: order.tenantId,
+      orderId: order.id,
+      type: "STATUS_CHANGE",
+      body: "Cancelled by platform admin",
+      authorEmail: session.email,
+    },
+  });
+  const { emailCustomerAboutOrder } = await import("../lib/transactional-email.js");
+  emailCustomerAboutOrder(order.id, "orderCancelled", {
+    reason: "Cancelled by platform",
+  }).catch(() => {});
+  await logPlatformAudit({
+    actorUserId: session.sub,
+    actorEmail: session.email,
+    action: "order.cancel",
+    summary: `Cancelled order ${order.orderNumber}`,
+  });
+  return c.json({ order: { id: updated.id, status: updated.status } });
+});
+
+platform.patch("/orders/:id/fulfillment", async (c) => {
+  const session = c.get("session");
+  const body = await c.req.json<{
+    trackingNumber?: string;
+    markFulfilled?: boolean;
+  }>();
+  const order = await prisma.order.findUnique({ where: { id: c.req.param("id") } });
+  if (!order) return c.json({ error: "Not found" }, 404);
+  if (
+    order.status !== OrderStatus.PAID &&
+    order.status !== OrderStatus.FULFILLED
+  ) {
+    return c.json({ error: "Order must be paid before fulfillment" }, 400);
+  }
+  const tracking = body.trackingNumber?.trim() || null;
+  const markFulfilled = body.markFulfilled === true;
+  const updated = await prisma.order.update({
+    where: { id: order.id },
+    data: {
+      ...(tracking !== null ? { trackingNumber: tracking } : {}),
+      ...(markFulfilled
+        ? {
+            status: OrderStatus.FULFILLED,
+            shippedAt: order.shippedAt ?? new Date(),
+          }
+        : tracking
+          ? { shippedAt: order.shippedAt ?? new Date() }
+          : {}),
+    },
+  });
+  if (tracking) {
+    await prisma.orderEvent.create({
+      data: {
+        tenantId: order.tenantId,
+        orderId: order.id,
+        type: "NOTE",
+        body: `Tracking: ${tracking}`,
+        authorEmail: session.email,
+      },
+    });
+  }
+  if (markFulfilled && order.status !== OrderStatus.FULFILLED) {
+    await prisma.orderEvent.create({
+      data: {
+        tenantId: order.tenantId,
+        orderId: order.id,
+        type: "STATUS_CHANGE",
+        body: "Marked as fulfilled (platform admin)",
+        authorEmail: session.email,
+      },
+    });
+  }
+  return c.json({
+    order: {
+      id: updated.id,
+      status: updated.status,
+      trackingNumber: updated.trackingNumber,
+    },
+  });
+});
+
+platform.patch("/orders/:id/line-fulfillment", async (c) => {
+  const session = c.get("session");
+  const body = await c.req.json<{
+    items: { lineId: string; fulfilledQuantity: number }[];
+    markFulfilled?: boolean;
+  }>();
+  const order = await prisma.order.findUnique({
+    where: { id: c.req.param("id") },
+    include: { items: true },
+  });
+  if (!order) return c.json({ error: "Not found" }, 404);
+  for (const row of body.items ?? []) {
+    const line = order.items.find((i) => i.id === row.lineId);
+    if (!line) continue;
+    const qty = Math.min(line.quantity, Math.max(0, row.fulfilledQuantity));
+    await prisma.orderLineItem.update({
+      where: { id: line.id },
+      data: { fulfilledQuantity: qty },
+    });
+  }
+  if (body.markFulfilled) {
+    await prisma.order.update({
+      where: { id: order.id },
+      data: {
+        status: OrderStatus.FULFILLED,
+        shippedAt: order.shippedAt ?? new Date(),
+      },
+    });
+    await prisma.orderEvent.create({
+      data: {
+        tenantId: order.tenantId,
+        orderId: order.id,
+        type: "STATUS_CHANGE",
+        body: "Marked as fulfilled (line items)",
+        authorEmail: session.email,
+      },
+    });
+  }
+  return c.json({ ok: true });
+});
+
+platform.post("/orders/:id/notes", async (c) => {
+  const session = c.get("session");
+  const body = await c.req.json<{ body?: string }>();
+  const text = String(body.body ?? "").trim();
+  if (!text) return c.json({ error: "Note cannot be empty" }, 400);
+  const order = await prisma.order.findUnique({ where: { id: c.req.param("id") } });
+  if (!order) return c.json({ error: "Not found" }, 404);
+  const event = await prisma.orderEvent.create({
+    data: {
+      tenantId: order.tenantId,
+      orderId: order.id,
+      type: "NOTE",
+      body: text,
+      authorEmail: session.email,
+    },
+  });
+  return c.json({
+    event: {
+      id: event.id,
+      type: event.type,
+      body: event.body,
+      createdAt: event.createdAt.toISOString(),
+      authorEmail: event.authorEmail,
+    },
+  });
+});
+
+platform.get("/orders/:id/invoice", async (c) => {
+  const order = await prisma.order.findUnique({
+    where: { id: c.req.param("id") },
+    include: {
+      customer: true,
+      items: true,
+      tenant: { include: { settings: true } },
+    },
+  });
+  if (!order) return c.json({ error: "Not found" }, 404);
+  const { renderOrderHtml, orderToDoc } = await import("../lib/order-document.js");
+  const html = renderOrderHtml(orderToDoc(order), "invoice", {
+    includePlatformFee: true,
+  });
+  return c.html(html);
+});
+
+platform.get("/orders/:id/packing-slip", async (c) => {
+  const order = await prisma.order.findUnique({
+    where: { id: c.req.param("id") },
+    include: {
+      customer: true,
+      items: true,
+      tenant: { include: { settings: true } },
+    },
+  });
+  if (!order) return c.json({ error: "Not found" }, 404);
+  const { renderOrderHtml, orderToDoc } = await import("../lib/order-document.js");
+  const html = renderOrderHtml(orderToDoc(order), "packing");
+  return c.html(html);
+});
+
+platform.get("/payments/local", async (c) => {
+  const { isFinikConfigured } = await import("../lib/finik/config.js");
+  const { isGoPayConfigured } = await import("../lib/gopay/config.js");
+  const recent = await prisma.order.findMany({
+    where: {
+      OR: [
+        { paymentProvider: { in: ["finik", "FINIK", "gopay", "GOPAY"] } },
+        { finikPaymentId: { not: null } },
+        { gopayPaymentId: { not: null } },
+      ],
+    },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+    include: {
+      tenant: { select: { id: true, name: true, slug: true } },
+      customer: { select: { email: true } },
+    },
+  });
+  return c.json({
+    finikConfigured: isFinikConfigured(),
+    gopayConfigured: isGoPayConfigured(),
+    orders: recent.map((o) => ({
+      id: o.id,
+      tenantId: o.tenantId,
+      tenantName: o.tenant.name,
+      tenantSlug: o.tenant.slug,
+      orderNumber: o.orderNumber,
+      status: o.status,
+      totalAmount: o.totalAmount,
+      currency: o.currency,
+      paymentProvider: o.paymentProvider,
+      finikPaymentId: o.finikPaymentId,
+      gopayPaymentId: o.gopayPaymentId,
+      customerEmail: o.customer?.email ?? o.guestEmail,
+      createdAt: o.createdAt.toISOString(),
+    })),
+  });
+});
+
 platform.get("/activity", async (c) => {
   const tenantId = c.req.query("tenantId")?.trim();
   const logs = await prisma.activityLog.findMany({
@@ -453,7 +913,10 @@ platform.get("/tenants/:id", async (c) => {
     where: { tenantId: tenant.id },
     orderBy: { createdAt: "desc" },
     take: 10,
-    include: { customer: { select: { email: true } } },
+    include: {
+      customer: { select: { email: true } },
+      affiliatePartner: { select: { code: true, displayName: true } },
+    },
   });
 
   const pendingPayouts = isMorPaymentModel()
@@ -477,7 +940,19 @@ platform.get("/tenants/:id", async (c) => {
         pendingPayouts,
       },
       recentOrders: recentOrders.map((o) => ({
-        ...o,
+        id: o.id,
+        orderNumber: o.orderNumber,
+        status: o.status,
+        totalAmount: o.totalAmount,
+        currency: o.currency,
+        affiliateCommissionCents: o.affiliateCommissionCents,
+        referral: o.affiliatePartner
+          ? {
+              code: o.affiliatePartner.code,
+              displayName: o.affiliatePartner.displayName,
+            }
+          : null,
+        customer: o.customer,
         createdAt: o.createdAt.toISOString(),
       })),
     },
@@ -548,6 +1023,65 @@ platform.get("/payouts/export.csv", async (c) => {
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": 'attachment; filename="platform-payouts.csv"',
     },
+  });
+});
+
+platform.get("/tenants/:id/products", async (c) => {
+  const tenantId = c.req.param("id");
+  const q = (c.req.query("q") ?? "").trim();
+  const statusFilter = (c.req.query("status") ?? "all").trim().toUpperCase();
+
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { id: true, slug: true, name: true },
+  });
+  if (!tenant) return c.json({ error: "Not found" }, 404);
+
+  const products = await prisma.product.findMany({
+    where: {
+      tenantId,
+      ...(statusFilter !== "ALL" &&
+      Object.values(ProductStatus).includes(statusFilter as ProductStatus)
+        ? { status: statusFilter as ProductStatus }
+        : {}),
+      ...(q
+        ? {
+            OR: [
+              { title: { contains: q, mode: "insensitive" } },
+              { slug: { contains: q, mode: "insensitive" } },
+              { sku: { contains: q, mode: "insensitive" } },
+            ],
+          }
+        : {}),
+    },
+    orderBy: { updatedAt: "desc" },
+    take: 200,
+    include: {
+      images: { orderBy: { sortOrder: "asc" }, take: 1 },
+      _count: { select: { orderItems: true } },
+    },
+  });
+
+  const storefrontUrl = getStorefrontUrl(tenant.slug);
+
+  return c.json({
+    tenantSlug: tenant.slug,
+    storefrontUrl,
+    products: products.map((p) => ({
+      id: p.id,
+      title: p.title,
+      slug: p.slug,
+      status: p.status,
+      type: p.type,
+      priceAmount: p.priceAmount,
+      currency: p.currency,
+      inventory: p.inventory,
+      sku: p.sku,
+      createdAt: p.createdAt.toISOString(),
+      updatedAt: p.updatedAt.toISOString(),
+      imageUrl: p.images[0] ? uploadPublicUrl(p.images[0].storageKey) : null,
+      ordersCount: p._count.orderItems,
+    })),
   });
 });
 
@@ -665,6 +1199,10 @@ platform.post("/tenants/:id/payouts", async (c) => {
   if (!tenant) return c.json({ error: "Tenant not found" }, 404);
   const amount = Math.max(0, Math.floor(body.amountCents ?? 0));
   if (amount <= 0) return c.json({ error: "amountCents required" }, 400);
+  const balance = await getMerchantBalance(tenant.id);
+  if (amount > balance.availableCents) {
+    return c.json({ error: "Amount is above the available balance" }, 400);
+  }
   const minErr = assertMorPayoutAmount(amount);
   if (minErr && body.status !== "PAID") return c.json({ error: minErr }, 400);
   const status = body.status === "PAID" ? "PAID" : "PENDING";

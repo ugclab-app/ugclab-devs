@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
 import { Button, Input } from "@ugclab/ui";
 import { storeApi } from "@/api/client";
 import { useStoreParams } from "@/hooks/use-store-params";
+import { storeHref } from "@/lib/store-href";
+import { readLocalWishlist, writeLocalWishlist } from "@/components/wishlist-button";
 
 export function AccountLookupForm({ initialEmail }: { initialEmail?: string }) {
   const { tenant, locale } = useStoreParams();
@@ -48,7 +50,16 @@ export function CustomerLoginForm() {
         String(fd.get("email")),
         String(fd.get("password"))
       ),
-    onSuccess: () => {
+    onSuccess: async () => {
+      const ids = readLocalWishlist();
+      if (ids.length) {
+        try {
+          await storeApi.wishlistAdd(tenant, ids);
+          writeLocalWishlist([]);
+        } catch {
+          /* keep the local list if sync fails */
+        }
+      }
       const q = new URLSearchParams({ tenant, locale });
       navigate(`/account?${q.toString()}`);
     },
@@ -70,6 +81,14 @@ export function CustomerLoginForm() {
       <Button type="submit" className="w-full" disabled={login.isPending}>
         {login.isPending ? "Signing in…" : "Sign in"}
       </Button>
+      <p className="flex justify-between text-sm">
+        <Link to={storeHref("/account/forgot", { locale, tenant })} className="text-[var(--store-primary)]">
+          Forgot password
+        </Link>
+        <Link to={storeHref("/account/register", { locale, tenant })} className="text-[var(--store-primary)]">
+          Create account
+        </Link>
+      </p>
     </form>
   );
 }

@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useAdminT } from "@/hooks/use-admin-t";
 
 export function PlanLimitsBanner({
   planName,
@@ -11,6 +12,7 @@ export function PlanLimitsBanner({
   productLimit: number | null;
   staffCount: number;
 }) {
+  const { ta } = useAdminT();
   const atLimit = productLimit != null && productCount >= productLimit;
   return (
     <div
@@ -22,13 +24,12 @@ export function PlanLimitsBanner({
     >
       <span className="font-semibold text-zinc-900">{planName}</span>
       <span className="mx-2 text-zinc-300">·</span>
-      Products:{" "}
-      <strong>
-        {productCount}
-        {productLimit != null ? ` / ${productLimit}` : ""}
-      </strong>
+      {ta("plan.products", {
+        count: productCount,
+        limit: productLimit ?? ta("plan.unlimited"),
+      })}
       <span className="mx-2 text-zinc-300">·</span>
-      Staff: <strong>{staffCount}</strong>
+      {ta("plan.staff", { count: staffCount })}
       {atLimit ? (
         <>
           {" "}

@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { formatMoney, moneyLocaleFor } from "@ugclab/i18n";
 import { storeApi } from "@/api/client";
 import { useStoreParams } from "@/hooks/use-store-params";
 import { productImageUrl } from "@/lib/product-images";
@@ -19,12 +18,13 @@ export function ProductQuickView({
   tenantSlug: string;
   onClose: () => void;
 }) {
-  const { tenant } = useStoreParams();
+  const { tenant, search } = useStoreParams();
+  const currency = search.get("currency") ?? undefined;
   const nav = { locale, tenant: tenantSlug };
 
   const { data, isLoading } = useQuery({
-    queryKey: ["product", tenant, slug, locale, "quick"],
-    queryFn: () => storeApi.product(tenant, slug, locale),
+    queryKey: ["product", tenant, slug, locale, currency, "quick"],
+    queryFn: () => storeApi.product(tenant, slug, locale, currency),
   });
 
   useEffect(() => {
@@ -95,11 +95,10 @@ export function ProductQuickView({
               <div className="mt-4 flex-1">
                 <ProductPurchase
                   productId={product.id}
-                  priceLabel={formatMoney(
-                    product.priceAmount,
-                    data!.currency,
-                    moneyLocaleFor(data!.currency, locale)
-                  )}
+                  productTitle={product.title}
+                  priceAmount={product.priceAmount}
+                  currency={data!.currency}
+                  locale={locale}
                   variants={product.variants}
                   productInventory={product.inventory}
                   type={product.type}

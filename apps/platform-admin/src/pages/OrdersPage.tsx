@@ -88,6 +88,7 @@ export default function OrdersPage() {
                 <th className="px-6 py-3">Customer</th>
                 <th className="px-6 py-3">Status</th>
                 <th className="px-6 py-3 text-right">Total</th>
+                <th className="px-6 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -96,7 +97,11 @@ export default function OrdersPage() {
                   <td className="px-6 py-3 whitespace-nowrap text-slate-600">
                     {new Date(o.createdAt).toLocaleString()}
                   </td>
-                  <td className="px-6 py-3 font-mono">#{o.orderNumber}</td>
+                  <td className="px-6 py-3 font-mono">
+                    <Link to={`/orders/${o.id}`} className="text-sky-600 hover:underline">
+                      #{o.orderNumber}
+                    </Link>
+                  </td>
                   <td className="px-6 py-3">
                     <Link
                       to={`/tenants/${o.tenantId}`}
@@ -113,11 +118,16 @@ export default function OrdersPage() {
                   <td className="px-6 py-3 text-right font-semibold">
                     {formatMoney(o.totalAmount, o.currency)}
                   </td>
+                  <td className="px-6 py-3 text-right">
+                    <Link to={`/orders/${o.id}`} className="text-sm font-medium text-sky-600">
+                      Open →
+                    </Link>
+                  </td>
                 </tr>
               ))}
               {orders.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-10 text-center text-slate-500">
+                  <td colSpan={7} className="px-6 py-10 text-center text-slate-500">
                     No orders found
                   </td>
                 </tr>

@@ -2,6 +2,8 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "@/context/auth";
 import { AdminLayout } from "@/layout/AdminLayout";
 import LoginPage from "@/pages/LoginPage";
+import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
+import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import DashboardPage from "@/pages/DashboardPage";
 import ProductsPage from "@/pages/ProductsPage";
 import ProductNewPage from "@/pages/ProductNewPage";
@@ -18,7 +20,10 @@ import DiscountsPage from "@/pages/DiscountsPage";
 import PagesPage from "@/pages/PagesPage";
 import ReviewsPage from "@/pages/ReviewsPage";
 import DraftOrdersPage from "@/pages/DraftOrdersPage";
+import DisputesPage from "@/pages/DisputesPage";
+import PosPage from "@/pages/PosPage";
 import AnalyticsPage from "@/pages/AnalyticsPage";
+import LiveViewPage from "@/pages/LiveViewPage";
 import PromotionsPage from "@/pages/PromotionsPage";
 import StorefrontPage from "@/pages/StorefrontPage";
 import PageEditPage from "@/pages/PageEditPage";
@@ -31,9 +36,16 @@ import MarketingPage from "@/pages/MarketingPage";
 import PaymentsPage from "@/pages/PaymentsPage";
 import { PermissionGate } from "@/components/permission-gate";
 import NoStorePage from "@/pages/NoStorePage";
+import PartnerPage from "@/pages/PartnerPage";
 import HelpPage from "@/pages/HelpPage";
 import GrowthPage from "@/pages/GrowthPage";
+import AppsPage from "@/pages/AppsPage";
 import InventoryPage from "@/pages/InventoryPage";
+import PlatformMessagesPage from "@/pages/PlatformMessagesPage";
+import ReturnsPage from "@/pages/ReturnsPage";
+import B2bPage from "@/pages/B2bPage";
+import MetafieldsPage from "@/pages/MetafieldsPage";
+import SubscriptionsPage from "@/pages/SubscriptionsPage";
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, tenant, loading } = useAuth();
@@ -66,6 +78,16 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route
+        path="/partner"
+        element={
+          <ProtectedUser>
+            <PartnerPage />
+          </ProtectedUser>
+        }
+      />
       <Route
         path="/no-store"
         element={
@@ -87,13 +109,26 @@ export default function App() {
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="analytics" element={<AnalyticsPage />} />
+        <Route
+          path="analytics/live"
+          element={
+            <PermissionGate perm="analytics">
+              <LiveViewPage />
+            </PermissionGate>
+          }
+        />
         <Route path="products" element={<ProductsPage />} />
         <Route path="products/new" element={<ProductNewPage />} />
         <Route path="products/:id/edit" element={<ProductEditPage />} />
         <Route path="orders" element={<OrdersPage />} />
         <Route path="orders/:id" element={<OrderDetailPage />} />
+        <Route path="returns" element={<PermissionGate perm="orders"><ReturnsPage /></PermissionGate>} />
+        <Route path="disputes" element={<PermissionGate perm="orders"><DisputesPage /></PermissionGate>} />
+        <Route path="subscriptions" element={<PermissionGate perm="orders"><SubscriptionsPage /></PermissionGate>} />
         <Route path="customers" element={<CustomersPage />} />
         <Route path="customers/:id" element={<CustomerDetailPage />} />
+        <Route path="b2b" element={<PermissionGate perm="customers"><B2bPage /></PermissionGate>} />
+        <Route path="metafields" element={<PermissionGate perm="products"><MetafieldsPage /></PermissionGate>} />
         <Route path="storefront" element={<PermissionGate perm="storefront"><StorefrontPage /></PermissionGate>} />
         <Route path="reports" element={<PermissionGate perm="reports"><ReportsPage /></PermissionGate>} />
         <Route path="abandoned-carts" element={<PermissionGate perm="abandoned-carts"><AbandonedCartsPage /></PermissionGate>} />
@@ -102,6 +137,7 @@ export default function App() {
         <Route path="payments" element={<PermissionGate perm="payments"><PaymentsPage /></PermissionGate>} />
         <Route path="marketing" element={<PermissionGate perm="marketing"><MarketingPage /></PermissionGate>} />
         <Route path="growth" element={<PermissionGate perm="growth"><GrowthPage /></PermissionGate>} />
+        <Route path="apps" element={<PermissionGate perm="growth"><AppsPage /></PermissionGate>} />
         <Route path="pages/:id/edit" element={<PermissionGate perm="pages"><PageEditPage /></PermissionGate>} />
         <Route path="pages/:id/builder" element={<PermissionGate perm="pages"><PageBuilderPage /></PermissionGate>} />
         <Route path="settings" element={<PermissionGate perm="settings"><SettingsPage /></PermissionGate>} />
@@ -114,7 +150,9 @@ export default function App() {
         <Route path="pages" element={<PagesPage />} />
         <Route path="reviews" element={<ReviewsPage />} />
         <Route path="draft-orders" element={<DraftOrdersPage />} />
+        <Route path="pos" element={<PermissionGate perm="draft-orders"><PosPage /></PermissionGate>} />
         <Route path="help" element={<HelpPage />} />
+        <Route path="messages" element={<PlatformMessagesPage />} />
       </Route>
     </Routes>
   );

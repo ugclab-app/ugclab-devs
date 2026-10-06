@@ -34,7 +34,8 @@ export type PlatformPermission =
   | "audit:read"
   | "blacklist:write"
   | "announcements:write"
-  | "staff:invite";
+  | "staff:invite"
+  | "outreach:send";
 
 const ROLE_PERMISSIONS: Record<UserRole, PlatformPermission[] | "*"> = {
   [UserRole.SUPER_ADMIN]: "*",

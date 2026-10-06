@@ -322,12 +322,15 @@ export function HomePage() {
             © {new Date().getFullYear()} {c.brand}. All rights reserved.
           </p>
           <div className="flex gap-6 text-sm text-zinc-500">
-            <a href="#" className="hover:text-zinc-800">
+            <Link to="/partners" className="hover:text-zinc-800">
+              Partners
+            </Link>
+            <Link to="/privacy" className="hover:text-zinc-800">
               Privacy
-            </a>
-            <a href="#" className="hover:text-zinc-800">
+            </Link>
+            <Link to="/terms" className="hover:text-zinc-800">
               Terms
-            </a>
+            </Link>
             <a href={`${merchantAdminUrl}/login`} className="hover:text-zinc-800">
               Merchant login
             </a>

@@ -4,7 +4,8 @@ import { randomBytes } from "crypto";
 export async function validateDiscountCode(
   tenantId: string,
   code: string,
-  subtotalAmount: number
+  subtotalAmount: number,
+  productIds: string[] = []
 ) {
   const normalized = code.trim().toUpperCase();
   if (!normalized) return null;
@@ -13,8 +14,20 @@ export async function validateDiscountCode(
     where: { tenantId, code: normalized, active: true },
   });
   if (!discount) throw new Error("Invalid discount code");
+  if (discount.startsAt && discount.startsAt > new Date()) {
+    throw new Error("This discount code is not active yet");
+  }
   if (discount.expiresAt && discount.expiresAt < new Date()) {
     throw new Error("This discount code has expired");
+  }
+  if (discount.collectionId) {
+    const hit = await prisma.collectionProduct.findFirst({
+      where: {
+        collectionId: discount.collectionId,
+        productId: { in: productIds.filter(Boolean) },
+      },
+    });
+    if (!hit) throw new Error("This code applies to a specific collection");
   }
   if (discount.maxUses != null && discount.usedCount >= discount.maxUses) {
     throw new Error("This discount code has reached its usage limit");

@@ -12,19 +12,25 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.svg"],
+      includeAssets: ["favicon.svg", "favicon.png", "apple-touch-icon.png"],
       manifest: {
         name: "Tescommerce",
         short_name: "Shop",
         description: "Shop on the go",
-        theme_color: "#7c3aed",
+        theme_color: "#15a082",
         background_color: "#ffffff",
         display: "standalone",
         start_url: "/",
         icons: [
           {
-            src: "/favicon.svg",
+            src: "/favicon.png",
             sizes: "512x512",
+            type: "image/png",
+            purpose: "any",
+          },
+          {
+            src: "/favicon.svg",
+            sizes: "any",
             type: "image/svg+xml",
             purpose: "any",
           },
@@ -66,6 +72,7 @@ export default defineConfig({
   },
   server: {
     port: 3002,
+    strictPort: true,
     proxy: {
       "/api": {
         target: "http://localhost:4000",

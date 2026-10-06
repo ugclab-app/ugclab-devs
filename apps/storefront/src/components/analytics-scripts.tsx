@@ -7,7 +7,11 @@ declare global {
     fbq?: (...args: unknown[]) => void;
     _fbq?: unknown;
     gtag?: (...args: unknown[]) => void;
-    ttq?: { load: (id: string) => void; page: () => void };
+    ttq?: {
+      load: (id: string) => void;
+      page: () => void;
+      track?: (event: string, props?: Record<string, unknown>) => void;
+    };
   }
 }
 

@@ -2,6 +2,8 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api, deleteProduct } from "@/api/client";
 import { ProductForm } from "@/components/product-form";
+import { ProductMetafieldsEditor } from "@/components/product-metafields-editor";
+import { ProductSellingOptions } from "@/components/product-selling-options";
 import { useAuth } from "@/context/auth";
 import type { ProductTranslations } from "@/components/product-translations-fields";
 
@@ -32,8 +34,13 @@ export default function ProductEditPage() {
     tags?: string[];
     weightGrams?: number | null;
     barcode?: string | null;
+    requiresShipping?: boolean;
+    hsCode?: string | null;
+    countryOfOrigin?: string | null;
     seoTitle?: string;
     seoDescription?: string;
+    sizeChart?: string;
+    countryPrices?: string;
     collectionIds?: string[];
     publishAt?: string | null;
     costAmountCents?: number | null;
@@ -46,6 +53,13 @@ export default function ProductEditPage() {
       inventory: number | null;
     }[];
     images?: { id: string; url: string; fileName: string; alt: string | null }[];
+    preorderEnabled?: boolean;
+    preorderShipAt?: string | null;
+    tryBeforeYouBuyEnabled?: boolean;
+    tryBeforeYouBuyDays?: number | null;
+    subscriptionEnabled?: boolean;
+    subscriptionInterval?: string | null;
+    sellAsGiftCard?: boolean;
   };
 
   const enabledLocales = tenant?.settings?.enabledLocales ?? ["en"];
@@ -78,8 +92,13 @@ export default function ProductEditPage() {
           tags: (p.tags ?? []).join(", "),
           weightGrams: p.weightGrams != null ? String(p.weightGrams) : "",
           barcode: p.barcode ?? "",
+          requiresShipping: p.requiresShipping ?? true,
+          hsCode: p.hsCode ?? "",
+          countryOfOrigin: p.countryOfOrigin ?? "",
           seoTitle: p.seoTitle ?? "",
           seoDescription: p.seoDescription ?? "",
+          sizeChart: p.sizeChart ?? "",
+          countryPrices: p.countryPrices ?? "",
           collectionIds: p.collectionIds ?? [],
           publishAt: p.publishAt
             ? new Date(p.publishAt).toISOString().slice(0, 16)
@@ -104,6 +123,21 @@ export default function ProductEditPage() {
           return { ok: true, message: "Product saved" };
         }}
       />
+      <ProductSellingOptions
+        productId={p.id}
+        initial={{
+          preorderEnabled: p.preorderEnabled,
+          preorderShipAt: p.preorderShipAt,
+          tryBeforeYouBuyEnabled: p.tryBeforeYouBuyEnabled,
+          tryBeforeYouBuyDays: p.tryBeforeYouBuyDays,
+          subscriptionEnabled: p.subscriptionEnabled,
+          subscriptionInterval: p.subscriptionInterval,
+          sellAsGiftCard: p.sellAsGiftCard,
+        }}
+      />
+      <div className="mx-auto max-w-6xl">
+        <ProductMetafieldsEditor productId={p.id} />
+      </div>
       <div className="mx-auto max-w-6xl pb-8">
         <button
           type="button"

@@ -22,6 +22,12 @@
       "development": "./src/block-style.ts",
       "import": "./dist/block-style.js",
       "default": "./dist/block-style.js"
+    },
+    "./block-visibility": {
+      "types": "./dist/block-visibility.d.ts",
+      "development": "./src/block-visibility.ts",
+      "import": "./dist/block-visibility.js",
+      "default": "./dist/block-visibility.js"
     }
   },
   "scripts": {

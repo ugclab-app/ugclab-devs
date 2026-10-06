@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { formatMoney, moneyLocaleFor } from "@ugclab/i18n";
 import { storeApi } from "@/api/client";
 import { useStore } from "@/context/store";
 import { useStoreParams } from "@/hooks/use-store-params";
@@ -15,6 +14,8 @@ import { ProductReviews } from "@/components/product-reviews";
 import { ProductQuestions } from "@/components/product-questions";
 import { RecentlyViewedSection } from "@/components/recently-viewed-section";
 import { WishlistButton } from "@/components/wishlist-button";
+import { SizeChart } from "@/components/size-chart";
+import { BoughtTogether } from "@/components/bought-together";
 import { ProductJsonLd } from "@/components/store-json-ld";
 import { StoreTrustStrip } from "@/components/store-trust-strip";
 import { StoreBlockRenderer } from "@/components/store-block-renderer";
@@ -23,12 +24,14 @@ import { buildStoreTitle, useDocumentSeo } from "@/hooks/use-document-seo";
 export function ProductPage() {
   const { slug } = useParams<{ slug: string }>();
   const ctx = useStore();
-  const { tenant, locale } = useStoreParams();
+  const { tenant, locale, search } = useStoreParams();
+  const currency = search.get("currency") ?? undefined;
+  const country = search.get("country") ?? undefined;
   const nav = { locale: ctx.locale, tenant: ctx.tenant.slug };
 
   const { data, isLoading } = useQuery({
-    queryKey: ["product", tenant, slug, locale],
-    queryFn: () => storeApi.product(tenant, slug!, locale),
+    queryKey: ["product", tenant, slug, locale, currency, country],
+    queryFn: () => storeApi.product(tenant, slug!, locale, currency, country),
     enabled: !!slug,
   });
 
@@ -36,6 +39,21 @@ export function ProductPage() {
     const id = (data?.product as { id?: string } | undefined)?.id;
     if (id) trackRecentProduct(ctx.tenant.id, id);
   }, [data, ctx.tenant.id]);
+
+  useEffect(() => {
+    const p = data?.product as
+      | { id: string; title: string; priceAmount: number; currency?: string }
+      | undefined;
+    if (!p?.id) return;
+    void import("@/lib/pixel-track").then(({ trackViewContent }) =>
+      trackViewContent({
+        id: p.id,
+        title: p.title,
+        priceAmount: p.priceAmount,
+        currency: p.currency ?? ctx.currency,
+      })
+    );
+  }, [data, ctx.currency]);
 
   const product = data?.product as
     | {
@@ -47,9 +65,26 @@ export function ProductPage() {
         compareAt: number | null;
         inventory: number | null;
         images: { storageKey: string; alt: string | null }[];
-        variants: { id: string; title: string; inventory: number | null }[];
+        variants: {
+          id: string;
+          title: string;
+          inventory: number | null;
+          priceAmount?: number;
+        }[];
+        sizeChart?: string | null;
         seoTitle?: string;
         seoDescription?: string | null;
+        preorderEnabled?: boolean;
+        tryBeforeYouBuyEnabled?: boolean;
+        tryBeforeYouBuyDays?: number | null;
+        subscriptionEnabled?: boolean;
+        subscriptionInterval?: string | null;
+        metafields?: {
+          namespace: string;
+          key: string;
+          type: string;
+          value: string;
+        }[];
       }
     | undefined;
 
@@ -82,16 +117,6 @@ export function ProductPage() {
     return <p className="text-zinc-500">Loading product…</p>;
   }
 
-  const priceLabel = formatMoney(
-    product.priceAmount,
-    data.currency,
-    moneyLocaleFor(data.currency, locale)
-  );
-  const compareLabel =
-    product.compareAt != null && product.compareAt > product.priceAmount
-      ? formatMoney(product.compareAt, data.currency, moneyLocaleFor(data.currency, locale))
-      : null;
-
   const inStock =
     product.type !== "PHYSICAL" ||
     product.inventory == null ||
@@ -122,27 +147,83 @@ export function ProductPage() {
             <h1 className="text-3xl font-bold tracking-tight">{product.title}</h1>
             <WishlistButton productId={product.id} title={product.title} />
           </div>
-          <div className="mt-4 flex items-baseline gap-3">
-            <span className="text-3xl font-bold">{priceLabel}</span>
-            {compareLabel ? (
-              <span className="text-lg text-zinc-400 line-through">{compareLabel}</span>
-            ) : null}
-          </div>
+          {(product.preorderEnabled ||
+            product.subscriptionEnabled ||
+            product.tryBeforeYouBuyEnabled) && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {product.preorderEnabled ? (
+                <span className="rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800">
+                  Pre-order
+                </span>
+              ) : null}
+              {product.subscriptionEnabled ? (
+                <span className="rounded-md bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-800">
+                  Subscribe
+                  {product.subscriptionInterval
+                    ? ` · ${product.subscriptionInterval}`
+                    : ""}
+                </span>
+              ) : null}
+              {product.tryBeforeYouBuyEnabled ? (
+                <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800">
+                  Try before you buy
+                  {product.tryBeforeYouBuyDays
+                    ? ` · ${product.tryBeforeYouBuyDays} days`
+                    : ""}
+                </span>
+              ) : null}
+            </div>
+          )}
           {product.description ? (
             <div
               className="product-description prose prose-zinc mt-6 max-w-none text-zinc-600 leading-relaxed"
               dangerouslySetInnerHTML={{ __html: product.description }}
             />
           ) : null}
+          {product.metafields && product.metafields.length > 0 ? (
+            <dl className="mt-6 space-y-2 rounded-xl border border-zinc-100 p-4 text-sm">
+              {product.metafields.map((m) => (
+                <div
+                  key={`${m.namespace}.${m.key}`}
+                  className="flex justify-between gap-4"
+                >
+                  <dt className="text-zinc-500">
+                    {m.namespace}.{m.key}
+                  </dt>
+                  <dd className="text-right font-medium text-zinc-800">
+                    {m.value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          ) : null}
           <ProductPurchase
             productId={product.id}
-            priceLabel={priceLabel}
+            productTitle={product.title}
+            priceAmount={product.priceAmount}
+            currency={data.currency}
+            locale={locale}
             variants={product.variants}
             productInventory={product.inventory}
             type={product.type}
+            subscriptionEnabled={product.subscriptionEnabled}
+            subscriptionInterval={product.subscriptionInterval}
           />
+          {product.sizeChart ? <SizeChart text={product.sizeChart} /> : null}
+          <BoughtTogether productId={product.id} />
         </div>
       </div>
+      {(ctx.theme.productPageBlocks?.length ?? 0) > 0 ? (
+        <div className="mt-12">
+          <StoreBlockRenderer
+            blocks={ctx.theme.productPageBlocks!.filter(
+              (b) => b.type !== "sticky_cta" && b.type !== "discount_popup"
+            )}
+            theme={ctx.theme}
+            pageContext="product"
+          />
+        </div>
+      ) : null}
       <ProductReviews productId={product.id} reviews={data.reviews} />
       <ProductQuestions
         productId={product.id}
@@ -159,11 +240,6 @@ export function ProductPage() {
         <StoreTrustStrip />
       </div>
       <RecentlyViewedSection excludeId={product.id} />
-      {(ctx.theme.productPageBlocks?.length ?? 0) > 0 ? (
-        <div className="mt-12">
-          <StoreBlockRenderer blocks={ctx.theme.productPageBlocks!} theme={ctx.theme} />
-        </div>
-      ) : null}
     </>
   );
 }

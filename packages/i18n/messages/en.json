@@ -22,7 +22,47 @@
     "noProducts": "No products yet. Create your first product to start selling.",
     "help": "Help",
     "support": "Support",
-    "language": "Language"
+    "language": "Admin language",
+    "signOut": "Sign out",
+    "storeLive": "Store live",
+    "viewStore": "View my store",
+    "nav": {
+      "dashboard": "Dashboard",
+      "storefront": "Storefront",
+      "analytics": "Analytics",
+      "products": "Products",
+      "productsAddNew": "Add new product",
+      "productsAll": "All products",
+      "productsDigital": "Digital products",
+      "productsPhysical": "Physical products",
+      "productsServices": "Services",
+      "productsLowStock": "Low stock",
+      "collections": "Collections",
+      "orders": "Orders",
+      "ordersAll": "All orders",
+      "ordersPending": "Pending",
+      "ordersPaid": "Paid",
+      "ordersFulfilled": "Fulfilled",
+      "customers": "Customers",
+      "customersAll": "All customers",
+      "customersSegments": "Segments",
+      "payments": "Payments",
+      "marketing": "Email marketing",
+      "growth": "Growth",
+      "abandonedCarts": "Abandoned carts",
+      "shipping": "Shipping",
+      "inventory": "Inventory",
+      "discounts": "Discounts",
+      "discountsCodes": "Discount codes",
+      "discountsAuto": "Auto discounts",
+      "pages": "Pages",
+      "reviews": "Reviews",
+      "draftOrders": "Draft orders",
+      "reports": "Reports",
+      "activityLog": "Activity log",
+      "settings": "Settings",
+      "help": "Help"
+    }
   },
   "storefront": {
     "addToCart": "Add to cart",
@@ -30,6 +70,89 @@
     "cart": "Cart",
     "emptyCart": "Your cart is empty",
     "digital": "Digital download",
-    "physical": "Ships worldwide"
+    "physical": "Shipping",
+    "service": "Service",
+    "subtotal": "Subtotal",
+    "total": "Total",
+    "tax": "Tax",
+    "shipping": "Shipping",
+    "discount": "Discount",
+    "placeOrder": "Place order",
+    "payWithGopay": "Pay with GoPay",
+    "payWithCard": "Pay with card",
+    "email": "Email",
+    "phone": "Phone",
+    "name": "Name",
+    "continueShopping": "Continue shopping",
+    "orderConfirmed": "Order confirmed",
+    "thankYou": "Thank you for your purchase!",
+    "nav": {
+      "collections": "Collections",
+      "allCollections": "All collections",
+      "blog": "Blog",
+      "wishlist": "Wishlist",
+      "account": "Account",
+      "shop": "Shop",
+      "newArrivals": "New arrivals",
+      "sale": "Sale",
+      "contact": "Contact"
+    },
+    "search": {
+      "placeholder": "Search SKU, tags…"
+    },
+    "hero": {
+      "welcomeTo": "Welcome to",
+      "browseCollections": "Browse collections",
+      "shopAll": "Shop all",
+      "shopCollection": "Shop {{name}}",
+      "defaultSubtitle": "Curated products — instant delivery or worldwide shipping.",
+      "digitalDownloads": "Digital downloads →"
+    },
+    "catalog": {
+      "allProducts": "All products",
+      "resultsFor": "Results for “{{q}}”",
+      "items": "{{count}} items",
+      "itemsOne": "1 item",
+      "noResults": "No products match your filters.",
+      "newArrivals": "New arrivals",
+      "sale": "Sale",
+      "bestsellers": "Bestsellers"
+    },
+    "product": {
+      "adding": "Adding…",
+      "added": "Added to cart",
+      "chooseOptions": "Choose options",
+      "shop": "Shop"
+    },
+    "footer": {
+      "thanks": "Thanks for shopping with us.",
+      "collections": "Collections",
+      "info": "Info",
+      "privacy": "Privacy",
+      "refunds": "Refunds",
+      "poweredBy": "Powered by Tescommerce."
+    },
+    "loading": {
+      "store": "Loading store…",
+      "product": "Loading product…"
+    },
+    "currency": {
+      "pricesShown": "Prices shown in {{display}}. Charged in {{base}} at checkout."
+    },
+    "promo": {
+      "percentOff": "{{value}}% off your order{{min}}",
+      "percentOffMin": " on orders over {{amount}} {{currency}}",
+      "freeShipping": "Free shipping{{min}}",
+      "freeShippingMin": " on orders over {{amount}} {{currency}}"
+    },
+    "storeClosed": "Store opening soon — browse our story below.",
+    "wishlist": {
+      "title": "Wishlist",
+      "add": "Wishlist",
+      "saved": "♥ Saved"
+    },
+    "collections": {
+      "title": "Collections"
+    }
   }
 }

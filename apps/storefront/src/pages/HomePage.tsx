@@ -2,7 +2,6 @@ import type { CSSProperties, ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { getMessages } from "@ugclab/i18n";
 import {
   blockGapClass,
   resolveHomeBlocks,
@@ -10,6 +9,7 @@ import {
   type HomeBlock,
   type ScrollAnimation,
 } from "@ugclab/tenant/store-theme";
+import { filterBlocksForPage } from "@ugclab/tenant/block-visibility";
 import { storeApi } from "@/api/client";
 import { useStore } from "@/context/store";
 import { useStoreParams } from "@/hooks/use-store-params";
@@ -19,6 +19,7 @@ import { CatalogToolbar } from "@/components/catalog-toolbar";
 import { ProductCard } from "@/components/product-card";
 import { productCardProps, productTypeLabel } from "@/lib/product-card-props";
 import { RecentlyViewedSection } from "@/components/recently-viewed-section";
+import { HomeBlockShell } from "@/components/home-block-shell";
 import {
   ColumnsBlockSection,
   CountdownBlockSection,
@@ -41,8 +42,10 @@ import {
   ProductCompareBlockSection,
   TabsBlockSection,
 } from "@/components/builder-extra-blocks";
+import { ReviewsBlockSection } from "@/components/reviews-block-section";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { buildStoreTitle, useDocumentSeo } from "@/hooks/use-document-seo";
+import { useStorefrontMessages } from "@/hooks/use-storefront-messages";
 
 function ProductsSection({
   tenant,
@@ -51,7 +54,7 @@ function ProductsSection({
   sort,
   type,
   tag,
-  title = "All products",
+  title,
 }: {
   tenant: string;
   locale: string;
@@ -62,12 +65,16 @@ function ProductsSection({
   title?: string;
 }) {
   const ctx = useStore();
+  const sf = useStorefrontMessages();
+  const [params] = useSearchParams();
+  const currency = params.get("currency") ?? undefined;
+  const country = params.get("country") ?? undefined;
+  const sectionTitle = title ?? sf.catalog.allProducts;
   const { data } = useQuery({
-    queryKey: ["products", tenant, locale, q, sort, type, tag],
-    queryFn: () => storeApi.products(tenant, { locale, q, sort, type, tag }),
+    queryKey: ["products", tenant, locale, currency, country, q, sort, type, tag],
+    queryFn: () => storeApi.products(tenant, { locale, currency, country, q, sort, type, tag }),
   });
 
-  const sf = getMessages().storefront;
   const products = data?.products ?? [];
 
   return (
@@ -75,17 +82,19 @@ function ProductsSection({
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-zinc-900">
-            {q ? `Results for “${q}”` : title}
+            {q ? sf.catalog.resultsFor.replace("{{q}}", q) : sectionTitle}
           </h2>
           <p className="mt-1 text-sm text-zinc-500">
-            {products.length} item{products.length === 1 ? "" : "s"}
+            {products.length === 1
+              ? sf.catalog.itemsOne
+              : sf.catalog.items.replace("{{count}}", String(products.length))}
           </p>
         </div>
       </div>
       <CatalogToolbar locale={locale} tenantSlug={tenant} tags={data?.tags ?? []} />
       {products.length === 0 ? (
         <p className="mt-10 rounded-xl border border-dashed border-zinc-300 bg-white p-12 text-center text-zinc-500">
-          No products match your filters.
+          {sf.catalog.noResults}
         </p>
       ) : (
         <ul className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -94,7 +103,7 @@ function ProductsSection({
               key={p.id}
               {...productCardProps(p, {
                 currency: data?.currency ?? ctx.currency,
-                typeLabel: productTypeLabel(p.type),
+                typeLabel: productTypeLabel(p.type, locale),
                 locale: ctx.locale,
                 tenantSlug: ctx.tenant.slug,
               })}
@@ -118,12 +127,14 @@ function FeaturedSection({
   title: string;
 }) {
   const ctx = useStore();
+  const [params] = useSearchParams();
+  const currency = params.get("currency") ?? undefined;
+  const country = params.get("country") ?? undefined;
   const { data } = useQuery({
-    queryKey: ["products", tenant, locale, featured],
-    queryFn: () => storeApi.products(tenant, { locale, featured }),
+    queryKey: ["products", tenant, locale, currency, country, featured],
+    queryFn: () => storeApi.products(tenant, { locale, currency, country, featured }),
   });
 
-  const sf = getMessages().storefront;
   const products = data?.products ?? [];
   if (products.length === 0) return null;
 
@@ -136,7 +147,7 @@ function FeaturedSection({
             key={p.id}
             {...productCardProps(p, {
               currency: data?.currency ?? ctx.currency,
-              typeLabel: productTypeLabel(p.type),
+              typeLabel: productTypeLabel(p.type, locale),
               locale: ctx.locale,
               tenantSlug: ctx.tenant.slug,
             })}
@@ -157,14 +168,16 @@ function CollectionSection({
   block: HomeBlock;
 }) {
   const ctx = useStore();
+  const [params] = useSearchParams();
+  const currency = params.get("currency") ?? undefined;
+  const country = params.get("country") ?? undefined;
   const slug = block.collectionSlug;
   const { data } = useQuery({
-    queryKey: ["collection", tenant, slug, locale],
-    queryFn: () => storeApi.collection(tenant, slug!, locale),
+    queryKey: ["collection", tenant, slug, locale, currency, country],
+    queryFn: () => storeApi.collection(tenant, slug!, { locale, currency, country }),
     enabled: !!slug,
   });
   if (!slug || !data?.products.length) return null;
-  const sf = getMessages().storefront;
 
   return (
     <section>
@@ -178,7 +191,7 @@ function CollectionSection({
             key={p.id}
             {...productCardProps(p, {
               currency: data.currency ?? ctx.currency,
-              typeLabel: productTypeLabel(p.type),
+              typeLabel: productTypeLabel(p.type, locale),
               locale: ctx.locale,
               tenantSlug: ctx.tenant.slug,
             })}
@@ -254,66 +267,68 @@ function VideoSection({ block }: { block: HomeBlock }) {
   );
 }
 
-function StoreReviewsSection({ tenant, title }: { tenant: string; title?: string }) {
-  const { data } = useQuery({
-    queryKey: ["store-reviews", tenant],
-    queryFn: () => storeApi.storeReviews(tenant, 6),
-  });
-  const reviews = data?.reviews ?? [];
-  if (reviews.length === 0) return null;
-  return (
-    <section>
-      <h2 className="text-2xl font-bold text-zinc-900">{title ?? "What customers say"}</h2>
-      <ul className="mt-8 grid gap-4 sm:grid-cols-2">
-        {reviews.map((r) => (
-          <li
-            key={r.id}
-            className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm"
-          >
-            <p className="font-medium text-zinc-900">{r.authorName}</p>
-            <p className="text-amber-500 text-sm" aria-label={`${r.rating} stars`}>
-              {"★".repeat(r.rating)}{"☆".repeat(5 - r.rating)}
-            </p>
-            {r.body ? <p className="mt-2 text-sm text-zinc-600">{r.body}</p> : null}
-            {r.product ? (
-              <p className="mt-2 text-xs text-zinc-400">— {r.product.title}</p>
-            ) : null}
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
 
 function TextBannerSection({ block }: { block: HomeBlock }) {
   const ctx = useStore();
   const nav = { locale: ctx.locale, tenant: ctx.tenant.slug };
+  const hasImage = Boolean(block.imageUrl?.trim());
+  const align = block.align === "center" ? "text-center" : "";
   return (
-    <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
-      <div className="grid gap-6 md:grid-cols-2 md:items-center">
-        {block.imageUrl ? (
-          <img src={block.imageUrl} alt="" className="h-full max-h-64 w-full object-cover" />
-        ) : null}
-        <div className="p-8">
-          {block.title ? <h2 className="text-2xl font-bold text-zinc-900">{block.title}</h2> : null}
-          {block.subtitle ? <p className="mt-2 text-zinc-600">{block.subtitle}</p> : null}
-          {block.body ? <p className="mt-3 text-sm text-zinc-500">{block.body}</p> : null}
-          {block.ctaLabel && block.ctaPath ? (
-            <Link
-              to={storeHref(block.ctaPath, nav)}
-              className="store-btn-primary mt-6 inline-block px-6 py-2.5 text-sm"
-            >
-              {block.ctaLabel}
-            </Link>
+    <HomeBlockShell
+      block={{
+        ...block,
+        bgColor: block.bgColor,
+        paddingY: block.paddingY ?? "md",
+        contentWidth: block.contentWidth ?? "boxed",
+      }}
+    >
+      <div
+        className={`overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-sm ${align}`}
+      >
+        <div
+          className={
+            hasImage
+              ? "grid gap-0 md:grid-cols-2 md:items-center"
+              : "mx-auto max-w-3xl"
+          }
+        >
+          {hasImage ? (
+            <img
+              src={block.imageUrl}
+              alt=""
+              className="h-full max-h-72 w-full object-cover"
+            />
           ) : null}
+          <div className="p-8 sm:p-10">
+            {block.title ? (
+              <h2 className="text-2xl font-bold text-zinc-900">{block.title}</h2>
+            ) : null}
+            {block.subtitle ? (
+              <p className="mt-2 text-zinc-600">{block.subtitle}</p>
+            ) : null}
+            {block.body ? (
+              <p className="mt-3 text-sm text-zinc-500">{block.body}</p>
+            ) : null}
+            {block.ctaLabel && block.ctaPath ? (
+              <div className={block.align === "center" ? "flex justify-center" : ""}>
+                <Link
+                  to={storeHref(block.ctaPath, nav)}
+                  className="store-btn-primary mt-6 inline-block px-6 py-2.5 text-sm"
+                >
+                  {block.ctaLabel}
+                </Link>
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
-    </section>
+    </HomeBlockShell>
   );
 }
 
 export function HomePage() {
   const ctx = useStore();
+  const sf = useStorefrontMessages();
   const { tenant, locale } = useStoreParams();
   const [params] = useSearchParams();
   const q = params.get("q") ?? undefined;
@@ -329,7 +344,7 @@ export function HomePage() {
     image: ctx.settings?.seoOgImageUrl ?? ctx.logoUrl,
   });
 
-  let homeBlocks = resolveHomeBlocks(ctx.theme);
+  let homeBlocks = filterBlocksForPage(resolveHomeBlocks(ctx.theme), "home");
   if (ctx.theme.storeClosed) {
     const landingOnly = new Set<HomeBlock["type"]>([
       "hero",
@@ -383,65 +398,118 @@ export function HomePage() {
       };
       const featuredCollection = block.collectionSlug
         ? ctx.collections.find((c) => c.slug === block.collectionSlug) ?? null
-        : ctx.featuredCollection;
+        : null;
       emit(
         block.id,
-        <StoreHero
-          storeName={ctx.tenant.name}
-          description={ctx.settings?.seoDescription}
-          primaryColor={ctx.primaryColor}
-          locale={ctx.locale}
-          tenantSlug={ctx.tenant.slug}
-          featuredCollections={ctx.collections}
-          theme={heroTheme}
-          featuredCollection={featuredCollection}
-        />
+        <HomeBlockShell
+          block={{
+            ...block,
+            contentWidth: "full",
+            paddingY: "none",
+            // Hero paints its own surface — don't inherit pale block bg on the shell
+            bgColor: undefined,
+            bgGradient: undefined,
+            textColor: undefined,
+          }}
+        >
+          <StoreHero
+            storeName={ctx.tenant.name}
+            description={ctx.settings?.seoDescription}
+            primaryColor={ctx.primaryColor}
+            locale={ctx.locale}
+            tenantSlug={ctx.tenant.slug}
+            featuredCollections={ctx.collections}
+            theme={heroTheme}
+            featuredCollection={featuredCollection}
+            block={block}
+          />
+        </HomeBlockShell>
       );
     }
     if (block.type === "products") {
       emit(
         block.id,
-        <ProductsSection
-          tenant={tenant}
-          locale={locale}
-          q={q}
-          sort={sort}
-          type={type}
-          tag={tag}
-        />
+        <HomeBlockShell
+          block={{
+            ...block,
+            bgColor: block.bgColor ?? "#ffffff",
+            paddingY: block.paddingY ?? "lg",
+            contentWidth: block.contentWidth ?? "boxed",
+          }}
+        >
+          <ProductsSection
+            tenant={tenant}
+            locale={locale}
+            q={q}
+            sort={sort}
+            type={type}
+            tag={tag}
+            title={block.title}
+          />
+        </HomeBlockShell>
       );
     }
     if (block.type === "new_arrivals") {
       emit(
         block.id,
-        <FeaturedSection
-          tenant={tenant}
-          locale={locale}
-          featured="new_arrivals"
-          title={block.title ?? "New arrivals"}
-        />
+        <HomeBlockShell
+          block={{
+            ...block,
+            bgColor: block.bgColor ?? "#ffffff",
+            paddingY: block.paddingY ?? "lg",
+          }}
+        >
+          <FeaturedSection
+            tenant={tenant}
+            locale={locale}
+            featured="new_arrivals"
+            title={block.title ?? sf.catalog.newArrivals}
+          />
+        </HomeBlockShell>
       );
     }
     if (block.type === "sale") {
       emit(
         block.id,
-        <FeaturedSection
-          tenant={tenant}
-          locale={locale}
-          featured="sale"
-          title={block.title ?? "Sale"}
-        />
+        <HomeBlockShell
+          block={{
+            ...block,
+            bgColor: block.bgColor ?? "#ffffff",
+            paddingY: block.paddingY ?? "lg",
+          }}
+        >
+          <FeaturedSection
+            tenant={tenant}
+            locale={locale}
+            featured="sale"
+            title={block.title ?? sf.catalog.sale}
+          />
+        </HomeBlockShell>
       );
     }
     if (block.type === "text_banner") emit(block.id, <TextBannerSection block={block} />);
     if (block.type === "featured_collection") {
-      emit(block.id, <CollectionSection tenant={tenant} locale={locale} block={block} />);
+      emit(
+        block.id,
+        <HomeBlockShell
+          block={{
+            ...block,
+            bgColor: block.bgColor ?? "#ffffff",
+            paddingY: block.paddingY ?? "lg",
+          }}
+        >
+          <CollectionSection tenant={tenant} locale={locale} block={block} />
+        </HomeBlockShell>
+      );
     }
     if (block.type === "faq") emit(block.id, <FaqSection block={block} />);
     if (block.type === "html") emit(block.id, <HtmlSection block={block} />);
     if (block.type === "video") emit(block.id, <VideoSection block={block} />);
     if (block.type === "reviews") {
-      emit(block.id, <StoreReviewsSection tenant={tenant} title={block.title} />);
+      emit(
+        block.id,
+        <ReviewsBlockSection block={block} tenant={tenant} nav={nav} />,
+      );
     }
     if (block.type === "cta") emit(block.id, <CtaBlockSection block={block} nav={nav} />);
     if (block.type === "image_text") {
@@ -459,7 +527,14 @@ export function HomePage() {
     if (block.type === "pricing") {
       emit(block.id, <PricingBlockSection block={block} nav={nav} />);
     }
-    if (block.type === "contact_form") emit(block.id, <ContactFormBlockSection block={block} />);
+    if (block.type === "contact_form") {
+      emit(
+        block.id,
+        <div id="contact">
+          <ContactFormBlockSection block={block} />
+        </div>
+      );
+    }
     if (block.type === "tabs") emit(block.id, <TabsBlockSection block={block} />);
     if (block.type === "blog_feed") emit(block.id, <BlogFeedBlockSection block={block} />);
     if (block.type === "carousel") emit(block.id, <CarouselBlockSection block={block} />);
@@ -479,14 +554,22 @@ export function HomePage() {
   };
 
   return (
-    <div className={blockGapClass(ctx.theme.blockGap)} style={pageStyle}>
+    <div
+      className={`${blockGapClass(ctx.theme.blockGap)} store-home-stack`}
+      style={pageStyle}
+      data-home-root
+    >
       {ctx.theme.storeClosed ? (
-        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm text-amber-900">
-          {ctx.theme.storeClosedMessage?.trim() || "Store opening soon — browse our story below."}
+        <p className="store-container rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm text-amber-900">
+          {ctx.theme.storeClosedMessage?.trim() || sf.storeClosed}
         </p>
       ) : null}
       {blocks}
-      {!filtered && !ctx.theme.storeClosed ? <RecentlyViewedSection /> : null}
+      {!filtered && !ctx.theme.storeClosed ? (
+        <div className="store-container py-10">
+          <RecentlyViewedSection />
+        </div>
+      ) : null}
     </div>
   );
 }

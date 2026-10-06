@@ -20,11 +20,19 @@ export function ScrollReveal({
     if (!el) return;
     const io = new IntersectionObserver(
       ([entry]) => {
-        if (entry?.isIntersecting) setVisible(true);
+        if (entry?.isIntersecting) {
+          setVisible(true);
+          io.disconnect();
+        }
       },
-      { threshold: 0.12, rootMargin: "0px 0px -40px 0px" }
+      { threshold: 0.01, rootMargin: "80px 0px 80px 0px" }
     );
     io.observe(el);
+    // Already on screen (e.g. short pages / fast paint)
+    requestAnimationFrame(() => {
+      const rect = el.getBoundingClientRect();
+      if (rect.top < window.innerHeight && rect.bottom > 0) setVisible(true);
+    });
     return () => io.disconnect();
   }, [animation]);
 

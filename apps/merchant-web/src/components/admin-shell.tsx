@@ -2,7 +2,9 @@ import { Link } from "react-router-dom";
 import { logout } from "@/api/client";
 import { getStorefrontUrl, getStorefrontDisplayHost } from "@/lib/storefront";
 import { AdminNav } from "@/components/admin-nav";
+import { AdminLocaleSwitcher } from "@/components/admin-locale-switcher";
 import { CopyStoreUrl } from "@/components/copy-store-url";
+import { useAdminLocale } from "@/context/admin-locale";
 
 export type TenantInfo = {
   name: string;
@@ -21,6 +23,7 @@ export function AdminShell({
   description?: string;
 }) {
   const storeUrl = getStorefrontUrl(tenant.slug);
+  const { t } = useAdminLocale();
 
   return (
     <div className="flex min-h-screen bg-zinc-100">
@@ -41,8 +44,11 @@ export function AdminShell({
           </Link>
           <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            Store live
+            {t.storeLive}
           </p>
+          <div className="mt-3">
+            <AdminLocaleSwitcher compact />
+          </div>
         </div>
 
         <AdminNav />
@@ -72,7 +78,7 @@ export function AdminShell({
                   d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9"
                 />
               </svg>
-              Sign out
+              {t.signOut}
             </button>
           </form>
         </div>
@@ -109,7 +115,7 @@ export function AdminShell({
                   d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"
                 />
               </svg>
-              View my store
+              {t.viewStore}
             </a>
           </div>
         </header>

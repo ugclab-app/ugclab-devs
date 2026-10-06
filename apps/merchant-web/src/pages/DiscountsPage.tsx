@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import { FormAlert } from "@/components/form-alert";
+import { useAdminT } from "@/hooks/use-admin-t";
 
 type Discount = {
   id: string;
@@ -12,9 +13,13 @@ type Discount = {
   maxUses: number | null;
   active: boolean;
   expiresAt: string | null;
+  startsAt?: string | null;
+  minOrderAmount?: number | null;
+  collectionId?: string | null;
 };
 
 export default function DiscountsPage() {
+  const { ta, c } = useAdminT();
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ["discounts"],
@@ -24,6 +29,11 @@ export default function DiscountsPage() {
   const [pending, setPending] = useState(false);
 
   const discounts = (data?.discounts ?? []) as Discount[];
+  const { data: collectionsData } = useQuery({
+    queryKey: ["collections"],
+    queryFn: () => api.collections(),
+  });
+  const collections = (collectionsData?.collections ?? []) as { id: string; title: string }[];
 
   async function onCreate(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -36,6 +46,9 @@ export default function DiscountsPage() {
         value: fd.get("value"),
         minOrderAmount: fd.get("minOrderAmount") || null,
         maxUses: fd.get("maxUses") || null,
+        startsAt: fd.get("startsAt") || null,
+        expiresAt: fd.get("expiresAt") || null,
+        collectionId: fd.get("collectionId") || null,
       });
       (e.target as HTMLFormElement).reset();
       setAlert({ ok: true, message: "Discount created" });
@@ -52,11 +65,12 @@ export default function DiscountsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Discount codes</h1>
+      <h1 className="text-2xl font-bold">{ta("discountsPage.title")}</h1>
+      <p className="text-sm text-zinc-500">{ta("discountsPage.description")}</p>
       <FormAlert ok={alert.ok} message={alert.message} />
 
       {isLoading ? (
-        <p className="text-zinc-500">Loading…</p>
+        <p className="text-zinc-500">{c.loading}</p>
       ) : (
         <div className="admin-card overflow-hidden">
           <table className="w-full text-sm">
@@ -118,6 +132,25 @@ export default function DiscountsPage() {
         <input name="value" type="number" step="0.01" placeholder="10 or 5.00" required className="ugclab-input" />
         <input name="minOrderAmount" type="number" step="0.01" placeholder="Min order (optional)" className="ugclab-input" />
         <input name="maxUses" type="number" placeholder="Max uses (optional)" className="ugclab-input" />
+        <label className="block text-sm">
+          Collection (optional)
+          <select name="collectionId" className="ugclab-select mt-1.5 w-full">
+            <option value="">Any product</option>
+            {collections.map((col) => (
+              <option key={col.id} value={col.id}>
+                {col.title}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block text-sm">
+          Starts
+          <input name="startsAt" type="datetime-local" className="ugclab-input mt-1.5" />
+        </label>
+        <label className="block text-sm">
+          Ends
+          <input name="expiresAt" type="datetime-local" className="ugclab-input mt-1.5" />
+        </label>
         <button type="submit" disabled={pending} className="ugclab-btn ugclab-btn-primary">
           Create
         </button>

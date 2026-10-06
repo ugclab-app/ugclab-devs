@@ -154,3 +154,20 @@ export async function getShippoRates(params: {
     estimatedDays: r.estimated_days ?? null,
   }));
 }
+
+export async function isShippoDelivered(trackingNumber: string): Promise<boolean> {
+  const token = process.env.SHIPPO_API_KEY?.trim();
+  const number = trackingNumber.trim();
+  if (!token || !number) return false;
+  const res = await fetch(`${SHIPPO_API}/tracks/`, {
+    method: "POST",
+    headers: {
+      Authorization: `ShippoToken ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ carrier: "shippo", tracking_number: number }),
+  });
+  if (!res.ok) return false;
+  const body = (await res.json()) as { tracking_status?: { status?: string } };
+  return body.tracking_status?.status === "DELIVERED";
+}

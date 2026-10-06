@@ -5,6 +5,9 @@ const RATES: Record<string, number> = {
   GBP: 0.79,
   PLN: 3.95,
   CAD: 1.36,
+  KGS: 89,
+  KZT: 450,
+  UZS: 12_500,
 };
 
 const LOCALE_CURRENCY: Record<string, string> = {
@@ -17,7 +20,34 @@ const LOCALE_CURRENCY: Record<string, string> = {
   pl: "PLN",
   gb: "GBP",
   uk: "GBP",
+  ru: "USD",
+  ky: "KGS",
+  kk: "KZT",
+  uz: "UZS",
 };
+
+export function listDisplayCurrencies(
+  baseCurrency: string,
+  locales: string[],
+  overrides?: Record<string, string> | null,
+  extra: Array<string | null | undefined> = []
+): string[] {
+  const set = new Set<string>();
+  const add = (code?: string | null) => {
+    if (!code) return;
+    const up = code.toUpperCase();
+    if (RATES[up]) set.add(up);
+  };
+  add(baseCurrency);
+  for (const locale of locales) {
+    add(resolveDisplayCurrency(locale, baseCurrency, overrides));
+  }
+  if (overrides) {
+    for (const value of Object.values(overrides)) add(value);
+  }
+  for (const code of extra) add(code);
+  return [...set];
+}
 
 export function resolveDisplayCurrency(
   locale: string,
@@ -48,14 +78,29 @@ export function convertAmount(
   return Math.round(inBase * toRate);
 }
 
+const LOCALE_BCP47: Record<string, string> = {
+  en: "en-US",
+  ru: "ru-RU",
+  ky: "ky-KG",
+  kk: "kk-KZ",
+  uz: "uz-UZ",
+  de: "de-DE",
+  fr: "fr-FR",
+  es: "es-ES",
+};
+
 export function moneyLocaleFor(displayCurrency: string, locale: string): string {
   const map: Record<string, string> = {
     EUR: "de-DE",
     GBP: "en-GB",
     PLN: "pl-PL",
     USD: "en-US",
+    KGS: "ru-KG",
+    KZT: "kk-KZ",
+    UZS: "uz-UZ",
   };
-  return map[displayCurrency] ?? locale;
+  const key = locale.toLowerCase().slice(0, 2);
+  return map[displayCurrency] ?? LOCALE_BCP47[key] ?? locale;
 }
 
 export type Priced = {

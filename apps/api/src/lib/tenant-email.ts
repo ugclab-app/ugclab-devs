@@ -19,13 +19,21 @@ export async function resolveTenantEmailOptions(tenantId: string) {
     select: {
       name: true,
       settings: {
-        select: { emailFromName: true, emailReplyTo: true },
+        select: { emailFromName: true, emailReplyTo: true, emailDomain: true },
       },
     },
   });
   const displayName =
     tenant?.settings?.emailFromName?.trim() || tenant?.name || "Store";
-  const from = formatEmailFrom(displayName);
+  const domain = tenant?.settings?.emailDomain as
+    | { status?: string; fromAddress?: string }
+    | null
+    | undefined;
+  const verifiedFrom =
+    domain?.status?.toLowerCase() === "verified" && domain.fromAddress
+      ? domain.fromAddress
+      : undefined;
+  const from = formatEmailFrom(displayName, verifiedFrom);
   const replyTo = tenant?.settings?.emailReplyTo?.trim() || undefined;
   return { from, replyTo, displayName };
 }

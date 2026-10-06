@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { getStorefrontUrl } from "@/lib/storefront";
+import { useAdminT } from "@/hooks/use-admin-t";
 
 export function LaunchChecklist({
   tenantSlug,
@@ -8,32 +9,31 @@ export function LaunchChecklist({
   tenantSlug: string;
   productCount: number;
 }) {
+  const { ta, t } = useAdminT();
   const storeUrl = getStorefrontUrl(tenantSlug);
   const hasProducts = productCount > 0;
 
   const steps = [
     {
       done: hasProducts,
-      title: "Add your first product",
-      desc: "Physical or digital — customers need something to buy.",
+      title: ta("launch.product"),
+      desc: ta("launch.productDesc"),
       href: "/products/new",
-      cta: "Add product",
+      cta: ta("productsPage.addProduct"),
     },
     {
       done: hasProducts,
-      title: "Preview your storefront",
-      desc: "See how buyers will experience your brand.",
-      href: storeUrl,
-      cta: "Open store",
-      external: true,
+      title: ta("launch.storefront"),
+      desc: ta("launch.storefrontDesc"),
+      href: "/storefront",
+      cta: t.nav.storefront,
     },
     {
       done: hasProducts,
-      title: "Share your store link",
-      desc: "Post on social, bio, or email — start selling globally.",
-      href: storeUrl,
-      cta: "Get link",
-      external: true,
+      title: ta("launch.domain"),
+      desc: ta("launch.domainDesc"),
+      href: "/settings?tab=domain",
+      cta: ta("onboarding.customDomain"),
     },
   ];
 
@@ -43,11 +43,9 @@ export function LaunchChecklist({
   return (
     <div className="admin-card overflow-hidden">
       <div className="border-b border-zinc-100 bg-gradient-to-r from-violet-600 to-indigo-600 px-6 py-5 text-white">
-        <p className="text-sm font-medium text-violet-100">Launch your store</p>
+        <p className="text-sm font-medium text-violet-100">{ta("launch.title")}</p>
         <h2 className="mt-1 text-lg font-bold">
-          {hasProducts
-            ? "Your store is ready for customers"
-            : "3 steps to go live"}
+          {hasProducts ? ta("storeLive") : ta("launch.payments")}
         </h2>
         <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/20">
           <div
@@ -72,23 +70,12 @@ export function LaunchChecklist({
               <p className="font-medium text-zinc-900">{step.title}</p>
               <p className="mt-0.5 text-sm text-zinc-500">{step.desc}</p>
             </div>
-            {step.external ? (
-              <a
-                href={step.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="shrink-0 text-sm font-semibold text-violet-600 hover:text-violet-700"
-              >
-                {step.cta} →
-              </a>
-            ) : (
-              <Link
-                to={step.href}
-                className="shrink-0 text-sm font-semibold text-violet-600 hover:text-violet-700"
-              >
-                {step.cta} →
-              </Link>
-            )}
+            <Link
+              to={step.href}
+              className="shrink-0 text-sm font-semibold text-violet-600 hover:text-violet-700"
+            >
+              {step.cta} →
+            </Link>
           </li>
         ))}
       </ul>

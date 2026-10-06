@@ -3,8 +3,10 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { formatMoney } from "@ugclab/i18n";
 import { api } from "@/api/client";
+import { useAdminT } from "@/hooks/use-admin-t";
 
 export function GlobalSearch() {
+  const { ta, c, t } = useAdminT();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -61,7 +63,7 @@ export function GlobalSearch() {
           setOpen(true);
         }}
         onFocus={() => setOpen(true)}
-        placeholder="Search products, orders, customers…"
+        placeholder={ta("searchPlaceholder")}
         className="ugclab-input w-full pr-16 text-sm"
       />
       <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[10px] font-medium text-zinc-400">
@@ -70,12 +72,12 @@ export function GlobalSearch() {
       {open && q.trim().length >= 2 ? (
         <div className="absolute z-50 mt-1 max-h-80 w-full overflow-auto rounded-lg border border-zinc-200 bg-white shadow-lg">
           {!hasResults ? (
-            <p className="px-4 py-3 text-sm text-zinc-500">No results</p>
+            <p className="px-4 py-3 text-sm text-zinc-500">{c.noResults}</p>
           ) : (
             <>
               {products.length > 0 ? (
                 <div className="border-b px-3 py-2">
-                  <p className="text-xs font-semibold uppercase text-zinc-400">Products</p>
+                  <p className="text-xs font-semibold uppercase text-zinc-400">{t.nav.products}</p>
                   {products.map((p) => (
                     <Link
                       key={p.id}
@@ -90,7 +92,7 @@ export function GlobalSearch() {
               ) : null}
               {orders.length > 0 ? (
                 <div className="border-b px-3 py-2">
-                  <p className="text-xs font-semibold uppercase text-zinc-400">Orders</p>
+                  <p className="text-xs font-semibold uppercase text-zinc-400">{t.nav.orders}</p>
                   {orders.map((o) => (
                     <Link
                       key={o.id}
@@ -105,7 +107,7 @@ export function GlobalSearch() {
               ) : null}
               {customers.length > 0 ? (
                 <div className="px-3 py-2">
-                  <p className="text-xs font-semibold uppercase text-zinc-400">Customers</p>
+                  <p className="text-xs font-semibold uppercase text-zinc-400">{t.nav.customers}</p>
                   {customers.map((c) => (
                     <Link
                       key={c.id}

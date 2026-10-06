@@ -1,7 +1,6 @@
 import { prisma } from "@ugclab/database";
 import { getCookie, setCookie } from "hono/cookie";
 import type { Context } from "hono";
-import { sendStoreEmail } from "./tenant-email.js";
 import { getStorefrontUrl } from "./storefront.js";
 import type { CartItem } from "./store-cart.js";
 
@@ -91,15 +90,11 @@ export async function processAbandonedCartReminders() {
     const total = (cart.subtotalAmount / 100).toFixed(2);
 
     if (!cart.remindedAt1h && cart.updatedAt <= oneHourAgo) {
-      await sendStoreEmail(cart.tenantId, {
-        to: cart.email,
-        subject: `You left items in your cart — ${cart.tenant.name}`,
-        html: `
-          <h2>Complete your order</h2>
-          <p>You have items waiting at <strong>${cart.tenant.name}</strong>.</p>
-          <p>Cart total: ${total} ${cart.currency}</p>
-          <p><a href="${storeUrl}/cart">Return to cart →</a></p>
-        `,
+      const { sendTemplatedStoreEmail } = await import("./transactional-email.js");
+      await sendTemplatedStoreEmail(cart.tenantId, "abandonedCart", cart.email, {
+        storeName: cart.tenant.name,
+        total: `${total} ${cart.currency}`,
+        url: `${storeUrl}/cart`,
       });
       await prisma.abandonedCart.update({
         where: { id: cart.id },
@@ -113,14 +108,11 @@ export async function processAbandonedCartReminders() {
       !cart.remindedAt24h &&
       cart.updatedAt <= twentyFourHoursAgo
     ) {
-      await sendStoreEmail(cart.tenantId, {
-        to: cart.email,
-        subject: `Still thinking? Your cart at ${cart.tenant.name}`,
-        html: `
-          <h2>Your cart is still here</h2>
-          <p>Don't miss out — ${total} ${cart.currency} in your cart.</p>
-          <p><a href="${storeUrl}/cart">Checkout now →</a></p>
-        `,
+      const { sendTemplatedStoreEmail } = await import("./transactional-email.js");
+      await sendTemplatedStoreEmail(cart.tenantId, "abandonedCart", cart.email, {
+        storeName: cart.tenant.name,
+        total: `${total} ${cart.currency}`,
+        url: `${storeUrl}/cart`,
       });
       await prisma.abandonedCart.update({
         where: { id: cart.id },
@@ -144,15 +136,11 @@ export async function sendAbandonedCartRecoveryEmail(opts: {
   const storeUrl = getStorefrontUrl(cart.tenant.slug);
   const total = (cart.subtotalAmount / 100).toFixed(2);
 
-  await sendStoreEmail(cart.tenantId, {
-    to: cart.email,
-    subject: `Complete your order — ${cart.tenant.name}`,
-    html: `
-      <h2>Your cart is waiting</h2>
-      <p>You left items at <strong>${cart.tenant.name}</strong>.</p>
-      <p>Cart total: ${total} ${cart.currency}</p>
-      <p><a href="${storeUrl}/cart">Return to checkout →</a></p>
-    `,
+  const { sendTemplatedStoreEmail } = await import("./transactional-email.js");
+  await sendTemplatedStoreEmail(cart.tenantId, "abandonedCart", cart.email, {
+    storeName: cart.tenant.name,
+    total: `${total} ${cart.currency}`,
+    url: `${storeUrl}/cart`,
   });
 
   await prisma.abandonedCart.update({

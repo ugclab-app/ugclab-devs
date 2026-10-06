@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { formatMoney } from "@ugclab/i18n";
+import { useAdminT } from "@/hooks/use-admin-t";
 
 type Props = {
   currency: string;
@@ -24,26 +25,28 @@ export function DashboardStatCards({
   netPayout,
   platformFees,
 }: Props) {
+  const { ta } = useAdminT();
+
   const cards = [
     {
-      label: "Orders today",
+      label: ta("dashboard.ordersTodayCard"),
       value: String(ordersToday),
       href: "/orders",
     },
     {
-      label: "Revenue today",
+      label: ta("dashboard.revenueToday"),
       value: formatMoney(revenueToday, currency),
       href: "/orders?status=PAID",
     },
     {
-      label: `GMV (${range}d)`,
+      label: ta("dashboard.gmv", { range }),
       value: formatMoney(rangeRevenue, currency),
       href: "/orders",
     },
     ...(netPayout != null
       ? [
           {
-            label: `Net payout (${range}d)`,
+            label: ta("dashboard.netPayout", { range }),
             value: formatMoney(netPayout, currency),
             href: "/reports",
           },
@@ -52,20 +55,20 @@ export function DashboardStatCards({
     ...(platformFees != null && platformFees > 0
       ? [
           {
-            label: `Platform fees (${range}d)`,
+            label: ta("dashboard.platformFee"),
             value: formatMoney(platformFees, currency),
             href: "/reports",
           },
         ]
       : []),
     {
-      label: "Pending orders",
+      label: ta("dashboard.pendingOrders"),
       value: String(pendingOrders),
       href: "/orders?status=PENDING",
       highlight: pendingOrders > 0,
     },
     {
-      label: "Low stock",
+      label: ta("dashboard.lowStock"),
       value: String(lowStockCount),
       href: "/products?lowStock=1",
       highlight: lowStockCount > 0,

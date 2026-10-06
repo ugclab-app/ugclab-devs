@@ -3,7 +3,7 @@ import { MediaPicker } from "@/components/media-picker";
 
 export type PageStyleState = Pick<
   StoreTheme,
-  "pageBgColor" | "pageBgImage" | "blockGap" | "scrollAnimation"
+  "pageBgColor" | "pageBgImage" | "blockGap" | "scrollAnimation" | "customCss"
 >;
 
 export function PageStylePanel({
@@ -20,6 +20,7 @@ export function PageStylePanel({
       <input type="hidden" name="pageBgImage" value={style.pageBgImage ?? ""} />
       <input type="hidden" name="blockGap" value={style.blockGap ?? "md"} />
       <input type="hidden" name="scrollAnimation" value={style.scrollAnimation ?? "none"} />
+      <input type="hidden" name="customCss" value={style.customCss ?? ""} />
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="text-xs">
           Page background
@@ -69,6 +70,20 @@ export function PageStylePanel({
           <MediaPicker onUploaded={(url) => onChange({ pageBgImage: url })} />
         </div>
       </label>
+      <label className="block text-xs">
+        Custom CSS
+        <textarea
+          className="ugclab-input mt-1 font-mono text-xs"
+          rows={5}
+          value={style.customCss ?? ""}
+          onChange={(e) => onChange({ customCss: e.target.value })}
+          placeholder=".store-btn-primary { letter-spacing: 0.04em; }"
+        />
+      </label>
+      <p className="text-[11px] text-zinc-400">
+        Desktop / tablet / mobile preview: use the toolbar toggle. Themes are block presets (not
+        Liquid).
+      </p>
     </div>
   );
 }

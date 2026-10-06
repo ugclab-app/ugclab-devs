@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
 
@@ -8,6 +8,13 @@ type ProductImage = {
   fileName: string;
   alt: string | null;
 };
+
+function fileFromBase64(fileName: string, mimeType: string, base64: string) {
+  const bin = atob(base64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new File([bytes], fileName, { type: mimeType });
+}
 
 export function ProductMediaField({
   productId,
@@ -24,6 +31,14 @@ export function ProductMediaField({
   const inputRef = useRef<HTMLInputElement>(null);
   const [images, setImages] = useState(initial);
   const [pending, setPending] = useState<File[]>(pendingFiles ?? []);
+  const [urlInput, setUrlInput] = useState("");
+  const [showUrl, setShowUrl] = useState(false);
+  const [urlError, setUrlError] = useState<string | null>(null);
+
+  const initialKey = initial.map((i) => i.id).join(",");
+  useEffect(() => {
+    setImages(initial);
+  }, [productId, initialKey, initial]);
   const [uploading, setUploading] = useState(false);
   const [drag, setDrag] = useState(false);
 
@@ -51,6 +66,32 @@ export function ProductMediaField({
         if (f.type.startsWith("image/")) await uploadOne(f);
       }
     })();
+  }
+
+  async function importFromUrl() {
+    const url = urlInput.trim();
+    if (!url) return;
+    setUrlError(null);
+    setUploading(true);
+    try {
+      if (productId) {
+        const res = await api.importProductImageFromUrl(productId, url);
+        setImages((prev) => [...prev, res.image as ProductImage]);
+        await queryClient.invalidateQueries({ queryKey: ["product", productId] });
+      } else {
+        const res = await api.fetchMediaFromUrl(url);
+        const file = fileFromBase64(res.fileName, res.mimeType, res.base64);
+        const next = [...pending, file];
+        setPending(next);
+        onPendingChange?.(next);
+      }
+      setUrlInput("");
+      setShowUrl(false);
+    } catch (e) {
+      setUrlError(e instanceof Error ? e.message : "Import failed");
+    } finally {
+      setUploading(false);
+    }
   }
 
   function removePending(i: number) {
@@ -107,7 +148,19 @@ export function ProductMediaField({
         >
           {uploading ? "Uploading…" : "Add images"}
         </button>
-        <p className="mt-1 text-xs text-zinc-500">PNG, JPG, WebP — drag and drop</p>
+        <span className="mx-2 text-zinc-300">·</span>
+        <button
+          type="button"
+          disabled={uploading}
+          onClick={() => {
+            setShowUrl((v) => !v);
+            setUrlError(null);
+          }}
+          className="text-sm font-medium text-violet-600 hover:text-violet-700"
+        >
+          Import from URL
+        </button>
+        <p className="mt-1 text-xs text-zinc-500">PNG, JPG, WebP — drag and drop or paste a link</p>
         <input
           ref={inputRef}
           type="file"
@@ -117,6 +170,39 @@ export function ProductMediaField({
           onChange={(e) => onFiles(e.target.files)}
         />
       </div>
+
+      {showUrl ? (
+        <div className="space-y-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <input
+              type="url"
+              value={urlInput}
+              onChange={(e) => setUrlInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void importFromUrl();
+                }
+              }}
+              placeholder="https://example.com/image.jpg"
+              className="ugclab-input flex-1"
+              disabled={uploading}
+            />
+            <button
+              type="button"
+              disabled={uploading || !urlInput.trim()}
+              onClick={() => void importFromUrl()}
+              className="ugclab-btn ugclab-btn-primary shrink-0"
+            >
+              {uploading ? "Importing…" : "Add"}
+            </button>
+          </div>
+          {urlError ? (
+            <p className="text-xs text-red-600">{urlError}</p>
+          ) : null}
+        </div>
+      ) : null}
+
       {previews.length > 0 ? (
         <div className="flex flex-wrap gap-3">
           {previews.map((p) => (

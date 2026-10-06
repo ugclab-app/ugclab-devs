@@ -11,18 +11,25 @@ export function ProductGallery({
   if (images.length === 0) return null;
 
   const main = images[active] ?? images[0]!;
+  const hasThumbs = images.length > 1;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[5rem_1fr]">
-      {images.length > 1 ? (
+    <div
+      className={
+        hasThumbs ? "grid gap-4 lg:grid-cols-[5rem_1fr]" : "grid gap-4"
+      }
+    >
+      {hasThumbs ? (
         <ul className="flex gap-2 overflow-x-auto lg:flex-col lg:overflow-visible">
           {images.map((img, i) => (
-            <li key={img.url}>
+            <li key={`${img.url}-${i}`}>
               <button
                 type="button"
                 onClick={() => setActive(i)}
                 className={`block overflow-hidden rounded-lg border-2 transition ${
-                  i === active ? "border-[var(--store-primary)]" : "border-transparent opacity-70 hover:opacity-100"
+                  i === active
+                    ? "border-[var(--store-primary)]"
+                    : "border-transparent opacity-70 hover:opacity-100"
                 }`}
               >
                 <img

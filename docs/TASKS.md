@@ -54,7 +54,15 @@
 - 🟡 Live preview (компонент `StorefrontPreview` на Storefront page)
 - 🟡 Block editor home (`SiteBuilder`)
 - ⬜ Collection hero / announcement editor
-- ⬜ Mobile preview toggle
+- 🟡 **Themes (block presets)**: gallery, mobile/tablet preview, custom CSS, save custom presets — **не** Shopify Liquid
+- ✅ Mobile preview toggle (Site Builder viewport)
+
+## F2. Markets & Taxes
+
+- ✅ `localeCurrencies` + `markets` на `StoreSettings` (display FX + country tax)
+- ✅ Checkout tax by shipping country (`resolveTaxRateBps`)
+- ✅ Settings tabs Markets / Tax; `stripeTaxEnabled` SOT + sync в theme
+- 📄 `docs/MARKETS-TAX.md`
 
 ## G. Marketing (Email)
 
@@ -66,17 +74,26 @@
 
 ## H. Storefront (покупатель)
 
-- ✅ Product page SEO meta
-- 🟡 Checkout UX (steps, fieldsets, order summary sidebar)
-- ⬜ Account: PDF invoices, reorder
-- ⬜ Каталог: фильтры, сортировка
+Уже есть: SEO товара, checkout (шаги, скидка, подарочная карта, доставка, самовывоз), PDF-чек, повтор заказа, трек-номер, отзывы, Q&A, блог, возврат, избранное в браузере, поиск с подсказками, переключатель языка. Сортировка и фильтр type/tag — только на главной.
+
+Дальше, по порядку:
+
+1. ✅ Кабинет: регистрация, сброс пароля, профиль, сохранённые адреса
+2. ✅ Избранное в аккаунте (гость — `localStorage`, после входа синхронизируется)
+3. ✅ Коллекции: сортировка, фильтр по цене и наличию, пагинация
+4. ✅ Страница результатов поиска `/search`
+5. ✅ Карточка товара: количество, цена и остаток варианта, свотчи цвет/размер
+6. ✅ «Сообщить, когда появится» и таблица размеров (поле Size chart в товаре)
+7. ✅ Переключатель валюты рядом с языком (базовая + рынки + локали)
+8. ✅ Мобильное меню в шапке
+9. ✅ Страница заказа: ссылка на перевозчика и история статусов
 
 ## I. Платежи
 
 - ✅ Stripe Connect + Link + platform billing (API) — Connect опционален (`PAYMENT_MODEL=connect`)
 - ✅ Payments hub в админке
 - ⬜ PayPal / local methods
-- ⬜ Stripe Tax
+- 🟡 Stripe Tax (Settings Tax tab + checkout; Dashboard enable still required)
 - ✅ Platform MoR (default): checkout на platform Stripe, balance, payout requests
 - ✅ MoR: refund через Stripe API + webhook `charge.refunded`
 - ✅ MoR: partial refund по строкам заказа

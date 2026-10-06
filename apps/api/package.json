@@ -8,10 +8,13 @@
     "start": "tsx src/dev-server.ts",
     "build": "npm run build -w @ugclab/i18n && npm run build -w @ugclab/tenant && tsc --noEmit",
     "lint": "tsc --noEmit",
+    "test": "tsx --test src/lib/finik/finik.test.ts",
+    "test:finik": "tsx --test src/lib/finik/finik.test.ts",
     "deploy": "cd ../.. && vercel --prod --yes"
   },
   "dependencies": {
     "@hono/node-server": "^1.14.4",
+    "@mancho.devs/authorizer": "^2.12.8",
     "@ugclab/database": "*",
     "@ugclab/i18n": "*",
     "@ugclab/tenant": "*",
@@ -19,6 +22,7 @@
     "dotenv": "^16.5.0",
     "hono": "^4.7.10",
     "jose": "^6.0.11",
+    "postgres": "^3.4.9",
     "stripe": "^17.7.0",
     "zod": "^3.25.28"
   },

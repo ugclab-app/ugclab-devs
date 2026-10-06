@@ -19,10 +19,11 @@ In the Vercel dashboard for **ugclab-devs-api**, set:
 
 Add at least:
 
-- `DATABASE_URL` — Postgres connection string (required; without it API routes time out)
+- `DATABASE_URL` — Supabase **transaction pooler** (port **6543**, `pgbouncer=true`); see [docs/SUPABASE.md](../../docs/SUPABASE.md). Do **not** set `DIRECT_URL` on Vercel (migrations only).
+- `CRON_SECRET` — random string; use with external cron (Hobby) or Vercel Cron (Pro) → `/api/health/ready`
 - `AUTH_SECRET` — JWT signing secret
 - `MERCHANT_ADMIN_URL` — `https://admin.tescommerce.com` (CORS + signup redirect)
-- `SESSION_COOKIE_DOMAIN` — optional; defaults to `.tescommerce.com` on production hosts
+- `SESSION_COOKIE_DOMAIN` — recommended: `.tescommerce.com` (session cookie on admin + API)
 - `PLATFORM_URL` — `https://tescommerce.com`
 - `PLATFORM_ADMIN_URL` — platform admin URL (CORS)
 - `STOREFRONT_URL` — storefront origin (CORS)

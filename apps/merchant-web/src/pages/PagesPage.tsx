@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import { AdminPageShell } from "@/components/admin-page-shell";
+import { useAdminT } from "@/hooks/use-admin-t";
 import {
   PageFormFields,
   formDataToPageBody,
@@ -52,12 +53,26 @@ function statusBadge(status: StorePageRow["status"]) {
 }
 
 export default function PagesPage() {
+  const { ta, t } = useAdminT();
   const { tenant } = useAuth();
   const qc = useQueryClient();
   const [params, setParams] = useSearchParams();
   const [alert, setAlert] = useState<{ ok?: boolean; message?: string }>({});
   const [template, setTemplate] = useState<PageTemplate | null>(null);
   const [formKey, setFormKey] = useState(0);
+  const [actionFlash, setActionFlash] = useState<string | null>(null);
+  const [actionBusy, setActionBusy] = useState<string | null>(null);
+
+  async function flashAction(key: string, fn: () => Promise<void>) {
+    setActionBusy(key);
+    try {
+      await fn();
+      setActionFlash(key);
+      window.setTimeout(() => setActionFlash(null), 420);
+    } finally {
+      setActionBusy(null);
+    }
+  }
 
   const queryKey = ["pages", params.toString()];
   const listParams = new URLSearchParams();
@@ -87,8 +102,9 @@ export default function PagesPage() {
 
   return (
     <AdminPageShell
-      title="Pages & blog"
-      description="Static pages, blog posts, SEO, and scheduled publishing."
+      crumbs={[{ label: t.nav.pages }]}
+      title={ta("pagesPage.title")}
+      description={ta("pagesPage.description")}
     >
       <div className="mb-4 flex flex-wrap gap-2">
         {FILTERS.map((f) => {
@@ -167,35 +183,49 @@ export default function PagesPage() {
                       </p>
                     ) : null}
                   </div>
-                  <div className="flex flex-wrap gap-2 text-sm">
+                  <div className="review-chip-row !mt-0">
                     {tenant ? (
                       <a
                         href={getPagePreviewUrl(tenant.slug, p)}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-violet-600 hover:underline"
+                        className="review-chip review-chip--accent"
                       >
                         Preview
                       </a>
                     ) : null}
-                    <Link to={`/pages/${p.id}/edit`} className="text-violet-600">
+                    <Link
+                      to={`/pages/${p.id}/edit`}
+                      className="review-chip review-chip--accent"
+                    >
                       Edit
                     </Link>
                     <button
                       type="button"
-                      className="text-zinc-600"
-                      onClick={async () => {
-                        await api.duplicatePage(p.id);
-                        await qc.invalidateQueries({ queryKey: ["pages"] });
-                        setAlert({ ok: true, message: "Duplicated as draft" });
-                      }}
+                      disabled={actionBusy === `dup-${p.id}`}
+                      className={`review-chip review-chip--idle${
+                        actionFlash === `dup-${p.id}` ? " review-chip--flash" : ""
+                      }${actionBusy === `dup-${p.id}` ? " review-chip--busy" : ""}`}
+                      onClick={() =>
+                        void flashAction(`dup-${p.id}`, async () => {
+                          await api.duplicatePage(p.id);
+                          await qc.invalidateQueries({ queryKey: ["pages"] });
+                          setAlert({ ok: true, message: "Duplicated as draft" });
+                        })
+                      }
                     >
-                      Duplicate
+                      {actionBusy === `dup-${p.id}` ? (
+                        <span className="review-chip__spinner" aria-hidden />
+                      ) : null}
+                      <span>Duplicate</span>
                     </button>
                     <button
                       type="button"
-                      className="text-red-600"
-                      onClick={async () => {
+                      disabled={actionBusy === `del-${p.id}`}
+                      className={`review-chip review-chip--danger${
+                        actionFlash === `del-${p.id}` ? " review-chip--flash" : ""
+                      }${actionBusy === `del-${p.id}` ? " review-chip--busy" : ""}`}
+                      onClick={() => {
                         if (
                           !window.confirm(
                             `Delete “${p.title}”? This cannot be undone.`
@@ -203,11 +233,16 @@ export default function PagesPage() {
                         ) {
                           return;
                         }
-                        await api.deletePage(p.id);
-                        await qc.invalidateQueries({ queryKey: ["pages"] });
+                        void flashAction(`del-${p.id}`, async () => {
+                          await api.deletePage(p.id);
+                          await qc.invalidateQueries({ queryKey: ["pages"] });
+                        });
                       }}
                     >
-                      Delete
+                      {actionBusy === `del-${p.id}` ? (
+                        <span className="review-chip__spinner" aria-hidden />
+                      ) : null}
+                      <span>Delete</span>
                     </button>
                   </div>
                 </li>

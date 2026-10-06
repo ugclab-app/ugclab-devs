@@ -2,46 +2,35 @@ import { useState } from "react";
 import { AdminPageShell } from "@/components/admin-page-shell";
 import { FormAlert } from "@/components/form-alert";
 import { api } from "@/api/client";
-import { useAdminLocale } from "@/context/admin-locale";
-
-const DOCS = [
-  {
-    title: "Payments (MoR)",
-    href: "https://github.com",
-    desc: "Payouts, refunds, and Stripe checkout — see docs/PAYMENTS-MOR.md in the repo.",
-  },
-  {
-    title: "Shipping & Shippo",
-    href: "https://goshippo.com/docs",
-    desc: "Set SHIPPO_API_KEY for labels. DHL/FedEx rates appear via Shippo carriers.",
-  },
-  {
-    title: "Email marketing",
-    href: "#",
-    desc: "Campaigns, segments, automations. Requires RESEND_API_KEY or SENDGRID_API_KEY.",
-  },
-];
+import { useAdminT } from "@/hooks/use-admin-t";
 
 const STATUS_URL = import.meta.env.VITE_STATUS_PAGE_URL ?? "";
 
 export default function HelpPage() {
-  const { t } = useAdminLocale();
+  const { ta, t } = useAdminT();
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [alert, setAlert] = useState<{ ok?: boolean; message?: string }>({});
   const [pending, setPending] = useState(false);
 
+  const docs = [
+    { title: ta("helpPage.docPaymentsTitle"), desc: ta("helpPage.docPaymentsDesc") },
+    { title: ta("helpPage.docGopayTitle"), desc: ta("helpPage.docGopayDesc") },
+    { title: ta("helpPage.docShippingTitle"), desc: ta("helpPage.docShippingDesc") },
+    { title: ta("helpPage.docEmailTitle"), desc: ta("helpPage.docEmailDesc") },
+  ];
+
   return (
     <AdminPageShell
-      crumbs={[{ label: t.help ?? "Help" }]}
-      title={t.help ?? "Help & support"}
-      description="Documentation links and contact platform support."
+      crumbs={[{ label: t.help }]}
+      title={ta("helpPage.title")}
+      description={ta("helpPage.description")}
     >
       <div className="grid gap-6 lg:grid-cols-2">
-        <section className="admin-card p-6 space-y-4">
-          <h2 className="font-semibold text-zinc-900">Help center</h2>
+        <section className="admin-card space-y-4 p-6">
+          <h2 className="font-semibold text-zinc-900">{ta("helpPage.helpCenter")}</h2>
           <ul className="space-y-3">
-            {DOCS.map((d) => (
+            {docs.map((d) => (
               <li key={d.title} className="rounded-lg border border-zinc-100 p-4">
                 <p className="font-medium text-zinc-900">{d.title}</p>
                 <p className="mt-1 text-sm text-zinc-500">{d.desc}</p>
@@ -55,20 +44,16 @@ export default function HelpPage() {
               rel="noreferrer"
               className="text-sm font-semibold text-violet-600 hover:underline"
             >
-              Platform status page →
+              {ta("helpPage.statusLink")}
             </a>
           ) : (
-            <p className="text-xs text-zinc-400">
-              Set VITE_STATUS_PAGE_URL for a public status link.
-            </p>
+            <p className="text-xs text-zinc-400">{ta("helpPage.statusMissing")}</p>
           )}
         </section>
 
         <section className="admin-card p-6">
-          <h2 className="font-semibold text-zinc-900">{t.support ?? "Contact support"}</h2>
-          <p className="mt-1 text-sm text-zinc-500">
-            We reply by email. Urgent payout or payment issues — mention order #.
-          </p>
+          <h2 className="font-semibold text-zinc-900">{ta("helpPage.contactSupport")}</h2>
+          <p className="mt-1 text-sm text-zinc-500">{ta("helpPage.contactHint")}</p>
           <div className="mt-4">
             <FormAlert ok={alert.ok} message={alert.message} />
           </div>
@@ -94,7 +79,7 @@ export default function HelpPage() {
             }}
           >
             <label className="block text-sm">
-              Subject
+              {ta("helpPage.subject")}
               <input
                 className="ugclab-input mt-1.5 w-full"
                 value={subject}
@@ -103,7 +88,7 @@ export default function HelpPage() {
               />
             </label>
             <label className="block text-sm">
-              Message
+              {ta("helpPage.message")}
               <textarea
                 className="ugclab-input mt-1.5 w-full min-h-[120px]"
                 value={message}
@@ -116,7 +101,7 @@ export default function HelpPage() {
               disabled={pending}
               className="ugclab-btn ugclab-btn-primary text-sm disabled:opacity-50"
             >
-              {pending ? "Sending…" : "Send to support"}
+              {pending ? ta("helpPage.sending") : ta("helpPage.send")}
             </button>
           </form>
         </section>

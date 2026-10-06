@@ -27,6 +27,12 @@ export async function getSegmentRecipients(
   if (segment === EmailCampaignSegment.PRODUCT && opts.productId) {
     return getProductBuyers(tenantId, opts.productId);
   }
+  if (segment === EmailCampaignSegment.RECENT_30) {
+    return getRecentBuyers(tenantId, 30);
+  }
+  if (segment === EmailCampaignSegment.RFM_CHAMPIONS) {
+    return getRfmChampions(tenantId);
+  }
 
   const customers = await prisma.customer.findMany({
     where: {
@@ -71,11 +77,18 @@ export async function getSegmentRecipients(
 
   if (segment === EmailCampaignSegment.ALL) {
     const subs = await prisma.emailSubscriber.findMany({
-      where: { tenantId, marketingOptOut: false },
+      where: {
+        tenantId,
+        marketingOptOut: false,
+        OR: [{ confirmedAt: { not: null } }, { confirmedAt: null }],
+      },
     });
+    // Only include confirmed, or legacy (confirmedAt null treated as confirmed for imports)
     for (const s of subs) {
       const email = s.email.trim().toLowerCase();
       if (!email || seen.has(email)) continue;
+      // Pending double-opt-in: confirmedAt null AND source newsletter_pending
+      if (s.source === "newsletter_pending" && !s.confirmedAt) continue;
       seen.add(email);
       out.push({ email, name: s.name });
     }
@@ -192,6 +205,53 @@ async function getProductBuyers(tenantId: string, productId: string) {
   return out;
 }
 
+async function getRecentBuyers(tenantId: string, days: number) {
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const customers = await prisma.customer.findMany({
+    where: {
+      tenantId,
+      marketingOptOut: false,
+      emailBounced: false,
+      orders: {
+        some: {
+          status: { in: [OrderStatus.PAID, OrderStatus.FULFILLED] },
+          createdAt: { gte: since },
+        },
+      },
+    },
+    select: { email: true, name: true },
+  });
+  return customers.map((c) => ({
+    email: c.email.toLowerCase(),
+    name: c.name,
+  }));
+}
+
+/** Recent buyers (30d) who also spent $500+ lifetime — RFM-style champions. */
+async function getRfmChampions(tenantId: string) {
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const customers = await prisma.customer.findMany({
+    where: {
+      tenantId,
+      marketingOptOut: false,
+      emailBounced: false,
+    },
+    include: {
+      orders: {
+        where: { status: { in: [OrderStatus.PAID, OrderStatus.FULFILLED] } },
+        select: { totalAmount: true, createdAt: true },
+      },
+    },
+  });
+  return customers
+    .filter((c) => {
+      const spent = c.orders.reduce((s, o) => s + o.totalAmount, 0);
+      const recent = c.orders.some((o) => o.createdAt >= since);
+      return spent >= VIP_THRESHOLD && recent;
+    })
+    .map((c) => ({ email: c.email.toLowerCase(), name: c.name }));
+}
+
 export function segmentLabel(segment: CampaignSegment): string {
   const labels: Record<CampaignSegment, string> = {
     ALL: "All customers & subscribers",
@@ -203,6 +263,8 @@ export function segmentLabel(segment: CampaignSegment): string {
     INACTIVE_90: "Inactive 90+ days (win-back)",
     COLLECTION: "Bought from collection",
     PRODUCT: "Bought this product",
+    RECENT_30: "Ordered in last 30 days",
+    RFM_CHAMPIONS: "Champions (VIP + ordered 30d)",
   };
   return labels[segment] ?? segment;
 }

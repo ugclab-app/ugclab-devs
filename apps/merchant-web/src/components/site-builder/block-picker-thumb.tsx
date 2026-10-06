@@ -104,6 +104,23 @@ export function BlockPickerThumb({ layout }: { layout: BlockThumbLayout }) {
           ))}
         </div>
       );
+    case "features-icons":
+      return (
+        <div className="block-picker-thumb-inner grid grid-cols-3 gap-1 p-2">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="flex flex-col items-center gap-0.5">
+              <span
+                className="flex items-center justify-center rounded-md text-[9px] font-bold text-white"
+                style={{ width: 14, height: 14, background: primary }}
+              >
+                ✓
+              </span>
+              {bar({ width: "100%", height: 2, background: "#d4d4d8" })}
+              {bar({ width: "80%", height: 2, background: "#e4e4e7" })}
+            </div>
+          ))}
+        </div>
+      );
     case "gallery-grid":
       return (
         <div className="block-picker-thumb-inner grid grid-cols-3 gap-0.5 p-1.5">
@@ -207,6 +224,50 @@ export function BlockPickerThumb({ layout }: { layout: BlockThumbLayout }) {
       return (
         <div className="block-picker-thumb-inner flex items-center justify-center bg-amber-50">
           {bar({ width: "70%", height: 4, background: "#d97706" })}
+        </div>
+      );
+    case "reviews-grid":
+      return (
+        <div className="block-picker-thumb-inner grid grid-cols-2 gap-0.5 p-1.5">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="rounded-sm border border-zinc-200 bg-white p-0.5">
+              {bar({ width: "100%", height: 2, background: "#a1a1aa" })}
+              {bar({ width: "80%", height: 1, marginTop: 1, background: "#e4e4e7" })}
+            </div>
+          ))}
+        </div>
+      );
+    case "reviews-carousel":
+      return (
+        <div className="block-picker-thumb-inner flex gap-0.5 p-1.5 overflow-hidden">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="w-6 shrink-0 rounded-sm bg-zinc-200" style={{ height: 28 }} />
+          ))}
+        </div>
+      );
+    case "reviews-quote":
+      return (
+        <div className="block-picker-thumb-inner flex flex-col items-center justify-center p-2">
+          {bar({ width: "70%", height: 2, background: "#fbbf24" })}
+          {bar({ width: "90%", height: 3, marginTop: 3, background: "#d4d4d8" })}
+        </div>
+      );
+    case "reviews-avatars":
+      return (
+        <div className="block-picker-thumb-inner grid grid-cols-3 gap-0.5 p-1.5">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="flex flex-col items-center gap-0.5">
+              <span className="rounded-full bg-violet-200" style={{ width: 8, height: 8 }} />
+              {bar({ width: "100%", height: 1, background: "#d4d4d8" })}
+            </div>
+          ))}
+        </div>
+      );
+    case "reviews-trust":
+      return (
+        <div className="block-picker-thumb-inner flex flex-col items-center justify-center gap-0.5 p-1">
+          <span className="text-[10px] text-amber-500">★★★★★</span>
+          {bar({ width: "60%", height: 2, background: "#d4d4d8" })}
         </div>
       );
     default:

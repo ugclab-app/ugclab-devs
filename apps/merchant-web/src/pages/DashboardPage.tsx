@@ -15,8 +15,11 @@ import { OnboardingWizard } from "@/components/onboarding-wizard";
 import { StoreUrlCard } from "@/components/store-url-card";
 import { FirstSalePanel } from "@/components/first-sale-panel";
 import { PlanLimitsBanner } from "@/components/plan-limits-banner";
+import { DailyPulsePanel } from "@/components/daily-pulse-panel";
+import { useAdminT } from "@/hooks/use-admin-t";
 
 export default function DashboardPage() {
+  const { ta } = useAdminT();
   const { tenant } = useAuth();
   const [params, setParams] = useSearchParams();
   const range = params.get("range") === "30" ? 30 : 7;
@@ -28,7 +31,7 @@ export default function DashboardPage() {
 
   if (!tenant) return null;
   if (isLoading || !data) {
-    return <p className="text-zinc-500">Loading dashboard…</p>;
+    return <p className="text-zinc-500">{ta("dashboard.loading")}</p>;
   }
 
   const metrics = data.metrics as {
@@ -88,14 +91,18 @@ export default function DashboardPage() {
         productCount={metrics.productCount}
       />
       <div>
-        <h1 className="text-2xl font-bold text-zinc-900">Welcome back</h1>
+        <h1 className="text-2xl font-bold text-zinc-900">{ta("dashboard.welcomeBack")}</h1>
         <p className="text-sm text-zinc-500">
-          {metrics.ordersToday} orders today ·{" "}
-          {formatMoney(metrics.revenueToday, currency)} revenue today
+          {ta("dashboard.ordersToday", {
+            count: metrics.ordersToday,
+            revenue: formatMoney(metrics.revenueToday, currency),
+          })}
         </p>
       </div>
 
       <NotificationsBar />
+
+      <DailyPulsePanel />
 
       <FirstSalePanel firstSale={firstSale} currency={currency} />
 

@@ -2,45 +2,99 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Button, Input } from "@ugclab/ui";
 import { getMessages } from "@ugclab/i18n";
+import { publicSignupUrl } from "@/lib/api-public";
 import { merchantAdminUrl } from "@/lib/urls";
 
 const c = getMessages().common;
 
+const COUNTRIES = [
+  { code: "US", label: "United States" },
+  { code: "KG", label: "Kyrgyzstan" },
+  { code: "KZ", label: "Kazakhstan" },
+  { code: "RU", label: "Russia" },
+  { code: "GB", label: "United Kingdom" },
+  { code: "DE", label: "Germany" },
+  { code: "FR", label: "France" },
+  { code: "CA", label: "Canada" },
+  { code: "AU", label: "Australia" },
+  { code: "AE", label: "UAE" },
+  { code: "TR", label: "Turkey" },
+  { code: "IN", label: "India" },
+] as const;
+
+function parseSignupError(data: unknown, status: number): string {
+  if (status === 504 || status === 502) {
+    return "Server timed out. Try again in a minute or contact support.";
+  }
+  if (!data || typeof data !== "object") return "Signup failed";
+  const err = (data as { error?: unknown }).error;
+  if (typeof err === "string") return err;
+  if (err && typeof err === "object" && "formErrors" in err) {
+    const fe = (err as { formErrors?: string[] }).formErrors;
+    if (fe?.[0]) return fe[0];
+  }
+  return "Signup failed";
+}
+
 export function SignupPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [slowHint, setSlowHint] = useState(false);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
     setLoading(true);
+    setSlowHint(false);
 
     const form = new FormData(e.currentTarget);
-    const res = await fetch("/api/public/signup", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: form.get("name"),
-        email: form.get("email"),
-        password: form.get("password"),
-        storeName: form.get("storeName"),
-        country: form.get("country") || "US",
-      }),
-    });
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 55_000);
+    const slowTimer = window.setTimeout(() => setSlowHint(true), 8_000);
 
-    const data = (await res.json()) as { error?: string | { formErrors?: string[] }; redirect?: string };
-    setLoading(false);
+    try {
+      const res = await fetch(publicSignupUrl(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify({
+          name: form.get("name"),
+          email: form.get("email"),
+          password: form.get("password"),
+          storeName: form.get("storeName"),
+          country: form.get("country") || "US",
+          ref: new URLSearchParams(window.location.search).get("ref") || undefined,
+        }),
+      });
 
-    if (!res.ok) {
-      const msg =
-        typeof data.error === "string"
-          ? data.error
-          : "Signup failed";
-      setError(msg);
-      return;
+      let data: { error?: unknown; redirect?: string } = {};
+      try {
+        data = (await res.json()) as typeof data;
+      } catch {
+        data = {};
+      }
+
+      if (!res.ok) {
+        setError(parseSignupError(data, res.status));
+        return;
+      }
+
+      window.location.href =
+        typeof data.redirect === "string"
+          ? data.redirect
+          : `${merchantAdminUrl}/login`;
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") {
+        setError("Request timed out. The server may be starting up — try again.");
+      } else {
+        setError("Network error. Check your connection and try again.");
+      }
+    } finally {
+      window.clearTimeout(timeout);
+      window.clearTimeout(slowTimer);
+      setSlowHint(false);
+      setLoading(false);
     }
-
-    window.location.href = data.redirect ?? `${merchantAdminUrl}/login`;
   }
 
   return (
@@ -72,16 +126,36 @@ export function SignupPage() {
 
           <form onSubmit={onSubmit} className="mt-8 flex flex-col gap-4">
             <Input name="name" label="Your name" required />
-            <Input name="email" type="email" label="Email" required />
-            <Input name="password" type="password" label="Password" required minLength={8} />
-            <Input name="storeName" label="Store name" required />
+            <Input name="email" type="email" label="Email" required autoComplete="email" />
             <Input
-              name="country"
-              label="Country code"
-              maxLength={2}
-              defaultValue="US"
-              placeholder="US"
+              name="password"
+              type="password"
+              label="Password"
+              required
+              minLength={8}
+              autoComplete="new-password"
             />
+            <Input name="storeName" label="Store name" required />
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-zinc-700">Country</span>
+              <select
+                name="country"
+                defaultValue="US"
+                className="ugclab-select w-full"
+                required
+              >
+                {COUNTRIES.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.label} ({c.code})
+                  </option>
+                ))}
+              </select>
+            </label>
+            {slowHint && loading ? (
+              <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                Still working… First request can take up to a minute if the server was idle.
+              </p>
+            ) : null}
             {error ? (
               <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
             ) : null}
@@ -96,7 +170,10 @@ export function SignupPage() {
 
           <p className="mt-6 text-center text-sm text-zinc-500">
             Already have an account?{" "}
-            <a href={`${merchantAdminUrl}/login`} className="font-medium text-violet-600 hover:underline">
+            <a
+              href={`${merchantAdminUrl}/login`}
+              className="font-medium text-violet-600 hover:underline"
+            >
               Sign in
             </a>
           </p>

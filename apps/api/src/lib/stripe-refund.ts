@@ -1,5 +1,8 @@
 import { OrderStatus, prisma } from "@ugclab/database";
+import { formatMoney } from "@ugclab/i18n";
 import { getStripe, isStripeConfigured } from "./stripe.js";
+import { voidAffiliateCommissionForOrder } from "./affiliate.js";
+import { voidPlatformReferralForRefund } from "./platform-partner.js";
 
 export type RefundLineInput = { lineId: string; quantity: number };
 
@@ -76,7 +79,7 @@ export async function markOrderRefunded(
       })
     : await prisma.order.update({
         where: { id: orderId },
-        data: { status: OrderStatus.REFUNDED },
+        data: { status: OrderStatus.REFUNDED, payoutBlocked: true, fundsReleasedAt: null },
         include: { items: true, customer: true, events: { orderBy: { createdAt: "desc" } } },
       });
   await prisma.orderEvent.create({
@@ -94,7 +97,22 @@ export async function markOrderRefunded(
     },
   });
 
+  const { emailCustomerAboutOrder, emailMerchantAboutOrder } = await import(
+    "./transactional-email.js"
+  );
+  const amount = formatMoney(opts.refundAmountCents ?? order.totalAmount, order.currency);
+  await emailCustomerAboutOrder(orderId, "orderRefunded", {
+    amount,
+    reason: opts.reason?.trim() || opts.stripeNote || "",
+  });
+  await emailMerchantAboutOrder(orderId, "merchantRefund", {
+    amount,
+    reason: opts.reason?.trim() || opts.stripeNote || "",
+  });
+
   if (!partial) {
+    await voidAffiliateCommissionForOrder(orderId).catch(console.error);
+    await voidPlatformReferralForRefund(orderId).catch(console.error);
     return updated;
   }
   return prisma.order.findUnique({

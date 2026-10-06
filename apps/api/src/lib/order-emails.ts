@@ -8,12 +8,12 @@ export async function sendCustomerOrderReceipt(orderId: string) {
     include: {
       customer: true,
       items: true,
+      digitalDownloads: true,
       tenant: { include: { settings: true } },
     },
   });
-  if (!order?.customer?.email) {
-    throw new Error("No customer email on this order");
-  }
+  const to = order?.customer?.email || order?.guestEmail;
+  if (!order || !to) return;
 
   const total = formatMoney(order.totalAmount, order.currency);
   const itemsList = order.items
@@ -23,12 +23,21 @@ export async function sendCustomerOrderReceipt(orderId: string) {
     )
     .join("<br/>");
 
+  const base = process.env.STOREFRONT_URL ?? "http://localhost:3002";
+  const downloadLinks = order.digitalDownloads
+    .map(
+      (d) =>
+        `<a href="${base}/api/store/download/${d.token}?tenant=${order.tenant.slug}">Download</a>`
+    )
+    .join("<br/>");
+
   const vars: Record<string, string> = {
     orderNumber: order.orderNumber,
     storeName: order.tenant.name,
     status: order.status,
     total,
     items: itemsList,
+    downloads: downloadLinks,
   };
 
   const defaultSubject = `Receipt for order #${order.orderNumber} — ${order.tenant.name}`;
@@ -39,6 +48,7 @@ export async function sendCustomerOrderReceipt(orderId: string) {
       <p><strong>Status:</strong> ${order.status}</p>
       <p><strong>Items:</strong><br/>${itemsList}</p>
       <p><strong>Total:</strong> ${total}</p>
+      ${downloadLinks ? `<p><strong>Downloads:</strong><br/>${downloadLinks}</p>` : ""}
     `;
 
   const subjectTemplate =
@@ -54,7 +64,7 @@ export async function sendCustomerOrderReceipt(orderId: string) {
   );
 
   await sendStoreEmail(order.tenantId, {
-    to: order.customer.email,
+    to,
     subject,
     html,
   });

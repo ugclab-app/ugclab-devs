@@ -8,6 +8,10 @@ import { QueryState } from "@/components/query-state";
 import { PlatformNotes } from "@/components/platform-notes";
 import { TenantBillingPanel } from "@/components/tenant-billing-panel";
 import { TenantFeatureFlags } from "@/components/tenant-feature-flags";
+import { TenantOpsHub } from "@/components/tenant-ops-hub";
+import { TenantProductsPanel } from "@/components/tenant-products-panel";
+import { TenantMessagesPanel } from "@/components/tenant-messages-panel";
+import { PermissionGate } from "@/components/permission-gate";
 
 export default function TenantDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -19,11 +23,18 @@ export default function TenantDetailPage() {
     enabled: !!id,
   });
 
+  const opsQuery = useQuery({
+    queryKey: ["tenant-ops", id],
+    queryFn: () => api.tenantOpsHub(id!),
+    enabled: !!id,
+  });
+
   return (
     <QueryState query={query}>
       {(data) => (
         <TenantDetailContent
           data={data}
+          ops={opsQuery.data}
           id={id!}
           onRefresh={async () => {
             await queryClient.invalidateQueries({ queryKey: ["tenant", id] });
@@ -37,10 +48,12 @@ export default function TenantDetailPage() {
 
 function TenantDetailContent({
   data,
+  ops,
   id,
   onRefresh,
 }: {
-  data: { tenant: unknown };
+  data: { tenant: unknown; paymentModel?: string };
+  ops?: Awaited<ReturnType<typeof api.tenantOpsHub>>;
   id: string;
   onRefresh: () => Promise<void>;
 }) {
@@ -61,7 +74,7 @@ function TenantDetailContent({
     subscriptionPlanId: string | null;
     platformFeeBpsOverride: number | null;
     storefrontUrl: string;
-    owner: { email: string; name: string | null };
+    owner: { id: string; email: string; name: string | null };
     subscriptionPlan: {
       id: string;
       name: string;
@@ -77,11 +90,32 @@ function TenantDetailContent({
       status: string;
       totalAmount: number;
       currency: string;
+      affiliateCommissionCents?: number;
+      referral?: { code: string; displayName: string } | null;
       customer?: { email: string } | null;
     }[];
   };
 
+  const paymentModel = data.paymentModel ?? "connect";
+  const mor = paymentModel === "mor";
+  const opsData = ops as {
+    affiliates?: { owedToCreatorsCents: number; platformDisabled: boolean };
+    mor?: { availableCents: number; currency: string };
+    marketing?: { paused: boolean };
+  } | undefined;
+  const riskBadges: { label: string; tone: "red" | "amber" }[] = [];
+  if (opsData?.marketing?.paused) {
+    riskBadges.push({ label: "Marketing paused", tone: "red" });
+  }
+  if (opsData?.affiliates?.platformDisabled) {
+    riskBadges.push({ label: "Affiliates locked", tone: "red" });
+  }
+  if (t.status === "SUSPENDED") {
+    riskBadges.push({ label: "Suspended", tone: "amber" });
+  }
+
   const currency = t.settings?.currency ?? "USD";
+  const morCurrency = opsData?.mor?.currency ?? currency;
   const merchantUrl = import.meta.env.VITE_MERCHANT_ADMIN_URL ?? "http://localhost:3001";
   const plans = (plansData?.plans ?? []) as { id: string; name: string; slug: string }[];
   const planFeeBps = t.subscriptionPlan?.platformFeeBps ?? 500;
@@ -100,30 +134,80 @@ function TenantDetailContent({
       <Link to="/tenants" className="text-sm text-slate-500 hover:text-sky-600">
         ← Stores
       </Link>
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="platform-page-header">
         <div>
-          <h1 className="text-2xl font-bold">{t.name}</h1>
+          <h1>{t.name}</h1>
           <p className="font-mono text-sm text-slate-500">{t.slug}</p>
+          <p className="mt-1 text-sm text-slate-600">
+            Owner: {t.owner.email}
+            {t.owner.name ? ` (${t.owner.name})` : ""}
+          </p>
+          {riskBadges.length > 0 ? (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {riskBadges.map((b) => (
+                <span
+                  key={b.label}
+                  className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                    b.tone === "red"
+                      ? "bg-red-50 text-red-700"
+                      : "bg-amber-50 text-amber-800"
+                  }`}
+                >
+                  {b.label}
+                </span>
+              ))}
+            </div>
+          ) : null}
+          <p className="mt-1 font-mono text-xs text-slate-400">{t.id}</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {t.status !== "ACTIVE" ? (
+        <div className="platform-toolbar">
+          <button
+            type="button"
+            className="platform-btn-secondary text-sm"
+            onClick={() => {
+              void navigator.clipboard.writeText(t.id);
+            }}
+          >
+            Copy ID
+          </button>
+          <Link
+            to={`/domains?q=${encodeURIComponent(t.slug)}`}
+            className="platform-btn-secondary text-sm"
+          >
+            Domains
+          </Link>
+          <a
+            href={t.storefrontUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="platform-btn-secondary"
+          >
+            View store
+          </a>
+          <PermissionGate permission="users:impersonate">
             <button
               type="button"
-              onClick={() => setStatus("ACTIVE")}
-              className="ugclab-btn ugclab-btn-primary text-sm"
+              className="platform-btn-primary"
+              onClick={async () => {
+                const { url } = await api.impersonateUser(t.owner.id);
+                window.open(url, "_blank", "noopener,noreferrer");
+              }}
             >
-              Activate
+              Login as merchant
             </button>
-          ) : null}
-          {t.status !== "SUSPENDED" ? (
-            <button
-              type="button"
-              onClick={() => setStatus("SUSPENDED")}
-              className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700"
-            >
-              Suspend
-            </button>
-          ) : null}
+          </PermissionGate>
+          <PermissionGate permission="tenants:write">
+            {t.status !== "ACTIVE" ? (
+              <button type="button" onClick={() => setStatus("ACTIVE")} className="platform-btn-secondary">
+                Activate
+              </button>
+            ) : null}
+            {t.status !== "SUSPENDED" ? (
+              <button type="button" onClick={() => setStatus("SUSPENDED")} className="platform-btn-danger">
+                Suspend
+              </button>
+            ) : null}
+          </PermissionGate>
         </div>
       </div>
 
@@ -133,6 +217,39 @@ function TenantDetailContent({
         <Stat label="GMV (30d)" value={formatMoney(t.stats.gmv30d, currency)} />
         <Stat label="Orders (30d)" value={String(t.stats.orders30d)} />
       </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <a href="#store-products" className="platform-stat block transition hover:border-sky-300">
+          <p className="text-sm text-slate-500">Products</p>
+          <p className="mt-1 text-xl font-bold">{t._count.products}</p>
+        </a>
+        <Stat label="Customers" value={String(t._count.customers)} />
+        {mor && opsData?.mor ? (
+          <>
+            <Stat
+              label="Available balance"
+              value={formatMoney(opsData.mor.availableCents, morCurrency)}
+            />
+            <Stat
+              label="Owed to creators"
+              value={formatMoney(
+                opsData.affiliates?.owedToCreatorsCents ?? 0,
+                morCurrency
+              )}
+              highlight
+            />
+          </>
+        ) : null}
+      </div>
+
+      <TenantOpsHub tenantId={t.id} />
+
+      <TenantMessagesPanel tenantId={t.id} />
+
+      <TenantProductsPanel
+        tenantId={t.id}
+        tenantSlug={t.slug}
+        storefrontUrl={t.storefrontUrl}
+      />
 
       <section className="platform-card p-6 space-y-3 text-sm">
         <h2 className="font-semibold">Transfer ownership</h2>
@@ -272,11 +389,39 @@ function TenantDetailContent({
       <section className="platform-card overflow-hidden">
         <h2 className="border-b px-6 py-4 font-semibold">Recent orders</h2>
         <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b bg-slate-50 text-left text-xs uppercase text-slate-500">
+              <th className="px-6 py-2">Order</th>
+              <th className="px-6 py-2">Customer</th>
+              <th className="px-6 py-2">Referral</th>
+              <th className="px-6 py-2">Status</th>
+              <th className="px-6 py-2 text-right">Total</th>
+            </tr>
+          </thead>
           <tbody className="divide-y">
             {t.recentOrders.map((o) => (
               <tr key={o.id}>
-                <td className="px-6 py-3">#{o.orderNumber}</td>
+                <td className="px-6 py-3">
+                  <Link to={`/orders?q=${encodeURIComponent(o.orderNumber)}`} className="text-sky-600">
+                    #{o.orderNumber}
+                  </Link>
+                </td>
                 <td className="px-6 py-3">{o.customer?.email ?? "Guest"}</td>
+                <td className="px-6 py-3 text-xs">
+                  {o.referral ? (
+                    <>
+                      {o.referral.displayName}{" "}
+                      <span className="text-slate-500">({o.referral.code})</span>
+                      {(o.affiliateCommissionCents ?? 0) > 0 ? (
+                        <span className="block text-amber-700">
+                          {formatMoney(o.affiliateCommissionCents!, o.currency)} comm.
+                        </span>
+                      ) : null}
+                    </>
+                  ) : (
+                    "—"
+                  )}
+                </td>
                 <td className="px-6 py-3">{o.status}</td>
                 <td className="px-6 py-3 text-right">
                   {formatMoney(o.totalAmount, o.currency)}
@@ -285,7 +430,7 @@ function TenantDetailContent({
             ))}
             {t.recentOrders.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-6 py-8 text-center text-slate-500">
+                <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
                   No orders
                 </td>
               </tr>
@@ -297,11 +442,21 @@ function TenantDetailContent({
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({
+  label,
+  value,
+  highlight,
+}: {
+  label: string;
+  value: string;
+  highlight?: boolean;
+}) {
   return (
     <div className="platform-stat">
       <p className="text-sm text-slate-500">{label}</p>
-      <p className="mt-1 text-xl font-bold">{value}</p>
+      <p className={`mt-1 text-xl font-bold ${highlight ? "text-amber-800" : ""}`}>
+        {value}
+      </p>
     </div>
   );
 }

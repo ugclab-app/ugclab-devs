@@ -12,6 +12,7 @@ import { OrderNotes } from "@/components/order-notes";
 import { AdminPageShell } from "@/components/admin-page-shell";
 import { OrderShippoPanel } from "@/components/order-shippo-panel";
 import { OrderEditPanel, OrderTagsEditor } from "@/components/order-edit-panel";
+import { OrderShipmentsPanel } from "@/components/order-shipments-panel";
 import type { OrderStatus } from "@/lib/database-types";
 
 function PartialRefundForm({
@@ -92,6 +93,11 @@ export default function OrderDetailPage() {
     orderNumber: string;
     status: OrderStatus;
     trackingNumber: string | null;
+    buyerProtection?: boolean;
+    paymentCaptureStatus?: string | null;
+    paymentHold?: boolean;
+    fundsReleasedAt?: string | null;
+    buyerReceivedAt?: string | null;
     shippedAt: string | null;
     totalAmount: number;
     platformFeeAmount?: number;
@@ -123,12 +129,32 @@ export default function OrderDetailPage() {
       authorEmail: string | null;
       createdAt: string;
     }[];
+    affiliatePartner?: { displayName: string; code: string } | null;
+    affiliateCommission?: {
+      commissionCents: number;
+      commissionBps: number;
+      status: string;
+      payoutNote: string | null;
+    } | null;
+    affiliateCommissionCents?: number;
+    riskScore?: number | null;
+    riskLevel?: string | null;
+    fulfillmentMethod?: string | null;
+    pickupReadyAt?: string | null;
+    pickupWarehouseId?: string | null;
   };
 
   const paymentModel = (data as { paymentModel?: string }).paymentModel ?? "mor";
   const mor = paymentModel === "mor";
   const platformFee = order.platformFeeAmount ?? 0;
   const merchantNet = Math.max(0, order.totalAmount - platformFee);
+  const showCaptureActions =
+    order.paymentCaptureStatus === "AUTHORIZED" || !!order.paymentHold;
+
+  async function refreshOrder() {
+    await qc.invalidateQueries({ queryKey: ["order", id] });
+    await qc.invalidateQueries({ queryKey: ["orders"] });
+  }
 
   return (
     <AdminPageShell
@@ -235,6 +261,127 @@ export default function OrderDetailPage() {
           >
             Resend receipt
           </button>
+          {showCaptureActions ? (
+            <>
+              {order.paymentCaptureStatus === "AUTHORIZED" ? (
+                <>
+                  <button
+                    type="button"
+                    className="ugclab-btn ugclab-btn-primary text-sm"
+                    onClick={async () => {
+                      if (!confirm("Capture authorized payment?")) return;
+                      try {
+                        await api.captureOrder(order.id);
+                        await refreshOrder();
+                      } catch (e) {
+                        alert(e instanceof Error ? e.message : "Capture failed");
+                      }
+                    }}
+                  >
+                    Capture
+                  </button>
+                  <button
+                    type="button"
+                    className="ugclab-btn border border-zinc-200 bg-white text-sm"
+                    onClick={async () => {
+                      if (!confirm("Void this authorization?")) return;
+                      try {
+                        await api.voidAuthorization(order.id);
+                        await refreshOrder();
+                      } catch (e) {
+                        alert(e instanceof Error ? e.message : "Void failed");
+                      }
+                    }}
+                  >
+                    Void
+                  </button>
+                </>
+              ) : null}
+              {order.paymentHold ? (
+                <button
+                  type="button"
+                  className="ugclab-btn border border-amber-200 bg-amber-50 text-sm text-amber-900"
+                  onClick={async () => {
+                    if (!confirm("Release payment hold?")) return;
+                    try {
+                      await api.releaseHold(order.id);
+                      await refreshOrder();
+                    } catch (e) {
+                      alert(e instanceof Error ? e.message : "Release failed");
+                    }
+                  }}
+                >
+                  Release hold
+                </button>
+              ) : null}
+            </>
+          ) : null}
+          <button
+            type="button"
+            className="ugclab-btn border border-zinc-200 bg-white text-sm"
+            onClick={async () => {
+              try {
+                const preview = await api.fulfillmentPreview(order.id);
+                const groups = (preview.groups ?? []) as {
+                  warehouseName: string;
+                  lines: { title: string; quantity: number; stockOk: boolean }[];
+                }[];
+                if (preview.alreadySplit) {
+                  alert("Shipments already exist for this order.");
+                  return;
+                }
+                const summary = groups
+                  .map(
+                    (g) =>
+                      `• ${g.warehouseName}: ${g.lines
+                        .map((l) => `${l.title}×${l.quantity}${l.stockOk ? "" : " (low stock)"}`)
+                        .join(", ")}`
+                  )
+                  .join("\n");
+                if (
+                  !confirm(
+                    `Split into ${groups.length} warehouse shipment(s)?\n\n${summary || "No lines"}`
+                  )
+                )
+                  return;
+                const r = await api.splitFulfillments(order.id);
+                alert(`Created ${r.shipments?.length ?? 0} shipment(s)`);
+                await refreshOrder();
+                await qc.invalidateQueries({
+                  queryKey: ["order-fulfillments", order.id],
+                });
+                await qc.invalidateQueries({
+                  queryKey: ["order-fulfillment-preview", order.id],
+                });
+              } catch (e) {
+                alert(e instanceof Error ? e.message : "Split failed");
+              }
+            }}
+          >
+            Split fulfillments
+          </button>
+          {order.fulfillmentMethod === "PICKUP" && !order.pickupReadyAt ? (
+            <button
+              type="button"
+              className="ugclab-btn ugclab-btn-primary text-sm"
+              onClick={async () => {
+                if (!confirm("Mark ready for pickup and email the customer?")) return;
+                try {
+                  await api.markOrderReadyForPickup(order.id);
+                  await refreshOrder();
+                } catch (e) {
+                  alert(e instanceof Error ? e.message : "Failed");
+                }
+              }}
+            >
+              Ready for pickup
+            </button>
+          ) : null}
+          {order.fulfillmentMethod === "PICKUP" && order.pickupReadyAt ? (
+            <span className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-medium text-sky-900">
+              Ready since {new Date(order.pickupReadyAt).toLocaleString()}
+            </span>
+          ) : null}
         </div>
       }
     >
@@ -292,9 +439,70 @@ export default function OrderDetailPage() {
                 </p>
               </dl>
             ) : null}
+            {order.affiliatePartner ? (
+              <dl className="mt-4 space-y-2 border-t border-zinc-100 pt-4 text-xs text-zinc-600">
+                <div className="flex justify-between">
+                  <dt>Referred by</dt>
+                  <dd className="font-medium text-zinc-800">
+                    {order.affiliatePartner.displayName}
+                    <span className="font-mono text-zinc-400"> ({order.affiliatePartner.code})</span>
+                  </dd>
+                </div>
+                {(order.affiliateCommission?.commissionCents ??
+                  order.affiliateCommissionCents) ? (
+                  <div className="flex justify-between">
+                    <dt>Creator commission</dt>
+                    <dd className="font-semibold text-violet-700">
+                      {formatMoney(
+                        order.affiliateCommission?.commissionCents ??
+                          order.affiliateCommissionCents ??
+                          0,
+                        data.currency
+                      )}
+                      {order.affiliateCommission?.status ? (
+                        <span className="ml-1 font-normal text-zinc-500">
+                          · {order.affiliateCommission.status}
+                        </span>
+                      ) : null}
+                    </dd>
+                  </div>
+                ) : null}
+                <p className="text-zinc-400">You pay the creator off-platform.</p>
+              </dl>
+            ) : null}
             {order.stripePaymentId ? (
               <p className="mt-2 font-mono text-[10px] text-zinc-400 break-all">
                 Stripe: {order.stripePaymentId}
+              </p>
+            ) : null}
+            {order.buyerProtection && order.paymentCaptureStatus === "AUTHORIZED" ? (
+              <p className="mt-2 text-sm text-amber-800">
+                Funds reserved. The buyer is charged when you ship
+                {order.shippingCountry === "KG" ? " (tracking is optional for Kyrgyzstan)" : " with a tracking number"}.
+              </p>
+            ) : null}
+            {order.buyerProtection &&
+            (order.status === "PAID" || order.status === "FULFILLED") &&
+            !order.fundsReleasedAt ? (
+              <p className="mt-2 text-sm text-amber-800">
+                Charged. Payout waits until the buyer confirms receipt or the protection window ends.
+              </p>
+            ) : null}
+            {order.fundsReleasedAt ? (
+              <p className="mt-2 text-sm text-emerald-800">Payout released for this order.</p>
+            ) : null}
+            {order.paymentCaptureStatus && order.paymentCaptureStatus !== "NONE" ? (
+              <p className="mt-2 text-xs text-zinc-600">
+                Capture: {order.paymentCaptureStatus}
+                {order.paymentHold ? " · on hold" : ""}
+              </p>
+            ) : order.paymentHold ? (
+              <p className="mt-2 text-xs text-amber-700">Payment hold</p>
+            ) : null}
+            {order.riskScore != null || order.riskLevel ? (
+              <p className="mt-2 text-xs text-zinc-600">
+                Risk: {order.riskLevel ?? "—"}
+                {order.riskScore != null ? ` (${order.riskScore})` : ""}
               </p>
             ) : null}
             {order.trackingNumber ? (
@@ -308,6 +516,7 @@ export default function OrderDetailPage() {
             trackingNumber={order.trackingNumber}
             status={order.status}
           />
+          <OrderShipmentsPanel orderId={order.id} />
           <OrderLineFulfillment orderId={order.id} items={order.items} />
           {(order.status === "PAID" || order.status === "FULFILLED") &&
           order.items.length >= 1 ? (

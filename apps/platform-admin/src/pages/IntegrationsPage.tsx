@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import { QueryState } from "@/components/query-state";
@@ -5,11 +6,79 @@ import { QueryState } from "@/components/query-state";
 export default function IntegrationsPage() {
   const qc = useQueryClient();
   const query = useQuery({ queryKey: ["stripe-events"], queryFn: () => api.stripeEvents() });
+  const [orderId, setOrderId] = useState("");
+  const [tenantId, setTenantId] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  async function run(fn: () => Promise<unknown>, ok: string) {
+    setPending(true);
+    setMsg(null);
+    try {
+      await fn();
+      setMsg(ok);
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setPending(false);
+    }
+  }
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Integrations</h1>
       <p className="text-sm text-slate-500">Stripe webhook log and resync tools.</p>
+
+      <section className="platform-card space-y-4 p-5">
+        <h2 className="font-semibold">Stripe resync</h2>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="block text-sm">
+            Order ID
+            <input
+              className="ugclab-input mt-1 min-w-[16rem]"
+              value={orderId}
+              onChange={(e) => setOrderId(e.target.value)}
+              placeholder="cuid…"
+            />
+          </label>
+          <button
+            type="button"
+            disabled={pending || !orderId.trim()}
+            className="ugclab-btn ugclab-btn-primary text-sm disabled:opacity-50"
+            onClick={() =>
+              run(() => api.resyncOrder(orderId.trim()), "Order synced from Stripe")
+            }
+          >
+            Resync order
+          </button>
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="block text-sm">
+            Tenant ID
+            <input
+              className="ugclab-input mt-1 min-w-[16rem]"
+              value={tenantId}
+              onChange={(e) => setTenantId(e.target.value)}
+              placeholder="cuid…"
+            />
+          </label>
+          <button
+            type="button"
+            disabled={pending || !tenantId.trim()}
+            className="ugclab-btn border border-slate-200 bg-white text-sm disabled:opacity-50"
+            onClick={() =>
+              run(
+                () => api.resyncSubscription(tenantId.trim()),
+                "Subscription synced from Stripe"
+              )
+            }
+          >
+            Resync subscription
+          </button>
+        </div>
+        {msg ? <p className="text-sm text-slate-700">{msg}</p> : null}
+      </section>
+
       <QueryState query={query}>
         {(data) => (
           <>

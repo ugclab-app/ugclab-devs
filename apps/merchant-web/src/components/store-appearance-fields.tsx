@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import type { HomeSection, StoreTheme } from "@ugclab/tenant/store-theme";
 import { ImageUrlField } from "@/components/image-url-field";
@@ -231,13 +232,79 @@ export function StoreSocialFields({ theme }: { theme: StoreTheme }) {
   );
 }
 
+export function StorePasswordFields() {
+  const queryClient = useQueryClient();
+  const { data } = useQuery({
+    queryKey: ["storefront-password"],
+    queryFn: () => api.storefrontPassword(),
+  });
+  const [password, setPassword] = useState("");
+  const [pending, setPending] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function save(next: string) {
+    setPending(true);
+    setMessage(null);
+    try {
+      const res = await api.saveStorefrontPassword(next);
+      setPassword("");
+      setMessage(res.enabled ? "Password saved. Visitors must enter it." : "Password removed.");
+      await queryClient.invalidateQueries({ queryKey: ["storefront-password"] });
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Could not save");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <section className="admin-card space-y-3 p-6">
+      <h3 className="font-semibold">Store password</h3>
+      <p className="text-sm text-zinc-500">
+        {data?.enabled
+          ? "A password is on. The shop, cart, and checkout stay hidden until a visitor enters it."
+          : "Leave this empty to keep the store public. Set a password to hide the shop until someone enters it."}
+      </p>
+      <input
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder={data?.enabled ? "New password" : "Password"}
+        className="ugclab-input max-w-sm"
+        autoComplete="new-password"
+      />
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={pending || password.length < 4}
+          onClick={() => void save(password)}
+          className="ugclab-btn ugclab-btn-primary"
+        >
+          {pending ? "Saving…" : "Save password"}
+        </button>
+        {data?.enabled ? (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => void save("")}
+            className="ugclab-btn"
+          >
+            Remove password
+          </button>
+        ) : null}
+      </div>
+      {message ? <p className="text-sm text-zinc-600">{message}</p> : null}
+    </section>
+  );
+}
+
 export function StoreAdvancedFields({ theme }: { theme: StoreTheme }) {
   return (
     <section className="admin-card space-y-4 p-6">
       <h3 className="font-semibold">Advanced</h3>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="storeClosed" defaultChecked={theme.storeClosed} />
-        Store closed (landing only — hide shop & checkout)
+        Store closed (coming soon — hide the shop, cart, and checkout)
       </label>
       <Field label="Closed message">
         <textarea
@@ -315,10 +382,13 @@ export function StoreCheckoutThemeFields({ theme }: { theme: StoreTheme }) {
         />
         Show secure payment badges (cart, checkout, product)
       </label>
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" name="stripeTaxEnabled" defaultChecked={theme.stripeTaxEnabled} />
-        Stripe Tax on Checkout (enable Stripe Tax in Dashboard)
-      </label>
+      <p className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
+        Stripe Tax is managed in{" "}
+        <a href="/settings?tab=tax" className="font-medium text-violet-600 underline">
+          Settings → Tax
+        </a>
+        .
+      </p>
       <label className="flex items-center gap-2 text-sm">
         <input
           type="checkbox"

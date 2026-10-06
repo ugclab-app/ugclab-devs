@@ -1,5 +1,6 @@
 import { Link, useSearchParams } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { formatMoney } from "@ugclab/i18n";
 import { api } from "@/api/client";
 import { ProductsTable, type ProductRow } from "@/components/products-table";
@@ -10,17 +11,26 @@ import { ProductFilterChips } from "@/components/product-filter-chips";
 import { useAuth } from "@/context/auth";
 import { getStorefrontUrl } from "@/lib/storefront";
 import type { ProductStatus, ProductType } from "@/lib/database-types";
+import { useAdminT } from "@/hooks/use-admin-t";
+import { FormAlert } from "@/components/form-alert";
+import { CsvImportPanel } from "@/components/csv-import-panel";
 
-const SORT_OPTIONS = [
-  { value: "newest", label: "Newest first" },
-  { value: "oldest", label: "Oldest first" },
-  { value: "title-asc", label: "Title A–Z" },
-  { value: "title-desc", label: "Title Z–A" },
-  { value: "price-asc", label: "Price low–high" },
-  { value: "price-desc", label: "Price high–low" },
-];
+const CSV_TEMPLATE =
+  "id,title,slug,type,status,price_cents,inventory,tags,weight_grams,barcode\n" +
+  ',Sample Tee,sample-tee,PHYSICAL,ACTIVE,2999,10,"apparel;summer",200,\n';
 
 export default function ProductsPage() {
+  const { ta, c, t } = useAdminT();
+  const [importAlert, setImportAlert] = useState<{ ok?: boolean; message?: string }>({});
+  const [importOpen, setImportOpen] = useState(false);
+  const SORT_OPTIONS = [
+    { value: "newest", label: ta("sort.newest") },
+    { value: "oldest", label: ta("sort.oldest") },
+    { value: "title-asc", label: ta("sort.titleAsc") },
+    { value: "title-desc", label: ta("sort.titleDesc") },
+    { value: "price-asc", label: ta("sort.priceAsc") },
+    { value: "price-desc", label: ta("sort.priceDesc") },
+  ];
   const { tenant } = useAuth();
   const [params, setParams] = useSearchParams();
   const page = Math.max(1, parseInt(params.get("page") ?? "1", 10) || 1);
@@ -43,7 +53,17 @@ export default function ProductsPage() {
     title: string;
   }[];
 
-  if (isLoading) return <p className="text-zinc-500">Loading products…</p>;
+  function downloadTemplate() {
+    const blob = new Blob([CSV_TEMPLATE], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "products-import-template.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  if (isLoading) return <p className="text-zinc-500">{ta("productsPage.loading")}</p>;
 
   const lowStockFilter = params.get("lowStock") === "1";
   const typeFilter = params.get("type");
@@ -74,9 +94,9 @@ export default function ProductsPage() {
   }));
 
   const typeLabels: Record<string, string> = {
-    DIGITAL: "digital",
-    PHYSICAL: "physical",
-    SERVICE: "service",
+    DIGITAL: ta("status.productType.DIGITAL"),
+    PHYSICAL: ta("status.productType.PHYSICAL"),
+    SERVICE: ta("status.productType.SERVICE"),
   };
 
   const total = data?.total ?? rows.length;
@@ -90,21 +110,35 @@ export default function ProductsPage() {
 
   return (
     <div className="mx-auto max-w-6xl">
-      <Breadcrumbs items={[{ label: "Products" }]} />
+      <Breadcrumbs items={[{ label: t.nav.products }]} />
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-zinc-900">{ta("productsPage.title")}</h1>
+        <p className="mt-1 text-sm text-zinc-500">{ta("productsPage.description")}</p>
+      </div>
+      <FormAlert ok={importAlert.ok} message={importAlert.message} />
+      {importOpen ? (
+        <CsvImportPanel
+          onCancel={() => setImportOpen(false)}
+          onDone={(message) => {
+            setImportOpen(false);
+            setImportAlert({ ok: true, message });
+          }}
+        />
+      ) : null}
       <ProductFilterChips />
       {lowStockFilter ? (
         <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-900">
           Showing physical products with 5 or fewer units in stock.{" "}
           <Link to="/products" className="font-medium underline">
-            Show all
+            {c.all}
           </Link>
         </p>
       ) : null}
       {!lowStockFilter && typeFilter && typeLabels[typeFilter] ? (
         <p className="mb-4 rounded-lg border border-violet-200 bg-violet-50 px-4 py-2 text-sm text-violet-900">
-          Showing {typeLabels[typeFilter]} products only.{" "}
+          {typeLabels[typeFilter]}{" "}
           <Link to="/products" className="font-medium underline">
-            Show all
+            {c.all}
           </Link>
         </p>
       ) : null}
@@ -117,36 +151,35 @@ export default function ProductsPage() {
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
+            onClick={() => downloadTemplate()}
+            className="ugclab-btn border border-zinc-200 bg-white text-sm"
+          >
+            CSV template
+          </button>
+          <button
+            type="button"
             onClick={() => api.exportProductsCsv()}
             className="ugclab-btn border border-zinc-200 bg-white text-sm"
           >
-            Export CSV
+            {c.export}
           </button>
-          <label className="ugclab-btn border border-zinc-200 bg-white text-sm cursor-pointer">
-            Import CSV
-            <input
-              type="file"
-              accept=".csv"
-              className="hidden"
-              onChange={async (e) => {
-                const f = e.target.files?.[0];
-                if (!f) return;
-                const r = await api.importProductsCsv(f);
-                alert(`Imported ${r.created} products`);
-                e.target.value = "";
-              }}
-            />
-          </label>
+          <button
+            type="button"
+            onClick={() => setImportOpen(true)}
+            className="ugclab-btn border border-zinc-200 bg-white text-sm"
+          >
+            {c.import}
+          </button>
           <Link to="/products/new" className="ugclab-btn ugclab-btn-primary px-5 py-2.5 text-center">
-            New product
+            {ta("productsPage.addProduct")}
           </Link>
         </div>
       </div>
       {rows.length === 0 ? (
         <EmptyState
-          title="No products"
-          description="Create your first product."
-          actionLabel="Add product"
+          title={ta("productsPage.empty")}
+          description={ta("productsPage.emptyDesc")}
+          actionLabel={ta("productsPage.addProduct")}
           actionHref="/products/new"
         />
       ) : (

@@ -4,7 +4,7 @@
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
-      "env": ["DATABASE_URL", "AUTH_SECRET", "API_PUBLIC_URL"]
+      "env": ["DATABASE_URL", "DIRECT_URL", "AUTH_SECRET", "API_PUBLIC_URL"]
     },
     "dev": {
       "cache": false,

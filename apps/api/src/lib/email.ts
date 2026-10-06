@@ -5,7 +5,24 @@ export type SendEmailParams = {
   text?: string;
   from?: string;
   replyTo?: string;
+  /** Outlook / some clients; Gmail Important is still algorithmic. */
+  priority?: "high" | "normal";
 };
+
+/** RFC 4021 + legacy headers for high-priority display in mail clients. */
+export function highPriorityEmailHeaders(): Record<string, string> {
+  return {
+    Importance: "high",
+    Priority: "urgent",
+    "X-Priority": "1",
+    "X-MSMail-Priority": "High",
+  };
+}
+
+function resolvePriorityHeaders(priority?: "high" | "normal") {
+  if (priority !== "high") return undefined;
+  return highPriorityEmailHeaders();
+}
 
 export async function sendEmail({
   to,
@@ -15,11 +32,14 @@ export async function sendEmail({
   from,
   replyTo,
   template,
+  priority = "normal",
 }: SendEmailParams & { template?: string }) {
   const resendKey = process.env.RESEND_API_KEY;
   const sendgridKey = process.env.SENDGRID_API_KEY;
   const fromHeader =
     from ?? process.env.EMAIL_FROM ?? "Tescommerce <orders@tescommerce.com>";
+
+  const priorityHeaders = resolvePriorityHeaders(priority);
 
   if (resendKey) {
     const res = await fetch("https://api.resend.com/emails", {
@@ -35,6 +55,7 @@ export async function sendEmail({
         html,
         ...(text ? { text } : {}),
         ...(replyTo ? { reply_to: replyTo } : {}),
+        ...(priorityHeaders ? { headers: priorityHeaders } : {}),
       }),
     });
     if (!res.ok) throw new Error(`Resend error: ${await res.text()}`);
@@ -44,6 +65,10 @@ export async function sendEmail({
   }
 
   if (sendgridKey) {
+    const sgHeaders = {
+      ...(priorityHeaders ?? {}),
+      ...(replyTo ? { "Reply-To": replyTo } : {}),
+    };
     const res = await fetch("https://api.sendgrid.com/v3/mail/send", {
       method: "POST",
       headers: {
@@ -54,7 +79,7 @@ export async function sendEmail({
         personalizations: [
           {
             to: [{ email: to }],
-            ...(replyTo ? { headers: { "Reply-To": replyTo } } : {}),
+            ...(Object.keys(sgHeaders).length > 0 ? { headers: sgHeaders } : {}),
           },
         ],
         from: {

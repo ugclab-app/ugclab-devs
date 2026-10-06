@@ -5,8 +5,22 @@ import { getUploadRoot } from "../lib/uploads.js";
 
 const files = new Hono();
 
+/** Storage key from URL (mounted at /api/files). */
+function storageKeyFromRequest(c: { req: { url: string; path: string; param: (k: string) => string | undefined } }) {
+  const wildcard = c.req.param("*");
+  if (wildcard) return decodeURIComponent(wildcard);
+
+  const pathname = new URL(c.req.url).pathname;
+  const fromUrl = pathname.replace(/^\/api\/files\/?/, "");
+  if (fromUrl && fromUrl !== pathname) return decodeURIComponent(fromUrl);
+
+  const raw = c.req.path.replace(/^\//, "");
+  if (raw.startsWith("api/files/")) return decodeURIComponent(raw.slice("api/files/".length));
+  return decodeURIComponent(raw);
+}
+
 files.get("/*", async (c) => {
-  const key = c.req.path.replace(/^\//, "");
+  const key = storageKeyFromRequest(c);
   if (!key || key.includes("..")) return c.text("Not found", 404);
 
   const filePath = path.join(getUploadRoot(), ...key.split("/"));

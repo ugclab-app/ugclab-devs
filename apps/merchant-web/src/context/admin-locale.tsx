@@ -2,18 +2,26 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from "react";
-import { getMessages, type Locale } from "@ugclab/i18n";
+import {
+  createAdminTa,
+  getAdminMessages,
+  locales,
+  type Locale,
+} from "@ugclab/i18n";
 
 const STORAGE_KEY = "ugclab_admin_locale";
 
 type AdminLocaleContextValue = {
   locale: Locale;
   setLocale: (l: Locale) => void;
-  t: ReturnType<typeof getMessages>["admin"];
+  t: ReturnType<typeof getAdminMessages>;
+  c: ReturnType<typeof getAdminMessages>["common"];
+  ta: ReturnType<typeof createAdminTa>;
 };
 
 const AdminLocaleContext = createContext<AdminLocaleContextValue | null>(null);
@@ -21,7 +29,7 @@ const AdminLocaleContext = createContext<AdminLocaleContextValue | null>(null);
 function readStored(): Locale {
   try {
     const v = localStorage.getItem(STORAGE_KEY);
-    if (v === "ru" || v === "en") return v;
+    if (v && (locales as readonly string[]).includes(v)) return v as Locale;
   } catch {
     /* ignore */
   }
@@ -38,10 +46,28 @@ export function AdminLocaleProvider({ children }: { children: ReactNode }) {
       /* ignore */
     }
   }, []);
-  const t = useMemo(() => getMessages(locale).admin, [locale]);
-  const value = useMemo(() => ({ locale, setLocale, t }), [locale, setLocale, t]);
+
+  const messages = useMemo(() => getAdminMessages(locale), [locale]);
+  const t = messages;
+  const c = messages.common;
+  const ta = useMemo(
+    () => createAdminTa(messages as unknown as Record<string, unknown>),
+    [locale, messages]
+  );
+
+  useEffect(() => {
+    document.documentElement.lang = locale;
+  }, [locale]);
+
+  const value = useMemo(
+    () => ({ locale, setLocale, t, c, ta }),
+    [locale, setLocale, t, c, ta]
+  );
+
   return (
-    <AdminLocaleContext.Provider value={value}>{children}</AdminLocaleContext.Provider>
+    <AdminLocaleContext.Provider value={value}>
+      <div key={locale}>{children}</div>
+    </AdminLocaleContext.Provider>
   );
 }
 

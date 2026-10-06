@@ -3,16 +3,18 @@ import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import { AdminPageShell } from "@/components/admin-page-shell";
+import { useAdminT } from "@/hooks/use-admin-t";
 import { FormAlert } from "@/components/form-alert";
 
 export default function DraftOrdersPage() {
+  const { ta, t } = useAdminT();
   const qc = useQueryClient();
   const [alert, setAlert] = useState<{ ok?: boolean; message?: string }>({});
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
-  const [productId, setProductId] = useState("");
-  const [qty, setQty] = useState(1);
+  const [lines, setLines] = useState([{ productId: "", quantity: 1 }]);
   const [pending, setPending] = useState(false);
+  const [linkBusy, setLinkBusy] = useState<string | null>(null);
 
   const params = new URLSearchParams({ status: "DRAFT" });
   const { data: ordersData } = useQuery({
@@ -33,8 +35,9 @@ export default function DraftOrdersPage() {
 
   async function createDraft(e: React.FormEvent) {
     e.preventDefault();
-    if (!productId) {
-      setAlert({ ok: false, message: "Select a product" });
+    const ready = lines.filter((l) => l.productId);
+    if (ready.length === 0) {
+      setAlert({ ok: false, message: "Add at least one product" });
       return;
     }
     setPending(true);
@@ -43,7 +46,7 @@ export default function DraftOrdersPage() {
       const r = await api.createDraftOrder({
         email,
         name: name || undefined,
-        lines: [{ productId, quantity: qty }],
+        lines: ready,
       });
       setAlert({
         ok: true,
@@ -51,6 +54,7 @@ export default function DraftOrdersPage() {
       });
       setEmail("");
       setName("");
+      setLines([{ productId: "", quantity: 1 }]);
       await qc.invalidateQueries({ queryKey: ["orders"] });
     } catch (err) {
       setAlert({
@@ -62,11 +66,32 @@ export default function DraftOrdersPage() {
     }
   }
 
+  async function copyPaymentLink(orderId: string) {
+    setLinkBusy(orderId);
+    setAlert({});
+    try {
+      const r = await api.createDraftPaymentLink(orderId);
+      await navigator.clipboard.writeText(r.checkoutUrl);
+      setAlert({
+        ok: true,
+        message: "Payment link copied — send it to the customer to pay via Stripe.",
+      });
+      await qc.invalidateQueries({ queryKey: ["orders"] });
+    } catch (err) {
+      setAlert({
+        ok: false,
+        message: err instanceof Error ? err.message : "Could not create payment link",
+      });
+    } finally {
+      setLinkBusy(null);
+    }
+  }
+
   return (
     <AdminPageShell
-      crumbs={[{ label: "Draft orders" }]}
-      title="Draft orders"
-      description="Create manual orders for phone sales or invoices. Mark paid when payment is received outside checkout."
+      crumbs={[{ label: t.nav.draftOrders }]}
+      title={ta("draftOrdersPage.title")}
+      description={ta("draftOrdersPage.description")}
     >
       <FormAlert ok={alert.ok} message={alert.message} />
 
@@ -91,32 +116,69 @@ export default function DraftOrdersPage() {
               onChange={(e) => setName(e.target.value)}
             />
           </label>
-          <label className="block text-sm">
-            Product
-            <select
-              required
-              className="ugclab-select mt-1.5 w-full"
-              value={productId}
-              onChange={(e) => setProductId(e.target.value)}
+          <div className="space-y-3 sm:col-span-2">
+            {lines.map((line, index) => (
+              <div key={index} className="grid gap-3 sm:grid-cols-[1fr_6rem_auto]">
+                <label className="block text-sm">
+                  Product
+                  <select
+                    className="ugclab-select mt-1.5 w-full"
+                    value={line.productId}
+                    onChange={(e) =>
+                      setLines((prev) =>
+                        prev.map((row, i) =>
+                          i === index ? { ...row, productId: e.target.value } : row
+                        )
+                      )
+                    }
+                  >
+                    <option value="">Select…</option>
+                    {products.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-sm">
+                  Quantity
+                  <input
+                    type="number"
+                    min={1}
+                    className="ugclab-input mt-1.5 w-full"
+                    value={line.quantity}
+                    onChange={(e) =>
+                      setLines((prev) =>
+                        prev.map((row, i) =>
+                          i === index
+                            ? { ...row, quantity: parseInt(e.target.value, 10) || 1 }
+                            : row
+                        )
+                      )
+                    }
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="self-end text-sm text-zinc-500"
+                  onClick={() =>
+                    setLines((prev) =>
+                      prev.length === 1 ? prev : prev.filter((_, i) => i !== index)
+                    )
+                  }
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              className="text-sm font-medium text-violet-700"
+              onClick={() => setLines((prev) => [...prev, { productId: "", quantity: 1 }])}
             >
-              <option value="">Select…</option>
-              {products.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.title}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block text-sm">
-            Quantity
-            <input
-              type="number"
-              min={1}
-              className="ugclab-input mt-1.5 w-full"
-              value={qty}
-              onChange={(e) => setQty(parseInt(e.target.value, 10) || 1)}
-            />
-          </label>
+              Add line
+            </button>
+          </div>
           <div className="sm:col-span-2">
             <button
               type="submit"
@@ -133,12 +195,20 @@ export default function DraftOrdersPage() {
         <h2 className="border-b px-6 py-4 font-semibold">Draft list</h2>
         <ul className="divide-y">
           {orders.map((o) => (
-            <li key={o.id} className="flex items-center justify-between px-6 py-4">
+            <li key={o.id} className="flex items-center justify-between gap-3 px-6 py-4">
               <Link to={`/orders/${o.id}`} className="font-medium text-violet-600">
                 #{o.orderNumber}
               </Link>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center justify-end gap-3">
                 <span className="text-sm text-zinc-500">{o.customer?.email ?? "—"}</span>
+                <button
+                  type="button"
+                  className="text-sm font-medium text-emerald-700 disabled:opacity-50"
+                  disabled={linkBusy === o.id}
+                  onClick={() => void copyPaymentLink(o.id)}
+                >
+                  {linkBusy === o.id ? "Creating link…" : "Copy payment link"}
+                </button>
                 <button
                   type="button"
                   className="text-sm font-medium text-violet-600"

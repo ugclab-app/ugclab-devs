@@ -13,17 +13,19 @@
     }
   },
   "scripts": {
-    "build": "prisma generate && tsc -p tsconfig.build.json",
-    "db:generate": "dotenv -e ../../.env -- prisma generate",
+    "build": "node scripts/generate-client.mjs && tsc -p tsconfig.build.json",
+    "db:generate": "node scripts/generate-client.mjs",
     "db:migrate": "dotenv -e ../../.env -- prisma migrate dev",
-    "db:push": "dotenv -e ../../.env -- prisma db push",
-    "db:push:force": "dotenv -e ../../.env -- prisma db push --accept-data-loss",
+    "db:deploy": "dotenv -e ../../.env -- prisma migrate deploy",
+    "db:push": "dotenv -e ../../.env -- prisma db push && node scripts/generate-client.mjs",
+    "db:push:force": "dotenv -e ../../.env -- prisma db push --accept-data-loss && node scripts/generate-client.mjs",
     "db:seed": "dotenv -e ../../.env -- tsx prisma/seed.ts",
     "db:tescommerce": "dotenv -e ../../.env -- tsx scripts/update-tescommerce.ts",
     "db:studio": "dotenv -e ../../.env -- prisma studio"
   },
   "dependencies": {
-    "@prisma/client": "^6.9.0"
+    "@prisma/client": "^6.9.0",
+    "@prisma/extension-accelerate": "^3.0.1"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

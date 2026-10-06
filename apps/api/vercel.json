@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": ["fra1"],
   "framework": null,
   "installCommand": "cd ../.. && npm install",
   "buildCommand": "node scripts/vercel-build.mjs",
@@ -10,10 +11,25 @@
     },
     "api/health.ts": {
       "maxDuration": 10
+    },
+    "api/health-ready.ts": {
+      "maxDuration": 15
     }
   },
   "rewrites": [
     { "source": "/health", "destination": "/api/health" },
+    { "source": "/api/health/ping", "destination": "/api/health-ping" },
+    { "source": "/api/health/ready", "destination": "/api/health-ready" },
+    {
+      "source": "/",
+      "has": [{ "type": "query", "key": "tenant" }],
+      "destination": "/storefront.html"
+    },
+    {
+      "source": "/:path((?!api/).*)",
+      "has": [{ "type": "query", "key": "tenant" }],
+      "destination": "/storefront.html"
+    },
     { "source": "/(.*)", "destination": "/api" }
   ]
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { storeApi } from "@/api/client";
+import { useStorefrontMessages } from "@/hooks/use-storefront-messages";
 import { storeHref } from "@/lib/store-href";
 
 export function StoreSearch({
@@ -10,6 +11,7 @@ export function StoreSearch({
   locale: string;
   tenantSlug: string;
 }) {
+  const sf = useStorefrontMessages();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const q = params.get("q") ?? "";
@@ -52,7 +54,7 @@ export function StoreSearch({
           next.set("locale", locale);
           next.set("tenant", tenantSlug);
           setOpen(false);
-          navigate(`/?${next.toString()}`);
+          navigate(`/search?${next.toString()}`);
         }}
       >
         <input
@@ -64,7 +66,7 @@ export function StoreSearch({
           }}
           onFocus={() => setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
-          placeholder="Search SKU, tags…"
+          placeholder={sf.search.placeholder}
           className="w-36 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm sm:w-52"
           autoComplete="off"
         />
@@ -88,6 +90,14 @@ export function StoreSearch({
               </Link>
             </li>
           ))}
+          <li className="border-t border-zinc-100">
+            <button
+              type="submit"
+              className="block w-full px-3 py-2 text-left text-sm font-medium text-[var(--store-primary)]"
+            >
+              See all results
+            </button>
+          </li>
         </ul>
       ) : null}
     </div>

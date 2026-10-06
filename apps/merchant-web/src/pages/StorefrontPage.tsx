@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { useAuth } from "@/context/auth";
 import { api } from "@/api/client";
 import { getStorefrontUrl } from "@/lib/storefront";
@@ -11,6 +12,7 @@ import {
   StoreSocialFields,
   StoreAdvancedFields,
   StoreCheckoutThemeFields,
+  StorePasswordFields,
 } from "@/components/store-appearance-fields";
 import { buildThemeFromForm } from "@/lib/store-theme-form";
 import { MediaPicker } from "@/components/media-picker";
@@ -28,12 +30,18 @@ import {
 import type { PageStyleState } from "@/components/site-builder/page-style-panel";
 import type { StoreThemePreset } from "@/components/site-builder/store-themes";
 import type { CustomThemePreset } from "@ugclab/tenant/store-theme";
+import type { BuilderTemplateId } from "@/components/site-builder/builder-types";
 import { ThemeVersionPanel } from "@/components/site-builder/theme-version-panel";
+import { StoreShellFields } from "@/components/store-shell-fields";
+import { ProductPageEditorChrome } from "@/components/site-builder/product-page-editor-chrome";
+import { useAdminT } from "@/hooks/use-admin-t";
 
 const TABS = [
   { id: "home", label: "Site builder" },
   { id: "global", label: "Global sections" },
   { id: "product", label: "Product page" },
+  { id: "templates", label: "Templates" },
+  { id: "shell", label: "Header & footer" },
   { id: "versions", label: "Versions" },
   { id: "appearance", label: "Appearance" },
   { id: "menu", label: "Menu" },
@@ -44,30 +52,64 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]["id"];
 
-const BUILDER_TABS: readonly TabId[] = ["home", "global", "product"];
+const BUILDER_TABS: readonly TabId[] = ["home", "global", "product", "templates"];
 
 function isBuilderTab(id: TabId): boolean {
   return BUILDER_TABS.includes(id);
 }
 
+function tabFromBuilderTemplate(id: BuilderTemplateId): TabId {
+  if (id === "home") return "home";
+  if (id === "global") return "global";
+  if (id === "product") return "product";
+  return "templates";
+}
+
+function builderTemplateFromTab(
+  tab: TabId,
+  templateKind: "cart" | "notFound" | "collection"
+): BuilderTemplateId {
+  if (tab === "home") return "home";
+  if (tab === "global") return "global";
+  if (tab === "product") return "product";
+  if (tab === "templates") return templateKind;
+  return "home";
+}
+
 export default function StorefrontPage() {
+  const { ta } = useAdminT();
   const { tenant, refresh } = useAuth();
   const qc = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [alert, setAlert] = useState<{ ok?: boolean; message?: string }>({});
   const [pending, setPending] = useState(false);
-  const [tab, setTab] = useState<TabId>("home");
+  const initialTab = (() => {
+    const t = searchParams.get("tab");
+    if (t && TABS.some((x) => x.id === t)) return t as TabId;
+    return "home";
+  })();
+  const [tab, setTab] = useState<TabId>(initialTab);
+  const [previewProductSlug, setPreviewProductSlug] = useState<string | null>(
+    searchParams.get("previewProduct")
+  );
   const [builderFullscreen, setBuilderFullscreen] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const homeBlocksRef = useRef<HomeBlock[]>([]);
   const globalBlocksRef = useRef<HomeBlock[]>([]);
   const productBlocksRef = useRef<HomeBlock[]>([]);
+  const cartBlocksRef = useRef<HomeBlock[]>([]);
+  const notFoundBlocksRef = useRef<HomeBlock[]>([]);
+  const collectionDefaultBlocksRef = useRef<HomeBlock[]>([]);
+  const [templateKind, setTemplateKind] = useState<"cart" | "notFound" | "collection">("cart");
   const pageStyleRef = useRef<PageStyleState>({
     pageBgColor: undefined,
     pageBgImage: undefined,
     blockGap: "md",
     scrollAnimation: "none",
+    customCss: undefined,
   });
   const themeExtrasRef = useRef<Partial<StoreTheme>>({});
+  const [shellRevision, setShellRevision] = useState(0);
   const [builderPrimary, setBuilderPrimary] = useState<string | null>(null);
   const [appliedThemeId, setAppliedThemeId] = useState<string | undefined>();
   const [previewRevision, setPreviewRevision] = useState(0);
@@ -75,7 +117,7 @@ export default function StorefrontPage() {
   const { data } = useQuery({ queryKey: ["settings"], queryFn: () => api.settings() });
   const { data: productsData } = useQuery({
     queryKey: ["products", "preview"],
-    queryFn: () => api.products(new URLSearchParams()),
+    queryFn: () => api.products(new URLSearchParams({ limit: "50", sort: "newest" })),
   });
 
   if (!tenant) return null;
@@ -85,6 +127,25 @@ export default function StorefrontPage() {
 
   const s = store.settings as Record<string, unknown> | null | undefined;
   const draftTheme = parseStoreTheme(s?.themeDraft ?? s?.theme);
+  const liveThemeRaw = s?.theme;
+  const draftThemeRaw = s?.themeDraft ?? s?.theme;
+  const themeMeta = (() => {
+    if (!draftThemeRaw || typeof draftThemeRaw !== "object") {
+      return { publishAt: "", abEnabled: false, trafficBPercent: 50 };
+    }
+    const o = draftThemeRaw as Record<string, unknown>;
+    const exp =
+      o._experiment && typeof o._experiment === "object"
+        ? (o._experiment as Record<string, unknown>)
+        : {};
+    return {
+      publishAt: typeof o._publishAt === "string" ? o._publishAt.slice(0, 16) : "",
+      abEnabled: exp.enabled === true,
+      trafficBPercent: Number(exp.trafficBPercent) || 50,
+    };
+  })();
+  const hasUnpublishedChanges =
+    JSON.stringify(liveThemeRaw ?? null) !== JSON.stringify(draftThemeRaw ?? null);
   if (homeBlocksRef.current.length === 0) {
     homeBlocksRef.current = resolveHomeBlocks(draftTheme);
   }
@@ -94,25 +155,104 @@ export default function StorefrontPage() {
   if (productBlocksRef.current.length === 0 && draftTheme.productPageBlocks?.length) {
     productBlocksRef.current = draftTheme.productPageBlocks;
   }
+  if (cartBlocksRef.current.length === 0 && draftTheme.cartBlocks?.length) {
+    cartBlocksRef.current = draftTheme.cartBlocks;
+  }
+  if (notFoundBlocksRef.current.length === 0 && draftTheme.notFoundBlocks?.length) {
+    notFoundBlocksRef.current = draftTheme.notFoundBlocks;
+  }
+  if (
+    collectionDefaultBlocksRef.current.length === 0 &&
+    (draftTheme.collectionPageBlocks?.["_default"]?.length ||
+      draftTheme.collectionPageBlocks?.["default"]?.length)
+  ) {
+    collectionDefaultBlocksRef.current =
+      draftTheme.collectionPageBlocks["_default"] ??
+      draftTheme.collectionPageBlocks["default"] ??
+      [];
+  }
   pageStyleRef.current = {
     pageBgColor: draftTheme.pageBgColor,
     pageBgImage: draftTheme.pageBgImage,
     blockGap: draftTheme.blockGap ?? "md",
     scrollAnimation: draftTheme.scrollAnimation ?? "none",
+    customCss: draftTheme.customCss,
   };
 
   const storeUrl = getStorefrontUrl(store.slug);
   const previewBase = `${storeUrl}${storeUrl.includes("?") ? "&" : "?"}preview=1`;
   const settingsPrimary =
     (store.settings as { primaryColor?: string } | null)?.primaryColor ?? "#7c3aed";
-  const firstProduct = (
-    (productsData?.products ?? []) as { slug: string; status?: string }[]
-  ).find((p) => p.status !== "DRAFT");
+  const productRows = (productsData?.products ?? []) as {
+    id: string;
+    slug: string;
+    title: string;
+    status?: string;
+    priceAmount?: number;
+    thumbUrl?: string | null;
+    images?: { id?: string; url: string }[];
+    description?: string | null;
+  }[];
+  const firstProduct = productRows.find((p) => p.status !== "DRAFT");
+  const previewSlug = previewProductSlug || firstProduct?.slug || null;
+  const previewProductRow =
+    productRows.find((p) => p.slug === previewSlug) ?? firstProduct ?? null;
+
+  const { data: previewProductDetail } = useQuery({
+    queryKey: ["product", previewProductRow?.id, "builder-pdp"],
+    queryFn: () => api.product(previewProductRow!.id),
+    enabled: Boolean(previewProductRow?.id) && (activeTab === "product" || builderFullscreen),
+    staleTime: 15_000,
+  });
+
+  const detailProduct = previewProductDetail?.product as
+    | {
+        id: string;
+        slug: string;
+        title: string;
+        priceAmount: number;
+        compareAt?: number | null;
+        description?: string | null;
+        images?: { id: string; url: string }[];
+      }
+    | undefined;
+
+  const previewProductForBuilder = detailProduct
+    ? {
+        id: detailProduct.id,
+        slug: detailProduct.slug,
+        title: detailProduct.title,
+        priceAmount: detailProduct.priceAmount,
+        compareAt: detailProduct.compareAt ?? null,
+        description: detailProduct.description ?? null,
+        currency: previewProductDetail?.currency ?? "USD",
+        images: detailProduct.images ?? [],
+      }
+    : previewProductRow
+      ? {
+          id: previewProductRow.id,
+          slug: previewProductRow.slug,
+          title: previewProductRow.title,
+          priceAmount: previewProductRow.priceAmount ?? 0,
+          description: previewProductRow.description ?? null,
+          currency:
+            (productsData as { currency?: string } | undefined)?.currency ?? "USD",
+          images:
+            previewProductRow.images?.length
+              ? previewProductRow.images
+              : previewProductRow.thumbUrl
+                ? [{ url: previewProductRow.thumbUrl }]
+                : [],
+        }
+      : null;
 
   async function saveDraft(fd: FormData, opts?: { silent?: boolean }) {
     if (!opts?.silent) setPending(true);
     try {
-      const base = buildThemeFromForm(fd);
+      const base = buildThemeFromForm(fd, draftTheme);
+      const settingsStripeTax =
+        (store.settings as { stripeTaxEnabled?: boolean } | null)?.stripeTaxEnabled ===
+        true;
       const primaryFromForm = fd.get("primaryColor");
       const primaryColor =
         typeof primaryFromForm === "string" && primaryFromForm
@@ -128,11 +268,18 @@ export default function StorefrontPage() {
         homeSections: homeBlocksRef.current.map((b) => b.type),
         globalBlocks: globalBlocksRef.current,
         productPageBlocks: productBlocksRef.current,
+        cartBlocks: cartBlocksRef.current,
+        notFoundBlocks: notFoundBlocksRef.current,
         pageBlocks: draftTheme.pageBlocks,
+        collectionPageBlocks: {
+          ...(draftTheme.collectionPageBlocks ?? {}),
+          _default: collectionDefaultBlocksRef.current,
+        },
         collectionHeroes: draftTheme.collectionHeroes,
         customThemePresets:
           themeExtrasRef.current.customThemePresets ?? draftTheme.customThemePresets,
         ...(appliedThemeId ? { catalogThemeId: appliedThemeId } : {}),
+        stripeTaxEnabled: settingsStripeTax || base.stripeTaxEnabled === true,
       } as StoreTheme & { catalogThemeId?: string };
 
       await api.updateThemeDraft({
@@ -184,9 +331,48 @@ export default function StorefrontPage() {
 
   const isBuilder = isBuilderTab(activeTab);
   const primaryColor = builderPrimary ?? settingsPrimary;
+  const liveShellTheme = {
+    ...draftTheme,
+    ...themeExtrasRef.current,
+  } as StoreTheme;
+  // shellRevision forces re-render when themeExtrasRef mutates
+  void shellRevision;
+
+  const builderTemplate = builderTemplateFromTab(activeTab, templateKind);
+
+  function switchBuilderTemplate(id: BuilderTemplateId) {
+    const nextTab = tabFromBuilderTemplate(id);
+    setTab(nextTab);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("tab", nextTab);
+      return next;
+    });
+    if (id === "cart" || id === "notFound" || id === "collection") {
+      setTemplateKind(id);
+    }
+  }
+
+  function openProductPage(product: { id: string; slug: string }) {
+    const slug =
+      product.slug ||
+      productRows.find((p) => p.id === product.id)?.slug ||
+      "";
+    if (slug) setPreviewProductSlug(slug);
+    setTab("product");
+    setBuilderFullscreen(true);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("tab", "product");
+      if (slug) next.set("previewProduct", slug);
+      return next;
+    });
+  }
 
   useEffect(() => {
-    if (activeTab !== "home" && builderFullscreen) setBuilderFullscreen(false);
+    if (activeTab !== "home" && activeTab !== "product" && builderFullscreen) {
+      setBuilderFullscreen(false);
+    }
   }, [activeTab, builderFullscreen]);
 
   function submitDraft() {
@@ -206,9 +392,10 @@ export default function StorefrontPage() {
       homeBlocksRef.current = blocks;
     },
     onThemePresetApply: (preset: StoreThemePreset) => {
-      themeExtrasRef.current = { ...preset.theme };
+      themeExtrasRef.current = { ...themeExtrasRef.current, ...preset.theme };
       setBuilderPrimary(preset.primaryColor);
       setAppliedThemeId(preset.id);
+      setShellRevision((n) => n + 1);
     },
     onSaveThemePreset: () => {
       const label = window.prompt("Name for this theme preset?", "My theme");
@@ -240,6 +427,14 @@ export default function StorefrontPage() {
     appliedThemeId,
     fullscreen: builderFullscreen,
     onToggleFullscreen: () => setBuilderFullscreen((f) => !f),
+    builderTemplate,
+    onBuilderTemplateChange: switchBuilderTemplate,
+    shellTheme: liveShellTheme,
+    onShellChange: (patch: Partial<StoreTheme>) => {
+      themeExtrasRef.current = { ...themeExtrasRef.current, ...patch };
+      setShellRevision((n) => n + 1);
+    },
+    onOpenProductPage: openProductPage,
   };
 
   return (
@@ -255,19 +450,146 @@ export default function StorefrontPage() {
         {!builderFullscreen ? (
           <>
             <div>
-              <h1 className="text-2xl font-bold">Storefront</h1>
-              <p className="mt-1 text-sm text-zinc-500">
-                Customize your buyer-facing shop. Save a draft, preview, then publish.
-              </p>
+              <h1 className="text-2xl font-bold">{ta("storefrontPage.title")}</h1>
+              <p className="mt-1 text-sm text-zinc-500">{ta("storefrontPage.description")}</p>
             </div>
             <FormAlert ok={alert.ok} message={alert.message} />
+            {hasUnpublishedChanges ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+                <div>
+                  <p className="font-semibold">Unpublished changes</p>
+                  <p className="mt-0.5 text-amber-900/80">
+                    Buyers still see the live theme. Save draft is editor-only — click Publish to update the storefront.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => void publish()}
+                  className="ugclab-btn ugclab-btn-primary shrink-0 text-sm"
+                >
+                  Publish to live store
+                </button>
+              </div>
+            ) : (
+              <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-900">
+                Live store matches your draft.
+              </p>
+            )}
+
+            <div className="grid gap-4 rounded-xl border border-zinc-200 p-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-zinc-900">Schedule publish</p>
+                <input
+                  type="datetime-local"
+                  key={themeMeta.publishAt}
+                  defaultValue={themeMeta.publishAt}
+                  className="ugclab-input w-full text-sm"
+                  id="theme-schedule-at"
+                />
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={pending}
+                    className="ugclab-btn border border-zinc-200 bg-white text-xs"
+                    onClick={() => {
+                      const el = document.getElementById(
+                        "theme-schedule-at"
+                      ) as HTMLInputElement | null;
+                      const v = el?.value;
+                      setPending(true);
+                      void api
+                        .scheduleThemePublish(v ? new Date(v).toISOString() : null)
+                        .then(async () => {
+                          await refresh();
+                          setAlert({
+                            ok: true,
+                            message: v ? "Theme publish scheduled" : "Schedule cleared",
+                          });
+                        })
+                        .catch((e) =>
+                          setAlert({
+                            ok: false,
+                            message: e instanceof Error ? e.message : "Failed",
+                          })
+                        )
+                        .finally(() => setPending(false));
+                    }}
+                  >
+                    Save schedule
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-zinc-900">A/B theme test</p>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    id="theme-ab-enabled"
+                    defaultChecked={themeMeta.abEnabled}
+                  />
+                  Serve draft as variant B
+                </label>
+                <label className="block text-xs text-zinc-600">
+                  Traffic to B (%)
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    id="theme-ab-pct"
+                    defaultValue={themeMeta.trafficBPercent}
+                    className="ugclab-input mt-1 w-full text-sm"
+                  />
+                </label>
+                <button
+                  type="button"
+                  disabled={pending}
+                  className="ugclab-btn border border-zinc-200 bg-white text-xs"
+                  onClick={() => {
+                    const enabled = (
+                      document.getElementById("theme-ab-enabled") as HTMLInputElement
+                    )?.checked;
+                    const trafficBPercent = Number(
+                      (document.getElementById("theme-ab-pct") as HTMLInputElement)?.value
+                    );
+                    setPending(true);
+                    void api
+                      .setThemeExperiment({
+                        enabled: !!enabled,
+                        trafficBPercent,
+                        snapshotVariantB: true,
+                      })
+                      .then(async () => {
+                        await refresh();
+                        setAlert({ ok: true, message: "A/B settings saved" });
+                      })
+                      .catch((e) =>
+                        setAlert({
+                          ok: false,
+                          message: e instanceof Error ? e.message : "Failed",
+                        })
+                      )
+                      .finally(() => setPending(false));
+                  }}
+                >
+                  Save A/B test
+                </button>
+              </div>
+            </div>
 
             <nav className="flex flex-wrap gap-1 rounded-xl border border-zinc-200 bg-zinc-50 p-1">
               {TABS.map((t) => (
                 <button
                   key={t.id}
                   type="button"
-                  onClick={() => setTab(t.id)}
+                  onClick={() => {
+                    setTab(t.id);
+                    setSearchParams((prev) => {
+                      const next = new URLSearchParams(prev);
+                      next.set("tab", t.id);
+                      return next;
+                    });
+                  }}
                   className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
                     activeTab === t.id
                       ? "bg-white text-violet-800 shadow-sm"
@@ -288,9 +610,12 @@ export default function StorefrontPage() {
         {activeTab === "global" ? (
           <section className="admin-card p-4">
             <p className="mb-4 text-sm text-zinc-600">
-              Blocks shown on every page (trust strip, promo). Save draft, then publish.
+              Optional sitewide overlays only (logos, promo strip, sticky CTA, discount
+              popup). Do not put Cover/Catalog/Newsletter here — those belong on Home or
+              Product page, or they will duplicate. Save draft, then publish.
             </p>
             <SiteBuilder
+              key="global"
               {...builderProps}
               theme={{ ...draftTheme, homeBlocks: globalBlocksRef.current }}
               onBlocksChange={(blocks) => {
@@ -301,19 +626,108 @@ export default function StorefrontPage() {
         ) : null}
 
         {activeTab === "product" ? (
-          <section className="admin-card p-4">
-            <p className="mb-4 text-sm text-zinc-600">
-              Extra blocks below product details on every product page. Collection layouts: edit each
-              collection → hero & blocks.
-            </p>
+          <SiteBuilderFullscreenShell
+            open={builderFullscreen}
+            onClose={() => setBuilderFullscreen(false)}
+            storeName={store.name}
+            alert={alert}
+            pending={pending}
+            onSave={submitDraft}
+            onPublish={() => void publish()}
+            previewUrl={
+              previewProductForBuilder
+                ? (() => {
+                    const u = new URL(previewBase);
+                    u.pathname = `/products/${previewProductForBuilder.slug}`;
+                    return u.toString();
+                  })()
+                : previewBase
+            }
+          >
+            <div
+              className={
+                builderFullscreen
+                  ? "flex h-full min-h-0 flex-col"
+                  : "admin-card p-4"
+              }
+            >
+              {!builderFullscreen ? (
+                <ProductPageEditorChrome
+                  tenantSlug={store.slug}
+                  previewProductSlug={previewProductSlug}
+                  onPickProduct={(slug) => {
+                    setPreviewProductSlug(slug);
+                    setSearchParams((prev) => {
+                      const next = new URLSearchParams(prev);
+                      next.set("tab", "product");
+                      next.set("previewProduct", slug);
+                      return next;
+                    });
+                  }}
+                />
+              ) : null}
+              <SiteBuilder
+                key={`product-${previewProductForBuilder?.id ?? "none"}`}
+                {...builderProps}
+                builderTemplate="product"
+                previewProduct={previewProductForBuilder}
+                theme={{ ...draftTheme, homeBlocks: productBlocksRef.current }}
+                onBlocksChange={(blocks) => {
+                  productBlocksRef.current = blocks;
+                }}
+              />
+            </div>
+          </SiteBuilderFullscreenShell>
+        ) : null}
+
+        {activeTab === "templates" ? (
+          <section className="admin-card p-4 space-y-4">
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="text-sm text-zinc-600">
+                Template
+                <select
+                  className="ugclab-select mt-1 block"
+                  value={templateKind}
+                  onChange={(e) =>
+                    setTemplateKind(e.target.value as "cart" | "notFound" | "collection")
+                  }
+                >
+                  <option value="cart">Cart page</option>
+                  <option value="notFound">404 page</option>
+                  <option value="collection">Collection default</option>
+                </select>
+              </label>
+              <p className="text-sm text-zinc-500">
+                {templateKind === "cart"
+                  ? "Blocks below the cart summary."
+                  : templateKind === "notFound"
+                    ? "Extra content on the store 404 page."
+                    : "Fallback blocks for collections without their own layout."}
+              </p>
+            </div>
             <SiteBuilder
+              key={templateKind}
               {...builderProps}
-              theme={{ ...draftTheme, homeBlocks: productBlocksRef.current }}
+              theme={{
+                ...draftTheme,
+                homeBlocks:
+                  templateKind === "cart"
+                    ? cartBlocksRef.current
+                    : templateKind === "notFound"
+                      ? notFoundBlocksRef.current
+                      : collectionDefaultBlocksRef.current,
+              }}
               onBlocksChange={(blocks) => {
-                productBlocksRef.current = blocks;
+                if (templateKind === "cart") cartBlocksRef.current = blocks;
+                else if (templateKind === "notFound") notFoundBlocksRef.current = blocks;
+                else collectionDefaultBlocksRef.current = blocks;
               }}
             />
           </section>
+        ) : null}
+
+        {!builderFullscreen && activeTab === "shell" ? (
+          <StoreShellFields theme={draftTheme} />
         ) : null}
 
         {activeTab === "versions" ? <ThemeVersionPanel /> : null}
@@ -329,7 +743,7 @@ export default function StorefrontPage() {
             onPublish={() => void publish()}
             previewUrl={previewBase}
           >
-            <SiteBuilder {...builderProps} />
+            <SiteBuilder key="home" {...builderProps} />
           </SiteBuilderFullscreenShell>
         ) : null}
 
@@ -403,12 +817,23 @@ export default function StorefrontPage() {
         ) : null}
 
         {!builderFullscreen && activeTab === "advanced" ? (
-          <StoreAdvancedFields theme={draftTheme} />
+          <>
+            <StoreAdvancedFields theme={draftTheme} />
+            <StorePasswordFields />
+          </>
         ) : null}
 
         {!(builderFullscreen && isBuilder) ? (
           <div className="sticky bottom-4 z-10 flex flex-wrap gap-3 rounded-xl border border-zinc-200 bg-white/95 p-4 shadow-lg backdrop-blur">
-            <button type="submit" disabled={pending} className="ugclab-btn ugclab-btn-primary">
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => void publish()}
+              className="ugclab-btn ugclab-btn-primary"
+            >
+              {pending ? "Publishing…" : "Publish to live store"}
+            </button>
+            <button type="submit" disabled={pending} className="ugclab-btn border border-zinc-200 bg-white">
               {pending ? "Saving…" : "Save draft"}
             </button>
             {isBuilder ? (
@@ -420,14 +845,11 @@ export default function StorefrontPage() {
                 Full screen editor
               </button>
             ) : null}
-            <button
-              type="button"
-              disabled={pending}
-              onClick={publish}
-              className="ugclab-btn border border-violet-200 bg-violet-50 text-violet-800"
-            >
-              Publish to live store
-            </button>
+            {hasUnpublishedChanges ? (
+              <span className="self-center text-xs font-medium text-amber-700">
+                Draft ≠ live
+              </span>
+            ) : null}
           </div>
         ) : null}
       </form>
@@ -436,7 +858,7 @@ export default function StorefrontPage() {
         <div className="space-y-4">
           <StorefrontPreview
             baseUrl={previewBase}
-            productSlug={firstProduct?.slug ?? null}
+            productSlug={previewSlug}
             refreshKey={previewRevision}
           />
           <p className="text-xs text-zinc-500">
@@ -447,7 +869,7 @@ export default function StorefrontPage() {
         <div className="space-y-6">
           <StorefrontPreview
             baseUrl={previewBase}
-            productSlug={firstProduct?.slug ?? null}
+            productSlug={previewSlug}
             refreshKey={previewRevision}
           />
           <section className="admin-card p-6 text-sm">

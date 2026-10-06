@@ -47,6 +47,7 @@ export function ImageTextBlockSection({
   block: HomeBlock;
   nav: { locale: string; tenant: string };
 }) {
+  const stacked = block.imageLayout === "stacked";
   const imageFirst = block.imagePosition !== "right";
   const text = (
     <div className="flex flex-col justify-center p-6 sm:p-10">
@@ -74,10 +75,17 @@ export function ImageTextBlockSection({
   return (
     <HomeBlockShell block={block}>
       <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
-        <div className={`grid md:grid-cols-2 ${imageFirst ? "" : "md:[direction:rtl]"}`}>
-          <div className={imageFirst ? "" : "md:[direction:ltr]"}>{image}</div>
-          <div className={imageFirst ? "" : "md:[direction:ltr]"}>{text}</div>
-        </div>
+        {stacked ? (
+          <div className="flex flex-col">
+            {image}
+            {text}
+          </div>
+        ) : (
+          <div className={`grid md:grid-cols-2 ${imageFirst ? "" : "md:[direction:rtl]"}`}>
+            <div className={imageFirst ? "" : "md:[direction:ltr]"}>{image}</div>
+            <div className={imageFirst ? "" : "md:[direction:ltr]"}>{text}</div>
+          </div>
+        )}
       </div>
     </HomeBlockShell>
   );
@@ -100,28 +108,93 @@ export function GalleryBlockSection({ block }: { block: HomeBlock }) {
   );
 }
 
+function resolveFeaturesVariant(block: HomeBlock): string {
+  if (
+    block.designVariantId === "features-4" ||
+    block.designVariantId === "features-icons" ||
+    block.designVariantId === "features-3"
+  ) {
+    return block.designVariantId;
+  }
+  const count = block.features?.length ?? 0;
+  if (block.align === "center" && block.paddingY === "lg") return "features-icons";
+  if (count >= 4) return "features-4";
+  return "features-3";
+}
+
+const FEATURE_ICONS = ["⚡", "🔒", "↩", "★", "✓", "◎"];
+
 export function FeaturesBlockSection({ block }: { block: HomeBlock }) {
   const items = block.features ?? [];
   if (items.length === 0) return null;
+
+  const variant = resolveFeaturesVariant(block);
+  const title = block.title ? (
+    <h2
+      className={`mb-8 text-2xl font-bold text-zinc-900 ${
+        block.align === "center" ? "text-center" : ""
+      }`}
+    >
+      {block.title}
+    </h2>
+  ) : null;
+
   return (
     <HomeBlockShell block={block}>
-      {block.title ? (
-        <h2
-          className={`mb-8 text-2xl font-bold text-zinc-900 ${
-            block.align === "center" ? "text-center" : ""
-          }`}
-        >
-          {block.title}
-        </h2>
-      ) : null}
-      <ul className="grid gap-6 sm:grid-cols-3">
-        {items.map((f, i) => (
-          <li key={i} className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <p className="font-semibold text-zinc-900">{f.title}</p>
-            <p className="mt-2 text-sm text-zinc-600">{f.text}</p>
-          </li>
-        ))}
-      </ul>
+      {variant === "features-icons" ? (
+        <>
+          {title}
+          <ul className="grid gap-8 sm:grid-cols-3">
+            {items.map((f, i) => (
+              <li key={i} className="flex flex-col items-center text-center">
+                <span
+                  className="mb-3 flex h-12 w-12 items-center justify-center rounded-full text-lg"
+                  style={{
+                    background:
+                      "color-mix(in srgb, var(--store-primary, #7c3aed) 12%, white)",
+                    color: "var(--store-primary, #7c3aed)",
+                  }}
+                  aria-hidden
+                >
+                  {FEATURE_ICONS[i % FEATURE_ICONS.length]}
+                </span>
+                <p className="font-semibold text-zinc-900">{f.title}</p>
+                <p className="mt-2 text-sm text-zinc-600">{f.text}</p>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : variant === "features-4" ? (
+        <>
+          {title}
+          <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {items.map((f, i) => (
+              <li
+                key={i}
+                className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm"
+              >
+                <p className="text-sm font-semibold text-zinc-900">{f.title}</p>
+                <p className="mt-1.5 text-xs text-zinc-600">{f.text}</p>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : (
+        <>
+          {title}
+          <ul className="grid gap-6 sm:grid-cols-3">
+            {items.map((f, i) => (
+              <li
+                key={i}
+                className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm"
+              >
+                <p className="font-semibold text-zinc-900">{f.title}</p>
+                <p className="mt-2 text-sm text-zinc-600">{f.text}</p>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </HomeBlockShell>
   );
 }

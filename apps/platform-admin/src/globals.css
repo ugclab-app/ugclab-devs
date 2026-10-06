@@ -24,3 +24,34 @@ body {
 .platform-sidebar {
   @apply bg-slate-950 text-slate-200;
 }
+
+.platform-login-bg {
+  background-color: #f8fafc;
+  background-image:
+    radial-gradient(at 0% 0%, rgba(14, 165, 233, 0.12) 0, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(99, 102, 241, 0.1) 0, transparent 45%);
+}
+
+.platform-page-header {
+  @apply flex flex-wrap items-start justify-between gap-4;
+}
+
+.platform-page-header h1 {
+  @apply text-2xl font-bold tracking-tight text-slate-900;
+}
+
+.platform-toolbar {
+  @apply flex flex-wrap gap-2;
+}
+
+.platform-btn-primary {
+  @apply inline-flex items-center justify-center rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700 disabled:opacity-50;
+}
+
+.platform-btn-secondary {
+  @apply inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50;
+}
+
+.platform-btn-danger {
+  @apply inline-flex items-center justify-center rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 transition hover:bg-red-100;
+}

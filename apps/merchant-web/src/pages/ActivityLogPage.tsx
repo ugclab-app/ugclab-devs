@@ -1,14 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import { EmptyState } from "@/components/empty-state";
+import { useAdminT } from "@/hooks/use-admin-t";
 
 export default function ActivityLogPage() {
+  const { ta, c } = useAdminT();
   const { data, isLoading } = useQuery({
     queryKey: ["activity-log"],
     queryFn: () => api.activityLog(),
   });
 
-  if (isLoading) return <p className="text-zinc-500">Loading…</p>;
+  if (isLoading) return <p className="text-zinc-500">{c.loading}</p>;
 
   const logs = (data?.logs ?? []) as {
     id: string;
@@ -21,10 +23,8 @@ export default function ActivityLogPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Activity log</h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          Who changed products, settings, and team permissions.
-        </p>
+        <h1 className="text-2xl font-bold">{ta("activityPage.title")}</h1>
+        <p className="mt-1 text-sm text-zinc-500">{ta("activityPage.description")}</p>
       </div>
       {logs.length === 0 ? (
         <EmptyState title="No activity yet" description="Actions will appear here." />

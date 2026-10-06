@@ -1,4 +1,5 @@
 import { prisma } from "@ugclab/database";
+import { parseCountryPrices } from "./country-price.js";
 
 export function parseCollectionIds(
   body: Record<string, unknown>
@@ -55,6 +56,18 @@ export function mergeTranslationsWithSeo(
     if (incomingSeo) translations._seo = incomingSeo;
   }
 
+  if (body.countryPrices !== undefined) {
+    const parsed = parseCountryPrices(String(body.countryPrices ?? ""));
+    if (parsed) translations._countryPrices = parsed;
+    else delete translations._countryPrices;
+  }
+
+  if (body.sizeChart !== undefined) {
+    const chart = String(body.sizeChart ?? "").trim();
+    if (chart) translations._sizeChart = chart;
+    else delete translations._sizeChart;
+  }
+
   if (body.seoTitle !== undefined || body.seoDescription !== undefined) {
     const prev = (translations._seo as Record<string, string> | undefined) ?? {};
     translations._seo = {
@@ -77,7 +90,9 @@ export function mergeTranslationsWithSeo(
   if (
     body.translations === undefined &&
     body.seoTitle === undefined &&
-    body.seoDescription === undefined
+    body.seoDescription === undefined &&
+    body.sizeChart === undefined &&
+    body.countryPrices === undefined
   ) {
     return undefined;
   }

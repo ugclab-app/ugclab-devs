@@ -10,17 +10,23 @@ export async function signSessionForUser(
     role: string;
     sessionVersion: number;
   },
-  impersonator?: { id: string; email: string }
+  impersonator?: { id: string; email: string },
+  tenantId?: string | null,
+  opts?: { remember?: boolean }
 ) {
-  return signSession({
-    sub: user.id,
-    email: user.email,
-    name: user.name,
-    role: user.role,
-    sv: user.sessionVersion,
-    impBy: impersonator?.id,
-    impEmail: impersonator?.email,
-  });
+  return signSession(
+    {
+      sub: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      sv: user.sessionVersion,
+      tid: tenantId || undefined,
+      impBy: impersonator?.id,
+      impEmail: impersonator?.email,
+    },
+    { expiresIn: opts?.remember ? "30d" : "7d" }
+  );
 }
 
 export async function resolveSession(

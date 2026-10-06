@@ -3,9 +3,14 @@ import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import { FormAlert } from "@/components/form-alert";
+import { AffiliatesPanel } from "@/components/affiliates-panel";
+import { TelegramBotPanel } from "@/components/telegram-bot-panel";
+import { useAuth } from "@/context/auth";
+import { useAdminT } from "@/hooks/use-admin-t";
 
 const TABS = [
   { id: "overview", label: "Overview" },
+  { id: "affiliates", label: "Creators & affiliates" },
   { id: "gift-cards", label: "Gift cards" },
   { id: "bundles", label: "Bundles" },
   { id: "upsell", label: "Post-checkout upsell" },
@@ -20,11 +25,17 @@ const TABS = [
 type TabId = (typeof TABS)[number]["id"];
 
 export default function GrowthPage() {
+  const { ta, c } = useAdminT();
+  const { tenant } = useAuth();
   const [tab, setTab] = useState<TabId>("overview");
   const [alert, setAlert] = useState<{ ok?: boolean; message?: string }>({});
   const [pending, setPending] = useState(false);
   const [apiSecret, setApiSecret] = useState<string | null>(null);
   const [webhookSecret, setWebhookSecret] = useState<string | null>(null);
+  const [utmBase, setUtmBase] = useState("");
+  const [utmSource, setUtmSource] = useState("newsletter");
+  const [utmMedium, setUtmMedium] = useState("email");
+  const [utmCampaign, setUtmCampaign] = useState("");
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -48,10 +59,10 @@ export default function GrowthPage() {
     }
   }
 
-  if (isLoading) return <p className="text-zinc-500">Loading…</p>;
+  if (isLoading) return <p className="text-zinc-500">{c.loading}</p>;
 
   const settings = (data?.settings ?? {}) as Record<string, unknown>;
-  const integrations = (settings.integrations ?? {}) as Record<string, string>;
+  const integrations = (settings.integrations ?? {}) as Record<string, string | boolean>;
   const upsell = (settings.postCheckoutUpsell ?? {}) as {
     enabled?: boolean;
     headline?: string;
@@ -73,7 +84,8 @@ export default function GrowthPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Growth</h1>
+        <h1 className="text-2xl font-bold">{ta("growthPage.title")}</h1>
+        <p className="mt-1 text-sm text-zinc-500">{ta("growthPage.description")}</p>
         <p className="mt-1 text-sm text-zinc-500">
           Gift cards, bundles, SEO, tax, integrations, webhooks, warehouses, subscriptions.
         </p>
@@ -97,6 +109,10 @@ export default function GrowthPage() {
           </button>
         ))}
       </div>
+
+      {tab === "affiliates" && tenant ? (
+        <AffiliatesPanel tenantSlug={tenant.slug} />
+      ) : null}
 
       {tab === "overview" && (
         <div className="grid gap-4 sm:grid-cols-2">
@@ -146,24 +162,51 @@ export default function GrowthPage() {
             <input name="balance" type="number" step="0.01" required placeholder="Balance" className="ugclab-input w-full" />
             <input name="email" type="email" placeholder="Recipient email" className="ugclab-input w-full" />
             <input name="note" placeholder="Note" className="ugclab-input w-full" />
-            <button type="submit" disabled={pending} className="ugclab-btn-primary">
+            <button type="submit" disabled={pending} className="ugclab-btn ugclab-btn-primary">
               Create
             </button>
           </form>
           <ul className="divide-y rounded-xl border border-zinc-200">
             {giftCards.map((g) => (
-              <li key={String(g.id)} className="flex items-center justify-between px-4 py-3 text-sm">
+              <li
+                key={String(g.id)}
+                className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm"
+              >
                 <span className="font-mono font-medium">{String(g.code)}</span>
                 <span>
                   {(Number(g.balanceCents) / 100).toFixed(2)} {String(g.currency)}
                   {!g.active ? " · inactive" : ""}
                 </span>
+                <button
+                  type="button"
+                  disabled={pending}
+                  className="ugclab-btn border border-zinc-200 bg-white text-xs"
+                  onClick={() => {
+                    const raw = window.prompt("Reload amount (e.g. 25.00)");
+                    if (raw == null || !raw.trim()) return;
+                    const amountCents = Math.round(Number(raw) * 100);
+                    if (!(amountCents > 0)) {
+                      setAlert({ ok: false, message: "Enter a positive amount" });
+                      return;
+                    }
+                    void run(
+                      () => api.reloadGiftCard(String(g.id), amountCents),
+                      "Gift card reloaded"
+                    );
+                  }}
+                >
+                  Reload
+                </button>
               </li>
             ))}
             {!giftCards.length ? (
               <li className="px-4 py-6 text-zinc-500">No gift cards yet.</li>
             ) : null}
           </ul>
+          <p className="text-xs text-zinc-500">
+            To sell a product as a gift card, enable “Sell as gift card” under the
+            product’s selling options.
+          </p>
         </div>
       )}
 
@@ -202,7 +245,7 @@ export default function GrowthPage() {
               className="ugclab-input w-full min-h-[80px]"
             />
             <textarea name="description" placeholder="Description" className="ugclab-input w-full" />
-            <button type="submit" disabled={pending} className="ugclab-btn-primary">
+            <button type="submit" disabled={pending} className="ugclab-btn ugclab-btn-primary">
               Create bundle
             </button>
           </form>
@@ -257,7 +300,7 @@ export default function GrowthPage() {
             placeholder="Product IDs (comma-separated)"
             className="ugclab-input w-full min-h-[80px]"
           />
-          <button type="submit" disabled={pending} className="ugclab-btn-primary">
+          <button type="submit" disabled={pending} className="ugclab-btn ugclab-btn-primary">
             Save
           </button>
         </form>
@@ -301,7 +344,7 @@ export default function GrowthPage() {
               placeholder="Default meta description"
               className="ugclab-input w-full min-h-[80px]"
             />
-            <button type="submit" disabled={pending} className="ugclab-btn-primary">
+            <button type="submit" disabled={pending} className="ugclab-btn ugclab-btn-primary">
               Save store SEO
             </button>
           </form>
@@ -329,6 +372,13 @@ export default function GrowthPage() {
           }}
         >
           <h2 className="font-semibold">Tax / VAT</h2>
+          <p className="text-sm text-zinc-500">
+            Prefer{" "}
+            <a href="/settings?tab=tax" className="text-violet-600 underline">
+              Settings → Tax
+            </a>{" "}
+            (and Markets for country rates). Changes here sync the same store settings.
+          </p>
           <input
             name="taxPercent"
             type="number"
@@ -348,64 +398,176 @@ export default function GrowthPage() {
             />
             Use Stripe Tax at checkout (when Stripe is connected)
           </label>
-          <button type="submit" disabled={pending} className="ugclab-btn-primary">
+          <button type="submit" disabled={pending} className="ugclab-btn ugclab-btn-primary">
             Save
           </button>
         </form>
       )}
 
       {tab === "integrations" && (
-        <form
-          className="max-w-lg space-y-3 rounded-xl border border-zinc-200 p-5"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const fd = new FormData(e.currentTarget);
-            void run(
-              () =>
-                api.patchGrowthSettings({
-                  integrations: {
-                    metaPixelId: fd.get("metaPixelId"),
-                    gaMeasurementId: fd.get("gaMeasurementId"),
-                    tiktokPixelId: fd.get("tiktokPixelId"),
-                    gtmId: fd.get("gtmId"),
-                  },
-                }),
-              "Integrations saved"
-            );
-          }}
-        >
-          <input
-            name="metaPixelId"
-            defaultValue={integrations.metaPixelId ?? ""}
-            placeholder="Meta Pixel ID"
-            className="ugclab-input w-full"
-          />
-          <input
-            name="gaMeasurementId"
-            defaultValue={integrations.gaMeasurementId ?? ""}
-            placeholder="Google Analytics (G-…)"
-            className="ugclab-input w-full"
-          />
-          <input
-            name="tiktokPixelId"
-            defaultValue={integrations.tiktokPixelId ?? ""}
-            placeholder="TikTok Pixel ID"
-            className="ugclab-input w-full"
-          />
-          <input
-            name="gtmId"
-            defaultValue={integrations.gtmId ?? ""}
-            placeholder="Google Tag Manager ID"
-            className="ugclab-input w-full"
-          />
-          <button type="submit" disabled={pending} className="ugclab-btn-primary">
-            Save
-          </button>
-        </form>
+        <div className="space-y-6">
+          <form
+            className="max-w-lg space-y-3 rounded-xl border border-zinc-200 p-5"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const fd = new FormData(e.currentTarget);
+              void run(
+                () =>
+                  api.patchGrowthSettings({
+                    integrations: {
+                      metaPixelId: fd.get("metaPixelId"),
+                      metaCapiAccessToken: fd.get("metaCapiAccessToken"),
+                      gaMeasurementId: fd.get("gaMeasurementId"),
+                      tiktokPixelId: fd.get("tiktokPixelId"),
+                      tiktokAccessToken: fd.get("tiktokAccessToken"),
+                      gtmId: fd.get("gtmId"),
+                      aiCatalogEnabled: fd.get("aiCatalogEnabled") === "on",
+                    },
+                  }),
+                "Integrations saved"
+              );
+            }}
+          >
+            <h2 className="text-base font-semibold text-zinc-900">
+              Tracking pixels
+            </h2>
+            <input
+              name="metaPixelId"
+              defaultValue={String(integrations.metaPixelId ?? "")}
+              placeholder="Meta Pixel ID"
+              className="ugclab-input w-full"
+            />
+            <input
+              name="metaCapiAccessToken"
+              type="password"
+              autoComplete="off"
+              defaultValue={String(integrations.metaCapiAccessToken ?? "")}
+              placeholder="Meta Conversions API access token"
+              className="ugclab-input w-full"
+            />
+            <input
+              name="gaMeasurementId"
+              defaultValue={String(integrations.gaMeasurementId ?? "")}
+              placeholder="Google Analytics (G-…)"
+              className="ugclab-input w-full"
+            />
+            <input
+              name="tiktokPixelId"
+              defaultValue={String(integrations.tiktokPixelId ?? "")}
+              placeholder="TikTok Pixel ID"
+              className="ugclab-input w-full"
+            />
+            <input
+              name="tiktokAccessToken"
+              type="password"
+              autoComplete="off"
+              defaultValue={String(integrations.tiktokAccessToken ?? "")}
+              placeholder="TikTok Events API access token"
+              className="ugclab-input w-full"
+            />
+            <input
+              name="gtmId"
+              defaultValue={String(integrations.gtmId ?? "")}
+              placeholder="Google Tag Manager ID"
+              className="ugclab-input w-full"
+            />
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                name="aiCatalogEnabled"
+                defaultChecked={integrations.aiCatalogEnabled === true}
+              />
+              Enable public AI catalog feed (
+              <code className="text-xs">/api/store/ai-catalog</code>)
+            </label>
+            <button type="submit" disabled={pending} className="ugclab-btn ugclab-btn-primary">
+              Save
+            </button>
+          </form>
+
+          <div className="max-w-lg space-y-3 rounded-xl border border-zinc-200 p-5">
+            <h2 className="text-base font-semibold text-zinc-900">UTM link generator</h2>
+            <p className="text-sm text-zinc-500">
+              Build campaign URLs with standard UTM parameters for ads and email.
+            </p>
+            <input
+              value={utmBase}
+              onChange={(e) => setUtmBase(e.target.value)}
+              placeholder="Base URL (e.g. https://yourstore.com/?tenant=slug)"
+              className="ugclab-input w-full"
+            />
+            <div className="grid gap-2 sm:grid-cols-3">
+              <input
+                value={utmSource}
+                onChange={(e) => setUtmSource(e.target.value)}
+                placeholder="utm_source"
+                className="ugclab-input w-full"
+              />
+              <input
+                value={utmMedium}
+                onChange={(e) => setUtmMedium(e.target.value)}
+                placeholder="utm_medium"
+                className="ugclab-input w-full"
+              />
+              <input
+                value={utmCampaign}
+                onChange={(e) => setUtmCampaign(e.target.value)}
+                placeholder="utm_campaign"
+                className="ugclab-input w-full"
+              />
+            </div>
+            {(() => {
+              let url = "";
+              try {
+                if (utmBase.trim()) {
+                  const u = new URL(utmBase.trim());
+                  if (utmSource.trim()) u.searchParams.set("utm_source", utmSource.trim());
+                  if (utmMedium.trim()) u.searchParams.set("utm_medium", utmMedium.trim());
+                  if (utmCampaign.trim()) u.searchParams.set("utm_campaign", utmCampaign.trim());
+                  url = u.toString();
+                }
+              } catch {
+                url = "";
+              }
+              return (
+                <>
+                  <input
+                    readOnly
+                    value={url}
+                    placeholder="Generated URL"
+                    className="ugclab-input w-full font-mono text-xs"
+                  />
+                  <button
+                    type="button"
+                    disabled={!url}
+                    className="ugclab-btn border border-zinc-200 bg-white text-sm"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(url);
+                      setAlert({ ok: true, message: "UTM link copied" });
+                    }}
+                  >
+                    Copy URL
+                  </button>
+                </>
+              );
+            })()}
+          </div>
+
+          <TelegramBotPanel />
+        </div>
       )}
 
       {tab === "webhooks" && (
         <div className="space-y-6 max-w-xl">
+          <div className="rounded-xl border border-violet-100 bg-violet-50 p-4 text-sm text-violet-950">
+            <p className="font-semibold">Public Admin API</p>
+            <p className="mt-1 text-violet-900/90">
+              Use a key as <code className="text-xs">Authorization: Bearer ugc_…</code> against{" "}
+              <code className="text-xs">/api/v1</code> —{" "}
+              <code className="text-xs">GET /products</code>,{" "}
+              <code className="text-xs">GET /orders</code>.
+            </p>
+          </div>
           <form
             className="rounded-xl border border-zinc-200 p-5 space-y-3"
             onSubmit={(e) => {
@@ -421,7 +583,7 @@ export default function GrowthPage() {
             }}
           >
             <input name="url" required placeholder="https://…" className="ugclab-input w-full" />
-            <button type="submit" disabled={pending} className="ugclab-btn-primary">
+            <button type="submit" disabled={pending} className="ugclab-btn ugclab-btn-primary">
               Add webhook
             </button>
           </form>
@@ -442,7 +604,7 @@ export default function GrowthPage() {
             }}
           >
             <input name="name" placeholder="Key name" className="ugclab-input w-full" />
-            <button type="submit" disabled={pending} className="ugclab-btn-primary">
+            <button type="submit" disabled={pending} className="ugclab-btn ugclab-btn-primary">
               Create API key
             </button>
           </form>
@@ -479,7 +641,7 @@ export default function GrowthPage() {
       )}
 
       {tab === "warehouses" && (
-        <div className="space-y-4 max-w-md">
+        <div className="space-y-4 max-w-lg">
           <form
             className="rounded-xl border border-zinc-200 p-5 space-y-3"
             onSubmit={(e) => {
@@ -500,16 +662,101 @@ export default function GrowthPage() {
               <input type="checkbox" name="isDefault" />
               Default warehouse (deduct stock on orders)
             </label>
-            <button type="submit" disabled={pending} className="ugclab-btn-primary">
+            <button type="submit" disabled={pending} className="ugclab-btn ugclab-btn-primary">
               Add warehouse
             </button>
           </form>
-          <ul className="rounded-xl border divide-y text-sm">
+          <ul className="space-y-4">
             {warehouses.map((w) => (
-              <li key={String(w.id)} className="px-4 py-3">
-                {String(w.name)}
-                {w.isDefault ? " (default)" : ""} ·{" "}
-                {Array.isArray(w.stock) ? w.stock.length : 0} SKUs
+              <li key={String(w.id)} className="rounded-xl border border-zinc-200 p-4 space-y-3 text-sm">
+                <p className="font-medium">
+                  {String(w.name)}
+                  {w.isDefault ? " (default)" : ""} ·{" "}
+                  {Array.isArray(w.stock) ? w.stock.length : 0} SKUs
+                  {w.pickupEnabled ? " · pickup on" : ""}
+                </p>
+                <form
+                  className="grid gap-2 sm:grid-cols-2"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const fd = new FormData(e.currentTarget);
+                    void run(
+                      () =>
+                        api.patchWarehousePickup(String(w.id), {
+                          pickupEnabled: fd.get("pickupEnabled") === "on",
+                          pickupInstructions:
+                            String(fd.get("pickupInstructions") ?? "") || null,
+                          address1: String(fd.get("address1") ?? "") || null,
+                          address2: String(fd.get("address2") ?? "") || null,
+                          city: String(fd.get("city") ?? "") || null,
+                          postal: String(fd.get("postal") ?? "") || null,
+                          country: String(fd.get("country") ?? "") || null,
+                          phone: String(fd.get("phone") ?? "") || null,
+                        }),
+                      "Pickup settings saved"
+                    );
+                  }}
+                >
+                  <label className="flex items-center gap-2 sm:col-span-2">
+                    <input
+                      type="checkbox"
+                      name="pickupEnabled"
+                      defaultChecked={!!w.pickupEnabled}
+                    />
+                    Enable store pickup (BOPIS)
+                  </label>
+                  <input
+                    name="address1"
+                    placeholder="Address line 1"
+                    defaultValue={String(w.address1 ?? "")}
+                    className="ugclab-input"
+                  />
+                  <input
+                    name="address2"
+                    placeholder="Address line 2"
+                    defaultValue={String(w.address2 ?? "")}
+                    className="ugclab-input"
+                  />
+                  <input
+                    name="city"
+                    placeholder="City"
+                    defaultValue={String(w.city ?? "")}
+                    className="ugclab-input"
+                  />
+                  <input
+                    name="postal"
+                    placeholder="Postal"
+                    defaultValue={String(w.postal ?? "")}
+                    className="ugclab-input"
+                  />
+                  <input
+                    name="country"
+                    placeholder="Country (US)"
+                    defaultValue={String(w.country ?? "")}
+                    className="ugclab-input"
+                    maxLength={2}
+                  />
+                  <input
+                    name="phone"
+                    placeholder="Phone"
+                    defaultValue={String(w.phone ?? "")}
+                    className="ugclab-input"
+                  />
+                  <textarea
+                    name="pickupInstructions"
+                    placeholder="Pickup instructions"
+                    defaultValue={String(w.pickupInstructions ?? "")}
+                    className="ugclab-input sm:col-span-2"
+                    rows={2}
+                  />
+                  <button
+                    type="submit"
+                    disabled={pending}
+                    className="ugclab-btn border border-zinc-200 bg-white text-xs sm:col-span-2"
+                  >
+                    Save pickup
+                  </button>
+                </form>
               </li>
             ))}
           </ul>
@@ -519,7 +766,7 @@ export default function GrowthPage() {
       {tab === "subscriptions" && (
         <div className="space-y-2 max-w-2xl">
           <p className="text-sm text-zinc-600">
-            Mark digital/SaaS products for recurring billing. Stripe Subscriptions checkout can be wired next.
+            Mark products for recurring billing. Stripe subscription checkout is live.
           </p>
           <ul className="divide-y rounded-xl border text-sm">
             {products.map((p) => (

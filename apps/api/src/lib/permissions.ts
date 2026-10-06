@@ -120,6 +120,7 @@ const ROUTE_PERMISSION: Record<string, MerchantPermission> = {
   "/products": "products",
   "/collections": "collections",
   "/orders": "orders",
+  "/disputes": "orders",
   "/customers": "customers",
   "/shipping": "shipping",
   "/discounts": "discounts",
@@ -127,6 +128,7 @@ const ROUTE_PERMISSION: Record<string, MerchantPermission> = {
   "/pages": "pages",
   "/reviews": "reviews",
   "/draft-orders": "draft-orders",
+  "/pos": "draft-orders",
   "/reports": "reports",
   "/storefront": "storefront",
   "/settings": "settings",
@@ -135,6 +137,7 @@ const ROUTE_PERMISSION: Record<string, MerchantPermission> = {
   "/activity-log": "activity-log",
   "/marketing": "marketing",
   "/growth": "growth",
+  "/apps": "growth",
   "/inventory": "products",
 };
 
@@ -246,8 +249,6 @@ export async function guardOrdersAccess(
   if (!hasPermission(access.permissions, "orders")) {
     return { ok: false, error: "Forbidden", status: 403 };
   }
-  const tfa = await requireSensitive2fa(session, "orders");
-  if (!tfa.ok) return tfa;
   return { ok: true, access };
 }
 

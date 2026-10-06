@@ -8,7 +8,6 @@ import {
   UserRole,
 } from "@ugclab/database";
 import type { AuthEnv } from "../middleware/session.js";
-import { THEME_CATALOG_SEED } from "../data/theme-catalog-seed.js";
 import { logPlatformAudit } from "../lib/platform-audit.js";
 import {
   getBillingHealthReport,
@@ -53,6 +52,7 @@ export function registerPlatformV2Routes(platform: Hono<AuthEnv>) {
         const meta = (e.meta ?? {}) as Record<string, unknown>;
         return {
           id: e.id,
+          disputeId: String(meta.disputeId ?? ""),
           tenantId: e.tenantId,
           tenantName: e.order.tenant.name,
           tenantSlug: e.order.tenant.slug,
@@ -62,11 +62,57 @@ export function registerPlatformV2Routes(platform: Hono<AuthEnv>) {
           currency: String(meta.currency ?? e.order.currency),
           status: String(meta.status ?? "unknown"),
           reason: String(meta.reason ?? ""),
+          evidenceDueBy: meta.evidenceDueBy
+            ? String(meta.evidenceDueBy)
+            : null,
+          evidenceSubmitted: meta.evidenceSubmitted === true,
           body: e.body,
           createdAt: e.createdAt.toISOString(),
         };
       }),
     });
+  });
+
+  platform.post("/disputes/:disputeId/evidence", async (c) => {
+    const disputeId = c.req.param("disputeId");
+    if (!disputeId) return c.json({ error: "disputeId required" }, 400);
+    const body = await c.req.json<Record<string, unknown>>();
+    try {
+      const { submitDisputeEvidence } = await import("../lib/stripe-disputes.js");
+      const updated = await submitDisputeEvidence(disputeId, {
+        customerName: body.customerName ? String(body.customerName) : undefined,
+        customerEmailAddress: body.customerEmailAddress
+          ? String(body.customerEmailAddress)
+          : undefined,
+        shippingTrackingNumber: body.shippingTrackingNumber
+          ? String(body.shippingTrackingNumber)
+          : undefined,
+        shippingCarrier: body.shippingCarrier
+          ? String(body.shippingCarrier)
+          : undefined,
+        shippingDocumentation: body.shippingDocumentation
+          ? String(body.shippingDocumentation)
+          : undefined,
+        productDescription: body.productDescription
+          ? String(body.productDescription)
+          : undefined,
+        refundPolicy: body.refundPolicy ? String(body.refundPolicy) : undefined,
+        uncategorizedText: body.uncategorizedText
+          ? String(body.uncategorizedText)
+          : undefined,
+        submit: body.submit === true,
+      });
+      return c.json({
+        ok: true,
+        status: updated.status,
+        disputeId: updated.id,
+      });
+    } catch (e) {
+      return c.json(
+        { error: e instanceof Error ? e.message : "Evidence submit failed" },
+        400
+      );
+    }
   });
 
   platform.get("/audit", async (c) => {
@@ -206,118 +252,6 @@ export function registerPlatformV2Routes(platform: Hono<AuthEnv>) {
       include: { _count: { select: { tenants: true } } },
     });
     return c.json({ plan });
-  });
-
-  platform.get("/themes", async (c) => {
-    const count = await prisma.storeThemeCatalog.count();
-    if (count === 0) {
-      await prisma.storeThemeCatalog.createMany({
-        data: THEME_CATALOG_SEED.map((t) => ({
-          id: t.id,
-          label: t.label,
-          featured: t.featured,
-          sortOrder: t.sortOrder,
-          published: true,
-        })),
-        skipDuplicates: true,
-      });
-    }
-    const themes = await prisma.storeThemeCatalog.findMany({
-      orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
-    });
-    return c.json({ themes });
-  });
-
-  platform.patch("/themes/:id", async (c) => {
-    const body = await c.req.json<{
-      published?: boolean;
-      featured?: boolean;
-      label?: string;
-      sortOrder?: number;
-    }>();
-    const theme = await prisma.storeThemeCatalog.update({
-      where: { id: c.req.param("id") },
-      data: {
-        ...(body.published !== undefined ? { published: body.published } : {}),
-        ...(body.featured !== undefined ? { featured: body.featured } : {}),
-        ...(body.label !== undefined ? { label: body.label } : {}),
-        ...(body.sortOrder !== undefined
-          ? { sortOrder: Math.floor(body.sortOrder) }
-          : {}),
-      },
-    });
-    return c.json({ theme });
-  });
-
-  platform.get("/themes/usage", async (c) => {
-    const settings = await prisma.storeSettings.findMany({
-      select: { tenantId: true, theme: true, tenant: { select: { name: true, slug: true } } },
-    });
-    const counts = new Map<string, number>();
-    let custom = 0;
-    for (const s of settings) {
-      const theme = s.theme as Record<string, unknown> | null;
-      const presetId =
-        typeof theme?.catalogThemeId === "string"
-          ? theme.catalogThemeId
-          : typeof theme?.presetId === "string"
-            ? theme.presetId
-            : null;
-      if (presetId) {
-        counts.set(presetId, (counts.get(presetId) ?? 0) + 1);
-      } else {
-        custom += 1;
-      }
-    }
-    return c.json({
-      byTheme: [...counts.entries()].map(([themeId, storeCount]) => ({
-        themeId,
-        storeCount,
-      })),
-      customThemeStores: custom,
-      totalStores: settings.length,
-    });
-  });
-
-  platform.get("/domains", async (c) => {
-    const domains = await prisma.customDomain.findMany({
-      orderBy: { createdAt: "desc" },
-      include: {
-        tenant: { select: { id: true, name: true, slug: true } },
-      },
-    });
-    return c.json({
-      domains: domains.map((d) => ({
-        id: d.id,
-        domain: d.domain,
-        verified: d.verified,
-        verificationToken: d.verificationToken,
-        tenantId: d.tenantId,
-        tenantName: d.tenant.name,
-        tenantSlug: d.tenant.slug,
-        createdAt: d.createdAt.toISOString(),
-      })),
-    });
-  });
-
-  platform.post("/domains/:id/verify", async (c) => {
-    const session = c.get("session");
-    const record = await prisma.customDomain.findUnique({
-      where: { id: c.req.param("id") },
-    });
-    if (!record) return c.json({ error: "Not found" }, 404);
-    const updated = await prisma.customDomain.update({
-      where: { id: record.id },
-      data: { verified: true },
-    });
-    await logPlatformAudit({
-      actorUserId: session.sub,
-      actorEmail: session.email,
-      action: "domain.verify",
-      summary: `Verified domain ${record.domain}`,
-      meta: { domainId: record.id, tenantId: record.tenantId },
-    });
-    return c.json({ domain: updated });
   });
 
   platform.post("/tenants", async (c) => {
@@ -495,6 +429,7 @@ export function registerPlatformV2Routes(platform: Hono<AuthEnv>) {
       message: string;
       active?: boolean;
       planSlugs?: string[];
+      tenantIds?: string[];
     }>();
     const item = await prisma.platformAnnouncement.create({
       data: {
@@ -502,6 +437,7 @@ export function registerPlatformV2Routes(platform: Hono<AuthEnv>) {
         message: String(body.message ?? "").trim(),
         active: body.active ?? false,
         planSlugs: body.planSlugs ?? [],
+        tenantIds: body.tenantIds ?? [],
       },
     });
     return c.json({ announcement: item }, 201);
@@ -513,6 +449,7 @@ export function registerPlatformV2Routes(platform: Hono<AuthEnv>) {
       message?: string;
       active?: boolean;
       planSlugs?: string[];
+      tenantIds?: string[];
     }>();
     const item = await prisma.platformAnnouncement.update({
       where: { id: c.req.param("id") },
@@ -521,6 +458,7 @@ export function registerPlatformV2Routes(platform: Hono<AuthEnv>) {
         ...(body.message !== undefined ? { message: body.message } : {}),
         ...(body.active !== undefined ? { active: body.active } : {}),
         ...(body.planSlugs !== undefined ? { planSlugs: body.planSlugs } : {}),
+        ...(body.tenantIds !== undefined ? { tenantIds: body.tenantIds } : {}),
       },
     });
     return c.json({ announcement: item });

@@ -73,6 +73,8 @@ export type HomeBlock = {
   paddingY?: BlockPadding;
   contentWidth?: BlockWidth;
   imagePosition?: "left" | "right";
+  /** image_text: side-by-side vs image above text */
+  imageLayout?: "side" | "stacked";
   spacerHeight?: number;
   mapEmbedUrl?: string;
   countdownEndsAt?: string;
@@ -99,6 +101,27 @@ export type HomeBlock = {
   blogLimit?: number;
   /** Product compare slugs */
   compareProductSlugs?: string[];
+  /** Site builder layout preset id (block-variants) */
+  designVariantId?: string;
+  /** Where this block is shown (default all) */
+  visibilityScope?: "all" | "home" | "product" | "pages";
+  /** tabs block */
+  tabStyle?: "underline" | "pills" | "boxed";
+  /** carousel block */
+  carouselAutoplay?: boolean;
+  carouselIntervalSec?: number;
+  /** reviews block */
+  reviewLimit?: number;
+  /** 0 = all ratings, 4 or 5 = minimum stars */
+  reviewMinRating?: number;
+  reviewSort?: "newest" | "rating";
+  reviewPinnedIds?: string[];
+  /** Show placeholder when no approved reviews (storefront) */
+  reviewShowWhenEmpty?: boolean;
+  /** Trustpilot / Google embed URL */
+  externalReviewsEmbedUrl?: string;
+  /** Show average stars above grid */
+  reviewShowAggregate?: boolean;
 };
 
 export type ThemeVersionSnapshot = {
@@ -211,6 +234,23 @@ export type StoreTheme = {
   collectionPageBlocks?: Record<string, HomeBlock[]>;
   /** Blocks below product detail on all PDPs */
   productPageBlocks?: HomeBlock[];
+  /** Extra blocks on cart page */
+  cartBlocks?: HomeBlock[];
+  /** Extra blocks on 404 page */
+  notFoundBlocks?: HomeBlock[];
+  /** Header layout: logo position / density */
+  headerLayout?: "logo-left" | "logo-center" | "minimal";
+  /** Sticky header (default true) */
+  headerSticky?: boolean;
+  /** Show search in header (default true) */
+  headerShowSearch?: boolean;
+  /** Footer column layout */
+  footerLayout?: "columns-3" | "columns-2" | "stacked" | "minimal";
+  footerShowSocial?: boolean;
+  footerShowCollections?: boolean;
+  footerCopyright?: string;
+  /** Custom footer link columns (in addition to auto collections/info) */
+  footerColumns?: { title: string; links: { label: string; href: string }[] }[];
   /** Published snapshots for restore (newest first) */
   themeVersionHistory?: ThemeVersionSnapshot[];
   /** Hero block per collection slug */
@@ -430,6 +470,12 @@ function parseHomeBlocks(raw: unknown): HomeBlock[] | undefined {
         row.contentWidth === "full" ? "full" : row.contentWidth === "boxed" ? "boxed" : undefined,
       imagePosition:
         row.imagePosition === "right" ? "right" : row.imagePosition === "left" ? "left" : undefined,
+      imageLayout:
+        row.imageLayout === "stacked"
+          ? "stacked"
+          : row.imageLayout === "side"
+            ? "side"
+            : undefined,
       spacerHeight:
         typeof row.spacerHeight === "number" && row.spacerHeight > 0
           ? row.spacerHeight
@@ -469,6 +515,37 @@ function parseHomeBlocks(raw: unknown): HomeBlock[] | undefined {
           ? row.blogLimit
           : parseInt(String(row.blogLimit ?? ""), 10) || undefined,
       compareProductSlugs: parseStringArray(row.compareProductSlugs),
+      designVariantId: str(row.designVariantId),
+      visibilityScope:
+        row.visibilityScope === "home" ||
+        row.visibilityScope === "product" ||
+        row.visibilityScope === "pages"
+          ? row.visibilityScope
+          : row.visibilityScope === "all"
+            ? "all"
+            : undefined,
+      tabStyle:
+        row.tabStyle === "pills" || row.tabStyle === "boxed" || row.tabStyle === "underline"
+          ? row.tabStyle
+          : undefined,
+      carouselAutoplay: row.carouselAutoplay === true,
+      carouselIntervalSec:
+        typeof row.carouselIntervalSec === "number" && row.carouselIntervalSec > 0
+          ? row.carouselIntervalSec
+          : parseInt(String(row.carouselIntervalSec ?? ""), 10) || undefined,
+      reviewLimit:
+        typeof row.reviewLimit === "number" && row.reviewLimit > 0
+          ? row.reviewLimit
+          : parseInt(String(row.reviewLimit ?? ""), 10) || undefined,
+      reviewMinRating:
+        typeof row.reviewMinRating === "number" && row.reviewMinRating >= 0
+          ? row.reviewMinRating
+          : parseInt(String(row.reviewMinRating ?? ""), 10) || undefined,
+      reviewSort: row.reviewSort === "rating" || row.reviewSort === "newest" ? row.reviewSort : undefined,
+      reviewPinnedIds: parseStringArray(row.reviewPinnedIds),
+      reviewShowWhenEmpty: row.reviewShowWhenEmpty === true,
+      externalReviewsEmbedUrl: str(row.externalReviewsEmbedUrl),
+      reviewShowAggregate: row.reviewShowAggregate === true,
     });
   }
   return blocks.length > 0 ? blocks : undefined;
@@ -564,6 +641,27 @@ function parseCustomThemePresets(raw: unknown): CustomThemePreset[] | undefined 
   return presets.length > 0 ? presets : undefined;
 }
 
+function parseFooterColumns(
+  raw: unknown
+): { title: string; links: { label: string; href: string }[] }[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const cols: { title: string; links: { label: string; href: string }[] }[] = [];
+  for (const row of raw as Record<string, unknown>[]) {
+    const title = str(row.title);
+    if (!title) continue;
+    const links: { label: string; href: string }[] = [];
+    if (Array.isArray(row.links)) {
+      for (const l of row.links as Record<string, unknown>[]) {
+        const label = str(l.label);
+        const href = str(l.href) ?? str(l.path);
+        if (label && href) links.push({ label, href });
+      }
+    }
+    cols.push({ title, links });
+  }
+  return cols.length > 0 ? cols : undefined;
+}
+
 function parseSocialLinks(raw: unknown): SocialLinks | undefined {
   if (!raw || typeof raw !== "object") return undefined;
   const s = raw as Record<string, unknown>;
@@ -577,7 +675,9 @@ function parseSocialLinks(raw: unknown): SocialLinks | undefined {
 }
 
 export function resolveHomeBlocks(theme: StoreTheme): HomeBlock[] {
-  if (theme.homeBlocks?.length) return theme.homeBlocks;
+  // Explicit empty array must stay empty (e.g. Global sections with no blocks).
+  // Only fall back to legacy `homeSections` when `homeBlocks` is missing.
+  if (Array.isArray(theme.homeBlocks)) return theme.homeBlocks;
   const sections = theme.homeSections ?? DEFAULT_STORE_THEME.homeSections;
   return sections.map((type, i) => ({
     id: `legacy_${type}_${i}`,
@@ -677,6 +777,27 @@ export function parseStoreTheme(raw: unknown): StoreTheme {
     globalBlocks: parseHomeBlocks(t.globalBlocks),
     collectionPageBlocks: parsePageBlocks(t.collectionPageBlocks),
     productPageBlocks: parseHomeBlocks(t.productPageBlocks),
+    cartBlocks: parseHomeBlocks(t.cartBlocks),
+    notFoundBlocks: parseHomeBlocks(t.notFoundBlocks),
+    headerLayout:
+      t.headerLayout === "logo-center" ||
+      t.headerLayout === "minimal" ||
+      t.headerLayout === "logo-left"
+        ? t.headerLayout
+        : undefined,
+    headerSticky: t.headerSticky !== false,
+    headerShowSearch: t.headerShowSearch !== false,
+    footerLayout:
+      t.footerLayout === "columns-2" ||
+      t.footerLayout === "stacked" ||
+      t.footerLayout === "minimal" ||
+      t.footerLayout === "columns-3"
+        ? t.footerLayout
+        : undefined,
+    footerShowSocial: t.footerShowSocial !== false,
+    footerShowCollections: t.footerShowCollections !== false,
+    footerCopyright: str(t.footerCopyright),
+    footerColumns: parseFooterColumns(t.footerColumns),
     themeVersionHistory: parseThemeVersionHistory(t.themeVersionHistory),
     collectionHeroes: parseCollectionHeroes(t.collectionHeroes),
     collectionSeo: parseCollectionSeo(t.collectionSeo),

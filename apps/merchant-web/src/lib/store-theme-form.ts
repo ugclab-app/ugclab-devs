@@ -47,7 +47,7 @@ export function parseNavLinksFromForm(fd: FormData): NavLink[] | undefined {
   return legacy.length > 0 ? legacy : undefined;
 }
 
-export function buildThemeFromForm(fd: FormData): StoreTheme {
+export function buildThemeFromForm(fd: FormData, existing?: StoreTheme | null): StoreTheme {
   const sections: HomeSection[] = [];
   if (fd.get("section_hero") === "on") sections.push("hero");
   if (fd.get("section_new_arrivals") === "on") sections.push("new_arrivals");
@@ -84,7 +84,7 @@ export function buildThemeFromForm(fd: FormData): StoreTheme {
     storeClosedMessage: String(fd.get("storeClosedMessage") ?? "").trim() || undefined,
     customCss: String(fd.get("customCss") ?? "").trim() || undefined,
     trustBadgesEnabled: fd.get("trustBadgesEnabled") === "on",
-    stripeTaxEnabled: fd.get("stripeTaxEnabled") === "on",
+    stripeTaxEnabled: existing?.stripeTaxEnabled === true,
     stripeLinkEnabled: fd.get("stripeLinkEnabled") === "on",
     stripePaypalEnabled: fd.get("stripePaypalEnabled") === "on",
     shippingCarrierLabel: String(fd.get("shippingCarrierLabel") ?? "").trim() || undefined,
@@ -106,5 +106,61 @@ export function buildThemeFromForm(fd: FormData): StoreTheme {
     cookieConsentEnabled: fd.get("cookieConsentEnabled") !== "off",
     cookieConsentMessage:
       String(fd.get("cookieConsentMessage") ?? "").trim() || undefined,
+    headerLayout: (() => {
+      const v = String(fd.get("headerLayout") ?? "").trim();
+      if (v === "logo-center" || v === "minimal" || v === "logo-left") return v;
+      return existing?.headerLayout;
+    })(),
+    headerSticky: fd.has("headerLayout")
+      ? fd.get("headerSticky") === "on"
+      : existing?.headerSticky !== false,
+    headerShowSearch: fd.has("headerLayout")
+      ? fd.get("headerShowSearch") === "on"
+      : existing?.headerShowSearch !== false,
+    footerLayout: (() => {
+      const v = String(fd.get("footerLayout") ?? "").trim();
+      if (
+        v === "columns-2" ||
+        v === "stacked" ||
+        v === "minimal" ||
+        v === "columns-3"
+      )
+        return v;
+      return existing?.footerLayout;
+    })(),
+    footerShowSocial: fd.has("footerLayout")
+      ? fd.get("footerShowSocial") === "on"
+      : existing?.footerShowSocial !== false,
+    footerShowCollections: fd.has("footerLayout")
+      ? fd.get("footerShowCollections") === "on"
+      : existing?.footerShowCollections !== false,
+    footerCopyright: fd.has("footerCopyright")
+      ? String(fd.get("footerCopyright") ?? "").trim() || undefined
+      : existing?.footerCopyright,
+    footerColumns: (() => {
+      if (!fd.has("footerColumnsJson")) return existing?.footerColumns;
+      const raw = String(fd.get("footerColumnsJson") ?? "").trim();
+      if (!raw) return undefined;
+      try {
+        const arr = JSON.parse(raw) as {
+          title?: string;
+          links?: { label?: string; href?: string }[];
+        }[];
+        if (!Array.isArray(arr)) return existing?.footerColumns;
+        return arr
+          .map((c) => ({
+            title: String(c.title ?? "").trim(),
+            links: (c.links ?? [])
+              .map((l) => ({
+                label: String(l.label ?? "").trim(),
+                href: String(l.href ?? "").trim(),
+              }))
+              .filter((l) => l.label && l.href),
+          }))
+          .filter((c) => c.title);
+      } catch {
+        return existing?.footerColumns;
+      }
+    })(),
   };
 }

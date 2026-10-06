@@ -22,7 +22,7 @@ export function CatalogToolbar({
   }
 
   return (
-    <form className="mt-6 flex flex-wrap items-end gap-4 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+    <form className="mt-6 flex w-full flex-wrap items-end gap-4 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
       <label className="text-sm">
         <span className="mb-1 block text-zinc-600">Sort</span>
         <select

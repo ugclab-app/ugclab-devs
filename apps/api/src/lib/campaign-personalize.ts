@@ -88,22 +88,24 @@ export function wrapTrackedLinks(html: string, campaignId: string): string {
   );
 }
 
-export function trackingPixelHtml(campaignId: string): string {
-  return `<img src="${API_PUBLIC}/api/marketing/open/${campaignId}.gif" width="1" height="1" alt="" style="display:none" />`;
+export function trackingPixelHtml(campaignId: string, variant?: "a" | "b"): string {
+  const q = variant ? `?v=${variant}` : "";
+  return `<img src="${API_PUBLIC}/api/marketing/open/${campaignId}.gif${q}" width="1" height="1" alt="" style="display:none" />`;
 }
 
 export async function buildCampaignEmail(
   ctx: PersonalizeContext,
   subject: string,
   bodyHtml: string,
-  plainText?: string | null
+  plainText?: string | null,
+  variant?: "a" | "b"
 ): Promise<{ subject: string; html: string; text: string }> {
   const unsubscribeUrl = `${API_PUBLIC}/api/marketing/unsubscribe?token=${createUnsubscribeToken(ctx.tenantId, ctx.email)}`;
   const lastOrderDate = await getLastOrderDateLabel(ctx.tenantId, ctx.email);
 
   let html = personalizeText(bodyHtml, ctx, { lastOrderDate, unsubscribeUrl });
   html = wrapTrackedLinks(html, ctx.campaignId);
-  html += trackingPixelHtml(ctx.campaignId);
+  html += trackingPixelHtml(ctx.campaignId, variant);
   html += `<p style="margin-top:24px;font-size:11px;color:#71717a;"><a href="${unsubscribeUrl}">Unsubscribe</a></p>`;
 
   const subj = personalizeText(subject, ctx, { lastOrderDate, unsubscribeUrl });

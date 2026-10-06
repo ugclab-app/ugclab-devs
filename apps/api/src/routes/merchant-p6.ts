@@ -138,14 +138,52 @@ p6.patch("/growth/settings", async (c) => {
   if (!requireGrowth(access)) return c.json({ error: "Forbidden" }, 403);
   const body = await c.req.json<Record<string, unknown>>();
 
-  const integrations =
-    body.integrations != null
-      ? parseIntegrations(body.integrations)
-      : undefined;
   const postCheckoutUpsell =
     body.postCheckoutUpsell != null
       ? parsePostCheckoutUpsell(body.postCheckoutUpsell)
       : undefined;
+
+  const stripeTaxEnabled =
+    body.stripeTaxEnabled != null
+      ? body.stripeTaxEnabled === true || body.stripeTaxEnabled === "true"
+      : undefined;
+
+  const existing = await prisma.storeSettings.findUnique({
+    where: { tenantId: tenant.id },
+    select: { theme: true, themeDraft: true, integrations: true },
+  });
+
+  let integrationsPatch: object | undefined;
+  if (body.integrations != null) {
+    const prev =
+      existing?.integrations && typeof existing.integrations === "object"
+        ? { ...(existing.integrations as Record<string, unknown>) }
+        : {};
+    const pixels = parseIntegrations(body.integrations);
+    integrationsPatch = {
+      ...prev,
+      metaPixelId: pixels.metaPixelId,
+      metaCapiAccessToken: pixels.metaCapiAccessToken,
+      gaMeasurementId: pixels.gaMeasurementId,
+      tiktokPixelId: pixels.tiktokPixelId,
+      tiktokAccessToken: pixels.tiktokAccessToken,
+      gtmId: pixels.gtmId,
+      aiCatalogEnabled: pixels.aiCatalogEnabled === true,
+    };
+  }
+
+  let themePatch: object | undefined;
+  let themeDraftPatch: object | undefined;
+  if (stripeTaxEnabled !== undefined) {
+    const { withStripeTaxOnTheme } = await import("../lib/sync-stripe-tax-theme.js");
+    const { jsonForPrisma } = await import("../lib/theme-json.js");
+    themePatch = jsonForPrisma(
+      withStripeTaxOnTheme(existing?.theme, stripeTaxEnabled)
+    ) as object;
+    themeDraftPatch = jsonForPrisma(
+      withStripeTaxOnTheme(existing?.themeDraft ?? existing?.theme, stripeTaxEnabled)
+    ) as object;
+  }
 
   await prisma.storeSettings.upsert({
     where: { tenantId: tenant.id },
@@ -160,21 +198,17 @@ p6.patch("/growth/settings", async (c) => {
               body.taxIncluded === true || body.taxIncluded === "true",
           }
         : {}),
-      ...(body.stripeTaxEnabled != null
-        ? {
-            stripeTaxEnabled:
-              body.stripeTaxEnabled === true ||
-              body.stripeTaxEnabled === "true",
-          }
-        : {}),
+      ...(stripeTaxEnabled !== undefined ? { stripeTaxEnabled } : {}),
+      ...(themePatch !== undefined ? { theme: themePatch } : {}),
+      ...(themeDraftPatch !== undefined ? { themeDraft: themeDraftPatch } : {}),
       ...(body.seoTitle != null
         ? { seoTitle: String(body.seoTitle).trim() || null }
         : {}),
       ...(body.seoDescription != null
         ? { seoDescription: String(body.seoDescription).trim() || null }
         : {}),
-      ...(integrations !== undefined
-        ? { integrations: integrations as object }
+      ...(integrationsPatch !== undefined
+        ? { integrations: integrationsPatch }
         : {}),
       ...(postCheckoutUpsell !== undefined
         ? { postCheckoutUpsell: postCheckoutUpsell as object }
@@ -299,7 +333,17 @@ p6.patch("/growth/bundles/:id", async (c) => {
 p6.post("/growth/warehouses", async (c) => {
   const { tenant, access } = await actor(c);
   if (!requireGrowth(access)) return c.json({ error: "Forbidden" }, 403);
-  const body = await c.req.json<{ name?: string; isDefault?: boolean }>();
+  const body = await c.req.json<{
+    name?: string;
+    isDefault?: boolean;
+    pickupEnabled?: boolean;
+    address1?: string;
+    city?: string;
+    postal?: string;
+    country?: string;
+    phone?: string;
+    pickupInstructions?: string;
+  }>();
   const name = String(body.name ?? "").trim();
   if (!name) return c.json({ error: "Name required" }, 400);
   if (body.isDefault) {
@@ -313,6 +357,15 @@ p6.post("/growth/warehouses", async (c) => {
       tenantId: tenant.id,
       name,
       isDefault: body.isDefault === true,
+      pickupEnabled: body.pickupEnabled === true,
+      address1: body.address1?.trim() || null,
+      city: body.city?.trim() || null,
+      postal: body.postal?.trim() || null,
+      country: body.country
+        ? String(body.country).toUpperCase().slice(0, 2)
+        : null,
+      phone: body.phone?.trim() || null,
+      pickupInstructions: body.pickupInstructions?.trim() || null,
     },
   });
   return c.json({ warehouse: wh });

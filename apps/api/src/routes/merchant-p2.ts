@@ -17,6 +17,14 @@ import {
 } from "../lib/store-page-mutate.js";
 
 import { useOrderRouteGuards } from "../middleware/merchant-guards.js";
+import {
+  cell,
+  parseCsv,
+  parsePrice,
+  previewProductCsv,
+  suggestMapping,
+  type CsvMapping,
+} from "../lib/product-csv.js";
 
 const p2 = new Hono<AuthEnv>();
 p2.use("*", requireAuth);
@@ -148,22 +156,63 @@ p2.get("/reviews", async (c) => {
   const { tenant } = await requireTenant(c.get("session"));
   const reviews = await prisma.productReview.findMany({
     where: { tenantId: tenant.id },
-    include: { product: { select: { title: true, slug: true } } },
-    orderBy: { createdAt: "desc" },
+    include: {
+      product: { select: { title: true, slug: true } },
+      order: { select: { id: true, orderNumber: true } },
+    },
+    orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
   });
   return c.json({ reviews });
 });
 
 p2.patch("/reviews/:id", async (c) => {
   const { tenant } = await requireTenant(c.get("session"));
-  const body = await c.req.json<{ approved?: boolean }>();
+  const body = await c.req.json<{
+    approved?: boolean;
+    verifiedPurchase?: boolean;
+    pinned?: boolean;
+    merchantReply?: string | null;
+    rating?: number;
+    body?: string | null;
+    authorName?: string;
+  }>();
   const review = await prisma.productReview.findFirst({
     where: { id: c.req.param("id"), tenantId: tenant.id },
   });
   if (!review) return c.json({ error: "Not found" }, 404);
+
+  const data: Record<string, unknown> = {};
+  if (body.approved !== undefined) data.approved = body.approved === true;
+  if (body.verifiedPurchase !== undefined)
+    data.verifiedPurchase = body.verifiedPurchase === true;
+  if (body.pinned !== undefined) data.pinned = body.pinned === true;
+  if (body.authorName !== undefined) {
+    const name = String(body.authorName).trim();
+    if (name) data.authorName = name;
+  }
+  if (body.rating !== undefined) {
+    const rating = Number(body.rating);
+    if (rating >= 1 && rating <= 5) data.rating = rating;
+  }
+  if (body.body !== undefined) {
+    data.body = body.body == null ? null : String(body.body).trim() || null;
+  }
+  if (body.merchantReply !== undefined) {
+    const reply =
+      body.merchantReply == null
+        ? null
+        : String(body.merchantReply).trim() || null;
+    data.merchantReply = reply;
+    data.merchantRepliedAt = reply ? new Date() : null;
+  }
+
   const updated = await prisma.productReview.update({
     where: { id: review.id },
-    data: { approved: body.approved === true },
+    data,
+    include: {
+      product: { select: { title: true, slug: true } },
+      order: { select: { id: true, orderNumber: true } },
+    },
   });
   return c.json({ review: updated });
 });
@@ -219,6 +268,7 @@ p2.post("/reviews", async (c) => {
       body: body.body?.trim() || null,
       photoUrls: parsePhotoUrls(body.photoUrls),
       approved: body.approved === true,
+      verifiedPurchase: true,
     },
     include: { product: { select: { title: true, slug: true } } },
   });
@@ -534,6 +584,10 @@ p2.patch("/orders/:id/line-fulfillment", async (c) => {
         authorEmail: user?.email,
       },
     });
+    if (order.status !== OrderStatus.FULFILLED) {
+      const { sendReviewRequestOnce } = await import("../lib/transactional-email.js");
+      sendReviewRequestOnce(order.id).catch(() => {});
+    }
   }
 
   const updated = await prisma.order.findUnique({
@@ -657,53 +711,97 @@ p2.get("/products/export.csv", async (c) => {
   });
 });
 
+p2.post("/products/import/preview", async (c) => {
+  await requireTenant(c.get("session"));
+  const form = await c.req.parseBody();
+  const file = form.file;
+  if (!(file instanceof File)) return c.json({ error: "CSV file required" }, 400);
+  const text = await file.text();
+  const table = parseCsv(text);
+  if (table.length < 2) return c.json({ error: "CSV needs a header and at least one row" }, 400);
+  let mapping = suggestMapping(table[0] ?? []);
+  if (typeof form.mapping === "string" && form.mapping.trim()) {
+    mapping = { ...mapping, ...JSON.parse(form.mapping) };
+  }
+  return c.json(previewProductCsv(text, mapping));
+});
+
 p2.post("/products/import.csv", async (c) => {
   const { tenant } = await requireTenant(c.get("session"));
   const form = await c.req.parseBody();
   const file = form.file;
   if (!(file instanceof File)) return c.json({ error: "CSV file required" }, 400);
   const text = await file.text();
-  const lines = text.split(/\r?\n/).filter((l) => l.trim());
-  if (lines.length < 2) return c.json({ error: "Empty CSV" }, 400);
+  const table = parseCsv(text);
+  if (table.length < 2) return c.json({ error: "Empty CSV" }, 400);
+  const headers = table[0] ?? [];
+  let mapping = suggestMapping(headers);
+  if (typeof form.mapping === "string" && form.mapping.trim()) {
+    mapping = { ...mapping, ...(JSON.parse(form.mapping) as CsvMapping) };
+  }
   const currency = tenant.settings?.currency ?? "USD";
   let created = 0;
-  for (const line of lines.slice(1)) {
-    const cols = line.match(/("([^"]|"")*"|[^,]+)/g)?.map((c) =>
-      c.startsWith('"') ? c.slice(1, -1).replace(/""/g, '"') : c.trim()
-    );
-    if (!cols || cols.length < 4) continue;
-    const title = cols[1] ?? "Product";
-    const slug = normalizeSlug(cols[2] ?? title) || `import-${Date.now()}`;
+  const errors: { row: number; message: string }[] = [];
+  for (let i = 1; i < table.length; i++) {
+    const cols = table[i] ?? [];
+    const title = cell(cols, mapping.title);
+    if (!title) {
+      errors.push({ row: i + 1, message: "Title is required" });
+      continue;
+    }
+    const slug =
+      normalizeSlug(cell(cols, mapping.slug) || title) || `import-${Date.now()}-${i}`;
+    const typeRaw = cell(cols, mapping.type).toUpperCase();
     const type =
-      cols[3] === "DIGITAL"
+      typeRaw === "DIGITAL"
         ? ProductType.DIGITAL
-        : cols[3] === "SERVICE"
+        : typeRaw === "SERVICE"
           ? ProductType.SERVICE
           : ProductType.PHYSICAL;
     const status =
-      cols[4] === "DRAFT" ? ProductStatus.DRAFT : ProductStatus.ACTIVE;
-    const priceAmount = parseInt(cols[5] ?? "0", 10) || 0;
-    const inventory = cols[6] ? parseInt(cols[6], 10) : type === ProductType.PHYSICAL ? 0 : null;
-    const tags = (cols[7] ?? "")
-      .split(";")
+      cell(cols, mapping.status).toUpperCase() === "DRAFT"
+        ? ProductStatus.DRAFT
+        : ProductStatus.ACTIVE;
+    const priceRaw = cell(cols, mapping.price);
+    const priceAmount = priceRaw
+      ? parsePrice(priceRaw, headers[mapping.price ?? -1] ?? "")
+      : 0;
+    if (!Number.isFinite(priceAmount)) {
+      errors.push({ row: i + 1, message: `Bad price for “${title}”` });
+      continue;
+    }
+    const inventoryRaw = cell(cols, mapping.inventory);
+    const inventory = inventoryRaw
+      ? parseInt(inventoryRaw, 10)
+      : type === ProductType.PHYSICAL
+        ? 0
+        : null;
+    const tags = cell(cols, mapping.tags)
+      .split(/[;,]/)
       .map((t) => t.trim().toLowerCase())
       .filter(Boolean);
-    const weightGrams = cols[8] ? parseInt(cols[8], 10) : null;
-    const barcode = cols[9] || null;
+    const weightRaw = cell(cols, mapping.weight);
+    const weightGrams = weightRaw ? parseInt(weightRaw, 10) : null;
+    const barcode = cell(cols, mapping.barcode) || null;
+    const description = cell(cols, mapping.description) || null;
     const exists = await prisma.product.findUnique({
       where: { tenantId_slug: { tenantId: tenant.id, slug } },
     });
-    if (exists) continue;
+    if (exists) {
+      errors.push({ row: i + 1, message: `Slug “${slug}” already exists` });
+      continue;
+    }
     await prisma.product.create({
       data: {
         tenantId: tenant.id,
         title,
         slug,
+        description,
         type,
         status,
         priceAmount,
         currency,
-        inventory,
+        inventory: Number.isFinite(inventory!) ? inventory : null,
         tags,
         weightGrams: Number.isFinite(weightGrams!) ? weightGrams : null,
         barcode,
@@ -711,7 +809,7 @@ p2.post("/products/import.csv", async (c) => {
     });
     created += 1;
   }
-  return c.json({ created });
+  return c.json({ created, skipped: errors.length, errors });
 });
 
 // ——— Collection auto rules ———

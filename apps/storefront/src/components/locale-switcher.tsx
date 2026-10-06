@@ -1,4 +1,5 @@
 import { Link, useLocation, useSearchParams } from "react-router-dom";
+import { localeLabel } from "@ugclab/i18n";
 import { useStore } from "@/context/store";
 
 export function LocaleSwitcher() {
@@ -19,13 +20,14 @@ export function LocaleSwitcher() {
           <Link
             key={loc}
             to={href}
-            className={`rounded-md px-2.5 py-1 font-medium uppercase ${
+            className={`rounded-md px-2.5 py-1 font-medium ${
               locale === loc
                 ? "bg-white text-violet-700 shadow-sm"
                 : "text-zinc-600 hover:text-zinc-900"
             }`}
+            title={loc}
           >
-            {loc}
+            {localeLabel(loc)}
           </Link>
         );
       })}

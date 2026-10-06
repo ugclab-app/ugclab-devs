@@ -42,7 +42,7 @@ export function CmsPage() {
   return (
     <article className="max-w-5xl">
       {blocks.length > 0 ? (
-        <StoreBlockRenderer blocks={blocks} theme={ctx.theme} />
+        <StoreBlockRenderer blocks={blocks} theme={ctx.theme} pageContext="page" />
       ) : (
         <>
           <h1 className="text-3xl font-bold">{page.title}</h1>

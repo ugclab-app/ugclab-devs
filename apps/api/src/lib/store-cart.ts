@@ -10,10 +10,12 @@ export type CartItem = {
   tenantId: string;
   quantity: number;
   variantId?: string;
+  /** Buyer opted into a digital subscription for this line. */
+  subscribe?: boolean;
 };
 
 export function cartKey(item: CartItem) {
-  return `${item.productId}:${item.variantId ?? ""}`;
+  return `${item.productId}:${item.variantId ?? ""}:${item.subscribe ? "sub" : ""}`;
 }
 
 export function getCart(c: Context): CartItem[] {
@@ -26,6 +28,7 @@ export function getCart(c: Context): CartItem[] {
       tenantId: i.tenantId,
       quantity: Math.max(1, i.quantity || 1),
       variantId: i.variantId || undefined,
+      subscribe: i.subscribe === true,
     }));
   } catch {
     return [];
@@ -42,10 +45,17 @@ export function setCart(c: Context, cart: CartItem[]) {
 }
 
 export async function resolveTenantBySlug(slug: string) {
-  const tenant = await prisma.tenant.findUnique({
-    where: { slug: slug.toLowerCase() },
+  const key = slug.toLowerCase();
+  const direct = await prisma.tenant.findUnique({
+    where: { slug: key },
     include: { settings: true },
   });
+  const tenant =
+    direct ??
+    (await prisma.tenant.findFirst({
+      where: { settings: { storeAliases: { has: key } } },
+      include: { settings: true },
+    }));
   if (!tenant || tenant.status !== "ACTIVE") return null;
   return tenant;
 }

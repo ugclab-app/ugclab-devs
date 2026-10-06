@@ -32,6 +32,10 @@ export function mapOrderListRow(order: {
   shippedAt: Date | null;
   guestEmail: string | null;
   tags: string[];
+  paymentHold?: boolean;
+  riskLevel?: string | null;
+  riskScore?: number | null;
+  fulfillmentMethod?: string | null;
   customer: { email: string } | null;
   items: { quantity: number; product: { type: ProductType } | null }[];
 }) {
@@ -66,6 +70,10 @@ export function mapOrderListRow(order: {
     trackingNumber: order.trackingNumber,
     tags: order.tags ?? [],
     shippedAt: order.shippedAt?.toISOString() ?? null,
+    paymentHold: order.paymentHold === true,
+    riskLevel: order.riskLevel ?? null,
+    riskScore: order.riskScore ?? null,
+    fulfillmentMethod: order.fulfillmentMethod ?? "SHIP",
     itemCount,
     hasPhysical,
     hasDigital,

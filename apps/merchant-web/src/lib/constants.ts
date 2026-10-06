@@ -8,6 +8,9 @@ export const CURRENCIES = [
   "CHF",
   "PLN",
   "TRY",
+  "KGS",
+  "KZT",
+  "UZS",
 ] as const;
 
 export const LOCALES = [
@@ -16,6 +19,9 @@ export const LOCALES = [
   { value: "fr", label: "Français" },
   { value: "es", label: "Español" },
   { value: "ru", label: "Русский" },
+  { value: "ky", label: "Кыргызча" },
+  { value: "kk", label: "Қазақша" },
+  { value: "uz", label: "Oʻzbekcha" },
 ] as const;
 
 export const TIMEZONES = [
@@ -28,6 +34,9 @@ export const TIMEZONES = [
   "Europe/Paris",
   "Europe/Warsaw",
   "Europe/Istanbul",
+  "Asia/Bishkek",
+  "Asia/Almaty",
+  "Asia/Tashkent",
   "Asia/Dubai",
   "Asia/Singapore",
   "Asia/Tokyo",

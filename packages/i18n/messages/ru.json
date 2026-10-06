@@ -22,7 +22,47 @@
     "noProducts": "Товаров пока нет. Создайте первый, чтобы начать продажи.",
     "help": "Помощь",
     "support": "Поддержка",
-    "language": "Язык"
+    "language": "Язык админки",
+    "signOut": "Выйти",
+    "storeLive": "Магазин активен",
+    "viewStore": "Открыть магазин",
+    "nav": {
+      "dashboard": "Дашборд",
+      "storefront": "Витрина",
+      "analytics": "Аналитика",
+      "products": "Товары",
+      "productsAddNew": "Новый товар",
+      "productsAll": "Все товары",
+      "productsDigital": "Цифровые",
+      "productsPhysical": "Физические",
+      "productsServices": "Услуги",
+      "productsLowStock": "Мало на складе",
+      "collections": "Коллекции",
+      "orders": "Заказы",
+      "ordersAll": "Все заказы",
+      "ordersPending": "Ожидают",
+      "ordersPaid": "Оплачены",
+      "ordersFulfilled": "Выполнены",
+      "customers": "Клиенты",
+      "customersAll": "Все клиенты",
+      "customersSegments": "Сегменты",
+      "payments": "Платежи",
+      "marketing": "Email-рассылки",
+      "growth": "Рост",
+      "abandonedCarts": "Брошенные корзины",
+      "shipping": "Доставка",
+      "inventory": "Склад",
+      "discounts": "Скидки",
+      "discountsCodes": "Промокоды",
+      "discountsAuto": "Автоскидки",
+      "pages": "Страницы",
+      "reviews": "Отзывы",
+      "draftOrders": "Черновики заказов",
+      "reports": "Отчёты",
+      "activityLog": "Журнал",
+      "settings": "Настройки",
+      "help": "Помощь"
+    }
   },
   "storefront": {
     "addToCart": "В корзину",
@@ -30,6 +70,89 @@
     "cart": "Корзина",
     "emptyCart": "Корзина пуста",
     "digital": "Цифровая загрузка",
-    "physical": "Доставка по миру"
+    "physical": "Доставка",
+    "service": "Услуга",
+    "subtotal": "Подытог",
+    "total": "Итого",
+    "tax": "Налог",
+    "shipping": "Доставка",
+    "discount": "Скидка",
+    "placeOrder": "Оформить заказ",
+    "payWithGopay": "Оплатить через GoPay",
+    "payWithCard": "Оплатить картой",
+    "email": "Email",
+    "phone": "Телефон",
+    "name": "Имя",
+    "continueShopping": "Продолжить покупки",
+    "orderConfirmed": "Заказ оформлен",
+    "thankYou": "Спасибо за покупку!",
+    "nav": {
+      "collections": "Коллекции",
+      "allCollections": "Все коллекции",
+      "blog": "Блог",
+      "wishlist": "Избранное",
+      "account": "Аккаунт",
+      "shop": "Магазин",
+      "newArrivals": "Новинки",
+      "sale": "Скидки",
+      "contact": "Контакты"
+    },
+    "search": {
+      "placeholder": "Поиск по SKU, тегам…"
+    },
+    "hero": {
+      "welcomeTo": "Добро пожаловать в",
+      "browseCollections": "Смотреть коллекции",
+      "shopAll": "Весь каталог",
+      "shopCollection": "Коллекция {{name}}",
+      "defaultSubtitle": "Подборка товаров — доставка или мгновенная загрузка.",
+      "digitalDownloads": "Цифровые товары →"
+    },
+    "catalog": {
+      "allProducts": "Все товары",
+      "resultsFor": "Результаты: «{{q}}»",
+      "items": "{{count}} товаров",
+      "itemsOne": "1 товар",
+      "noResults": "Нет товаров по вашим фильтрам.",
+      "newArrivals": "Новинки",
+      "sale": "Скидки",
+      "bestsellers": "Хиты продаж"
+    },
+    "product": {
+      "adding": "Добавляем…",
+      "added": "В корзине",
+      "chooseOptions": "Выбрать вариант",
+      "shop": "Магазин"
+    },
+    "footer": {
+      "thanks": "Спасибо, что вы с нами.",
+      "collections": "Коллекции",
+      "info": "Информация",
+      "privacy": "Конфиденциальность",
+      "refunds": "Возвраты",
+      "poweredBy": "На платформе Tescommerce."
+    },
+    "loading": {
+      "store": "Загрузка магазина…",
+      "product": "Загрузка товара…"
+    },
+    "currency": {
+      "pricesShown": "Цены в {{display}}. Списание в {{base}} при оплате."
+    },
+    "promo": {
+      "percentOff": "Скидка {{value}}% на заказ{{min}}",
+      "percentOffMin": " от {{amount}} {{currency}}",
+      "freeShipping": "Бесплатная доставка{{min}}",
+      "freeShippingMin": " от {{amount}} {{currency}}"
+    },
+    "storeClosed": "Скоро откроемся — пока можно ознакомиться с витриной.",
+    "wishlist": {
+      "title": "Избранное",
+      "add": "В избранное",
+      "saved": "♥ Сохранено"
+    },
+    "collections": {
+      "title": "Коллекции"
+    }
   }
 }

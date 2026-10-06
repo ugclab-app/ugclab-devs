@@ -8,6 +8,9 @@ const PAYOUT_CURRENCIES = [
   "CHF",
   "PLN",
   "TRY",
+  "KGS",
+  "KZT",
+  "UZS",
 ] as const;
 
 const TAX_FORM_TYPES = ["W9", "EU_VAT", "OTHER"] as const;

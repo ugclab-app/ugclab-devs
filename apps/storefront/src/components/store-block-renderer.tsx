@@ -1,5 +1,9 @@
 import type { ReactNode } from "react";
 import type { HomeBlock, ScrollAnimation, StoreTheme } from "@ugclab/tenant/store-theme";
+import {
+  filterBlocksForPage,
+  type BlockPageContext,
+} from "@ugclab/tenant/block-visibility";
 import { blockGapClass } from "@ugclab/tenant/store-theme";
 import { useStore } from "@/context/store";
 import { StoreHero } from "@/components/store-hero";
@@ -25,6 +29,7 @@ import {
   ProductCompareBlockSection,
   TabsBlockSection,
 } from "@/components/builder-extra-blocks";
+import { ReviewsBlockSection } from "@/components/reviews-block-section";
 import { ScrollReveal } from "@/components/scroll-reveal";
 
 function TextBannerSection({ block }: { block: HomeBlock }) {
@@ -104,16 +109,19 @@ const CMS_BLOCK_TYPES = new Set<HomeBlock["type"]>([
   "carousel",
   "instagram_embed",
   "product_compare",
+  "reviews",
 ]);
 
 export function StoreBlockRenderer({
   blocks,
   theme,
   scrollAnimation,
+  pageContext = "home",
 }: {
   blocks: HomeBlock[];
   theme: StoreTheme;
   scrollAnimation?: ScrollAnimation;
+  pageContext?: BlockPageContext;
 }) {
   const ctx = useStore();
   const nav = { locale: ctx.locale, tenant: ctx.tenant.slug };
@@ -132,7 +140,7 @@ export function StoreBlockRenderer({
     );
   }
 
-  for (const block of blocks) {
+  for (const block of filterBlocksForPage(blocks, pageContext)) {
     if (!CMS_BLOCK_TYPES.has(block.type) || block.type === "discount_popup") continue;
 
     if (block.type === "hero") {
@@ -188,6 +196,9 @@ export function StoreBlockRenderer({
     }
     if (block.type === "product_compare") {
       emit(block.id, <ProductCompareBlockSection block={block} />);
+    }
+    if (block.type === "reviews") {
+      emit(block.id, <ReviewsBlockSection block={block} tenant={nav.tenant} nav={nav} />);
     }
   }
 

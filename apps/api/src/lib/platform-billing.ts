@@ -118,4 +118,6 @@ export async function clearTenantSubscription(tenantId: string): Promise<void> {
       subscriptionStatus: "canceled",
     },
   });
+  const { voidPendingFeeShareForTenant } = await import("./platform-partner.js");
+  await voidPendingFeeShareForTenant(tenantId).catch(console.error);
 }

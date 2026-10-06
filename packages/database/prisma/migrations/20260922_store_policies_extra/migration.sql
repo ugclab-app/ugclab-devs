@@ -1,0 +1,8 @@
+ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "termsOfService" TEXT;
+ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "termsUrl" TEXT;
+ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "shippingPolicy" TEXT;
+ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "shippingUrl" TEXT;
+ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "legalNotice" TEXT;
+ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "legalNoticeUrl" TEXT;
+ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "contactPolicy" TEXT;
+ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "returnRules" TEXT;

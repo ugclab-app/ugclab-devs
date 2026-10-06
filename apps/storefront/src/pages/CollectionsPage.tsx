@@ -4,9 +4,11 @@ import { storeApi } from "@/api/client";
 import { useStore } from "@/context/store";
 import { useStoreParams } from "@/hooks/use-store-params";
 import { storeHref } from "@/lib/store-href";
+import { useStorefrontMessages } from "@/hooks/use-storefront-messages";
 
 export function CollectionsPage() {
   const ctx = useStore();
+  const sf = useStorefrontMessages();
   const { tenant } = useStoreParams();
   const nav = { locale: ctx.locale, tenant: ctx.tenant.slug };
 
@@ -19,7 +21,7 @@ export function CollectionsPage() {
 
   return (
     <>
-      <h1 className="text-3xl font-bold">Collections</h1>
+      <h1 className="text-3xl font-bold">{sf.collections.title}</h1>
       {collections.length === 0 ? (
         <p className="mt-8 text-zinc-500">No collections yet.</p>
       ) : (

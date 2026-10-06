@@ -35,7 +35,7 @@ export function OrderTimeline({
   }
 
   return (
-    <section className="admin-card p-6">
+    <section className="admin-card mt-8 p-6">
       <h2 className="font-semibold text-zinc-900">Timeline</h2>
       <form onSubmit={addNote} className="mt-4 flex gap-2">
         <input

@@ -27,6 +27,15 @@ import {
 import { sendShippingNotification } from "../lib/shipping-email.js";
 import { parseStoreTheme, resolveHomeBlocks } from "@ugclab/tenant/store-theme";
 import { jsonForPrisma } from "../lib/theme-json.js";
+import {
+  publishStoreTheme,
+  readThemeDraftMeta,
+  themeDraftWithMeta,
+  parseThemeExperiment,
+} from "../lib/theme-meta.js";
+import { getMerchantPulse } from "../lib/merchant-pulse.js";
+import { applyAiBlockEdit } from "../lib/ai-block-edit.js";
+import type { HomeBlock } from "@ugclab/tenant/store-theme";
 import { checkLowStockAfterInventoryChange } from "../lib/low-stock.js";
 import { logActivity } from "../lib/activity-log.js";
 import {
@@ -43,6 +52,14 @@ import {
   type CustomerListFilter,
   type CustomerListSort,
 } from "../lib/customer-metrics.js";
+import {
+  ensureThemeCatalog,
+  getCatalogThemeId,
+  loadThemeCatalogRows,
+  mapThemeCatalogRow,
+} from "../lib/theme-catalog.js";
+import { ensureBlockCatalog, getPublishedBlockIds } from "../lib/block-catalog.js";
+import { ensureSectionCatalog, getPublishedSectionIds } from "../lib/section-catalog.js";
 
 function parseProductType(raw: unknown): ProductType {
   if (raw === "DIGITAL") return ProductType.DIGITAL;
@@ -60,11 +77,24 @@ function parseTagsField(raw: unknown): string[] {
     .filter(Boolean);
 }
 
+function parseRequiresShipping(raw: unknown, defaultValue: boolean): boolean {
+  if (raw === undefined || raw === null || raw === "") return defaultValue;
+  if (raw === true || raw === "true" || raw === "on" || raw === "1") return true;
+  if (raw === false || raw === "false" || raw === "0" || raw === "off") return false;
+  return defaultValue;
+}
+
 import { useOrderRouteGuards } from "../middleware/merchant-guards.js";
 
 const merchant = new Hono<AuthEnv>();
 merchant.use("*", requireAuth);
 useOrderRouteGuards(merchant);
+
+merchant.get("/pulse", async (c) => {
+  const { tenant } = await requireTenant(c.get("session"));
+  const cards = await getMerchantPulse(tenant.id);
+  return c.json({ cards });
+});
 
 merchant.get("/dashboard", async (c) => {
   const { tenant } = await requireTenant(c.get("session"));
@@ -114,6 +144,38 @@ merchant.get("/plan-limits", async (c) => {
   });
 });
 
+/** Published theme catalog for site builder gallery (platform-controlled). */
+merchant.get("/theme-catalog", async (c) => {
+  const { tenant } = await requireTenant(c.get("session"));
+  await ensureThemeCatalog();
+  const { ensureMarketplace, activeAddonIds } = await import("../lib/marketplace.js");
+  await ensureMarketplace();
+  const [themes, owned] = await Promise.all([
+    loadThemeCatalogRows(),
+    activeAddonIds(tenant.id, "THEME"),
+  ]);
+  return c.json({
+    themes: themes
+      .map(mapThemeCatalogRow)
+      .filter((t) => t.published && !t.deprecated)
+      .map((t) => ({ ...t, owned: t.priceCents <= 0 || owned.has(t.id) })),
+  });
+});
+
+merchant.get("/block-catalog", async (c) => {
+  await requireTenant(c.get("session"));
+  await ensureBlockCatalog();
+  const ids = await getPublishedBlockIds();
+  return c.json({ blockIds: [...ids] });
+});
+
+merchant.get("/section-catalog", async (c) => {
+  await requireTenant(c.get("session"));
+  await ensureSectionCatalog();
+  const ids = await getPublishedSectionIds();
+  return c.json({ sectionIds: [...ids] });
+});
+
 merchant.post("/support", async (c) => {
   const { tenant, session } = await requireTenant(c.get("session"));
   const body = await c.req.json<{ subject: string; message: string }>();
@@ -124,11 +186,13 @@ merchant.post("/support", async (c) => {
   }
   const owner = await prisma.user.findUnique({ where: { id: session.sub } });
   const { sendEmail } = await import("../lib/email.js");
+  const { tenantHasApp } = await import("../lib/marketplace.js");
+  const priority = await tenantHasApp(tenant.id, "priority-support");
   const ops = process.env.PLATFORM_OPS_EMAIL?.trim();
   if (ops) {
     await sendEmail({
       to: ops,
-      subject: `[Support] ${tenant.slug}: ${subject}`,
+      subject: `${priority ? "[Priority] " : ""}[Support] ${tenant.slug}: ${subject}`,
       html: `<p><strong>${owner?.email ?? "merchant"}</strong> (${tenant.name})</p><p>${message}</p>`,
     }).catch(() => {});
   }
@@ -294,10 +358,30 @@ merchant.get("/products/:id", async (c) => {
       collectionIds: product.collectionItems.map((i) => i.collectionId),
       seoTitle: seo.seoTitle,
       seoDescription: seo.seoDescription,
+      sizeChart:
+        product.translations &&
+        typeof product.translations === "object" &&
+        !Array.isArray(product.translations)
+          ? String(
+              (product.translations as Record<string, unknown>)._sizeChart ?? ""
+            )
+          : "",
+      countryPrices: formatCountryPrices(product.translations),
     },
     currency: tenant.settings?.currency ?? "USD",
   });
 });
+
+function formatCountryPrices(translations: unknown): string {
+  if (!translations || typeof translations !== "object" || Array.isArray(translations)) {
+    return "";
+  }
+  const raw = (translations as Record<string, unknown>)._countryPrices;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return "";
+  return Object.entries(raw as Record<string, unknown>)
+    .map(([code, cents]) => `${code.toUpperCase()}=${(Number(cents) / 100).toFixed(2)}`)
+    .join("\n");
+}
 
 function parseMoney(v: unknown): number {
   const n = parseFloat(String(v ?? "0"));
@@ -346,6 +430,14 @@ merchant.post("/products", async (c) => {
   const tags = parseTagsField(body.tags);
   const barcode = String(body.barcode ?? "").trim() || null;
   const sku = String(body.sku ?? "").trim() || null;
+  const hsCode = String(body.hsCode ?? "").trim() || null;
+  const countryRaw = String(body.countryOfOrigin ?? "").trim().toUpperCase();
+  const countryOfOrigin =
+    countryRaw.length === 2 ? countryRaw : null;
+  const requiresShipping =
+    type === ProductType.PHYSICAL
+      ? parseRequiresShipping(body.requiresShipping, true)
+      : false;
   const costRaw = String(body.costAmount ?? body.cost ?? "").trim();
   const costAmountCents = costRaw ? parseMoney(costRaw) : null;
   const publishAtRaw = String(body.publishAt ?? "").trim();
@@ -376,6 +468,9 @@ merchant.post("/products", async (c) => {
       currency,
       inventory,
       weightGrams: Number.isFinite(weightGrams!) ? weightGrams : null,
+      requiresShipping: requiresShipping,
+      hsCode,
+      countryOfOrigin,
       tags,
       sku,
       barcode,
@@ -501,6 +596,26 @@ merchant.patch("/products/:id", async (c) => {
     : product.weightGrams;
   const tags =
     body.tags !== undefined ? parseTagsField(body.tags) : product.tags;
+  const hsCode =
+    body.hsCode !== undefined
+      ? String(body.hsCode).trim() || null
+      : product.hsCode;
+  const countryRaw =
+    body.countryOfOrigin !== undefined
+      ? String(body.countryOfOrigin).trim().toUpperCase()
+      : null;
+  const countryOfOrigin =
+    body.countryOfOrigin !== undefined
+      ? countryRaw && countryRaw.length === 2
+        ? countryRaw
+        : null
+      : product.countryOfOrigin;
+  const requiresShipping =
+    type === ProductType.PHYSICAL
+      ? body.requiresShipping !== undefined
+        ? parseRequiresShipping(body.requiresShipping, product.requiresShipping)
+        : product.requiresShipping
+      : false;
 
   if (!["DRAFT", "ACTIVE", "ARCHIVED"].includes(status)) {
     return c.json({ error: "Invalid status" }, 400);
@@ -521,6 +636,9 @@ merchant.patch("/products/:id", async (c) => {
           ? parseInt(String(body.inventory ?? product.inventory ?? 0), 10)
           : null,
       weightGrams: Number.isFinite(weightGrams!) ? weightGrams : null,
+      requiresShipping,
+      hsCode,
+      countryOfOrigin,
       tags,
       barcode:
         body.barcode !== undefined
@@ -783,6 +901,8 @@ merchant.get("/orders", async (c) => {
     country: c.req.query("country"),
     view: c.req.query("view"),
     tag: c.req.query("tag"),
+    hold: c.req.query("hold"),
+    risk: c.req.query("risk"),
   });
 
   const [orders, total, summary] = await Promise.all([
@@ -838,6 +958,25 @@ merchant.post("/orders/draft", async (c) => {
   }
 });
 
+merchant.post("/orders/:id/payment-link", async (c) => {
+  const { tenant } = await requireTenant(c.get("session"));
+  const { createDraftOrderPaymentLink } = await import(
+    "../lib/merchant-draft-order.js"
+  );
+  try {
+    const result = await createDraftOrderPaymentLink(
+      tenant.id,
+      c.req.param("id")
+    );
+    return c.json(result);
+  } catch (e) {
+    return c.json(
+      { error: e instanceof Error ? e.message : "Failed to create payment link" },
+      400
+    );
+  }
+});
+
 merchant.get("/orders/export", async (c) => {
   const { tenant } = await requireTenant(c.get("session"));
   const { buildOrderListWhere } = await import("../lib/order-list-query.js");
@@ -849,6 +988,8 @@ merchant.get("/orders/export", async (c) => {
     country: c.req.query("country"),
     view: c.req.query("view"),
     tag: c.req.query("tag"),
+    hold: c.req.query("hold"),
+    risk: c.req.query("risk"),
   });
   const accounting = c.req.query("format") === "accounting";
   const orders = await prisma.order.findMany({
@@ -895,6 +1036,19 @@ merchant.get("/orders/:id", async (c) => {
       customer: true,
       items: true,
       events: { orderBy: { createdAt: "desc" } },
+      affiliatePartner: {
+        select: { id: true, code: true, displayName: true, email: true },
+      },
+      affiliateCommission: {
+        select: {
+          id: true,
+          commissionCents: true,
+          commissionBps: true,
+          status: true,
+          paidAt: true,
+          payoutNote: true,
+        },
+      },
     },
   });
   if (!order) return c.json({ error: "Not found" }, 404);
@@ -936,6 +1090,14 @@ merchant.patch("/orders/:id/status", async (c) => {
   if (wasPending && status === OrderStatus.PAID) {
     notifyMerchantNewOrder(order.id).catch(console.error);
   }
+  if (status === OrderStatus.CANCELLED && order.status !== OrderStatus.CANCELLED) {
+    const { emailCustomerAboutOrder } = await import("../lib/transactional-email.js");
+    emailCustomerAboutOrder(order.id, "orderCancelled").catch(console.error);
+  }
+  if (status === OrderStatus.FULFILLED && order.status !== OrderStatus.FULFILLED) {
+    const { sendReviewRequestOnce } = await import("../lib/transactional-email.js");
+    sendReviewRequestOnce(order.id).catch(console.error);
+  }
 
   return c.json({ order: updated });
 });
@@ -954,6 +1116,14 @@ merchant.patch("/orders/:id/fulfillment", async (c) => {
 
   const tracking = body.trackingNumber?.trim() || null;
   const markFulfilled = body.markFulfilled === true;
+  const { shipmentBlockReason, captureAuthorizedPayment } = await import(
+    "../lib/buyer-protection.js"
+  );
+  const block = shipmentBlockReason(order, tracking, markFulfilled || Boolean(tracking));
+  if (block) return c.json({ error: block }, 400);
+  if (markFulfilled || tracking) {
+    await captureAuthorizedPayment(order.id, session.email);
+  }
 
   const updated = await prisma.order.update({
     where: { id: order.id },
@@ -1006,6 +1176,10 @@ merchant.patch("/orders/:id/fulfillment", async (c) => {
     } catch {
       /* optional email */
     }
+  }
+  if (markFulfilled && order.status !== OrderStatus.FULFILLED) {
+    const { sendReviewRequestOnce } = await import("../lib/transactional-email.js");
+    sendReviewRequestOnce(order.id).catch(console.error);
   }
 
   return c.json({ order: updated });
@@ -1068,6 +1242,8 @@ merchant.post("/orders/:id/shipping-label", async (c) => {
       weightGrams,
     });
 
+    const { captureAuthorizedPayment } = await import("../lib/buyer-protection.js");
+    await captureAuthorizedPayment(order.id);
     const updated = await prisma.order.update({
       where: { id: order.id },
       data: {
@@ -1179,6 +1355,56 @@ merchant.get("/customers", async (c) => {
   return c.json({
     currency: tenant.settings?.currency ?? "USD",
     customers,
+  });
+});
+
+merchant.post("/customers", async (c) => {
+  const { tenant } = await requireTenant(c.get("session"));
+  const body = await c.req.json<{
+    email?: string;
+    name?: string;
+    country?: string;
+  }>();
+  const email = String(body.email ?? "")
+    .trim()
+    .toLowerCase();
+  if (!email.includes("@") || email.length < 3) {
+    return c.json({ error: "Valid email is required" }, 400);
+  }
+  const name = String(body.name ?? "").trim() || null;
+  const countryRaw = String(body.country ?? "")
+    .trim()
+    .toUpperCase();
+  const country = /^[A-Z]{2}$/.test(countryRaw) ? countryRaw : null;
+
+  const existing = await prisma.customer.findUnique({
+    where: { tenantId_email: { tenantId: tenant.id, email } },
+  });
+  if (existing) {
+    return c.json({ error: "A customer with this email already exists" }, 409);
+  }
+
+  const customer = await prisma.customer.create({
+    data: {
+      tenantId: tenant.id,
+      email,
+      name,
+      country,
+    },
+  });
+
+  return c.json({
+    customer: {
+      id: customer.id,
+      email: customer.email,
+      name: customer.name,
+      country: customer.country,
+      orderCount: 0,
+      totalSpent: 0,
+      lastOrderAt: null,
+      segment: [],
+      createdAt: customer.createdAt.toISOString(),
+    },
   });
 });
 
@@ -1374,6 +1600,11 @@ merchant.patch("/settings", async (c) => {
       where: { slug, NOT: { id: tenant.id } },
     });
     if (taken) return c.json({ error: "This slug is already taken" }, 400);
+    const aliasTaken = await prisma.storeSettings.findFirst({
+      where: { storeAliases: { has: slug }, NOT: { tenantId: tenant.id } },
+      select: { tenantId: true },
+    });
+    if (aliasTaken) return c.json({ error: "This slug is already taken" }, 400);
   }
 
   const themeRaw =
@@ -1382,12 +1613,58 @@ merchant.patch("/settings", async (c) => {
     body.themeDraft != null && typeof body.themeDraft === "object"
       ? body.themeDraft
       : undefined;
-  const theme =
+
+  const existingSettings = await prisma.storeSettings.findUnique({
+    where: { tenantId: tenant.id },
+  });
+
+  const stripeTaxFromBody =
+    body.stripeTaxEnabled !== undefined
+      ? body.stripeTaxEnabled === true || body.stripeTaxEnabled === "true"
+      : undefined;
+
+  const emailTemplates =
+    body.emailTemplates !== undefined
+      ? (await import("../lib/transactional-email.js")).sanitizeEmailTemplates(
+          body.emailTemplates
+        )
+      : undefined;
+
+  const { assertThemePurchased } = await import("../lib/marketplace.js");
+  for (const candidate of [themeRaw, themeDraftRaw]) {
+    const themeId = getCatalogThemeId(candidate);
+    if (!themeId) continue;
+    try {
+      await assertThemePurchased(tenant.id, themeId);
+    } catch (e) {
+      return c.json({ error: e instanceof Error ? e.message : "Theme locked" }, 402);
+    }
+  }
+
+  let theme =
     themeRaw !== undefined ? jsonForPrisma(parseStoreTheme(themeRaw)) : undefined;
-  const themeDraft =
+  let themeDraft =
     themeDraftRaw !== undefined
       ? jsonForPrisma(parseStoreTheme(themeDraftRaw))
       : undefined;
+
+  if (stripeTaxFromBody !== undefined) {
+    const { withStripeTaxOnTheme } = await import("../lib/sync-stripe-tax-theme.js");
+    const baseTheme = themeRaw ?? existingSettings?.theme;
+    const baseDraft = themeDraftRaw ?? existingSettings?.themeDraft ?? baseTheme;
+    theme = jsonForPrisma(withStripeTaxOnTheme(baseTheme, stripeTaxFromBody));
+    themeDraft = jsonForPrisma(withStripeTaxOnTheme(baseDraft, stripeTaxFromBody));
+  }
+
+  const { parseLocaleCurrencies, normalizeMarketsInput } = await import(
+    "../lib/store-markets.js"
+  );
+  const localeCurrencies =
+    body.localeCurrencies !== undefined
+      ? parseLocaleCurrencies(body.localeCurrencies)
+      : undefined;
+  const markets =
+    body.markets !== undefined ? normalizeMarketsInput(body.markets) : undefined;
 
   await prisma.$transaction([
     prisma.tenant.update({
@@ -1412,10 +1689,20 @@ merchant.patch("/settings", async (c) => {
           : null,
         emailFromName: body.emailFromName ? String(body.emailFromName) : null,
         emailReplyTo: body.emailReplyTo ? String(body.emailReplyTo) : null,
+        emailDoubleOptIn:
+          body.emailDoubleOptIn === true || body.emailDoubleOptIn === "on",
         privacyUrl: body.privacyUrl ? String(body.privacyUrl) : null,
         refundUrl: body.refundUrl ? String(body.refundUrl) : null,
         privacyPolicy: body.privacyPolicy ? String(body.privacyPolicy) : null,
         refundPolicy: body.refundPolicy ? String(body.refundPolicy) : null,
+        termsOfService: body.termsOfService ? String(body.termsOfService) : null,
+        termsUrl: body.termsUrl ? String(body.termsUrl) : null,
+        shippingPolicy: body.shippingPolicy ? String(body.shippingPolicy) : null,
+        shippingUrl: body.shippingUrl ? String(body.shippingUrl) : null,
+        legalNotice: body.legalNotice ? String(body.legalNotice) : null,
+        legalNoticeUrl: body.legalNoticeUrl ? String(body.legalNoticeUrl) : null,
+        contactPolicy: body.contactPolicy ? String(body.contactPolicy) : null,
+        returnRules: body.returnRules ? String(body.returnRules) : null,
         digitalLinkDays:
           parseInt(String(body.digitalLinkDays ?? "30"), 10) || 30,
         notifyNewOrders:
@@ -1427,6 +1714,7 @@ merchant.patch("/settings", async (c) => {
           body.abandonedCartEnabled !== "false",
         taxRateBps: parseInt(String(body.taxRateBps ?? "0"), 10) || 0,
         taxIncluded: body.taxIncluded === true || body.taxIncluded === "true",
+        stripeTaxEnabled: stripeTaxFromBody ?? false,
         seoTitle: body.seoTitle ? String(body.seoTitle) : null,
         seoDescription: body.seoDescription ? String(body.seoDescription) : null,
         seoOgImageUrl: body.seoOgImageUrl ? String(body.seoOgImageUrl) : null,
@@ -1441,6 +1729,20 @@ merchant.patch("/settings", async (c) => {
           ? String(body.emailOrderSubject)
           : null,
         emailOrderBody: body.emailOrderBody ? String(body.emailOrderBody) : null,
+        ...(emailTemplates !== undefined
+          ? { emailTemplates: emailTemplates ?? Prisma.JsonNull }
+          : {}),
+        ...(localeCurrencies !== undefined
+          ? {
+              localeCurrencies:
+                localeCurrencies === null
+                  ? Prisma.JsonNull
+                  : jsonForPrisma(localeCurrencies),
+            }
+          : {}),
+        ...(markets !== undefined
+          ? { markets: jsonForPrisma(markets) }
+          : {}),
         ...(theme !== undefined ? { theme } : {}),
         ...(themeDraft !== undefined ? { themeDraft } : {}),
       },
@@ -1459,10 +1761,20 @@ merchant.patch("/settings", async (c) => {
           : null,
         emailFromName: body.emailFromName ? String(body.emailFromName) : null,
         emailReplyTo: body.emailReplyTo ? String(body.emailReplyTo) : null,
+        emailDoubleOptIn:
+          body.emailDoubleOptIn === true || body.emailDoubleOptIn === "on",
         privacyUrl: body.privacyUrl ? String(body.privacyUrl) : null,
         refundUrl: body.refundUrl ? String(body.refundUrl) : null,
         privacyPolicy: body.privacyPolicy ? String(body.privacyPolicy) : null,
         refundPolicy: body.refundPolicy ? String(body.refundPolicy) : null,
+        termsOfService: body.termsOfService ? String(body.termsOfService) : null,
+        termsUrl: body.termsUrl ? String(body.termsUrl) : null,
+        shippingPolicy: body.shippingPolicy ? String(body.shippingPolicy) : null,
+        shippingUrl: body.shippingUrl ? String(body.shippingUrl) : null,
+        legalNotice: body.legalNotice ? String(body.legalNotice) : null,
+        legalNoticeUrl: body.legalNoticeUrl ? String(body.legalNoticeUrl) : null,
+        contactPolicy: body.contactPolicy ? String(body.contactPolicy) : null,
+        returnRules: body.returnRules ? String(body.returnRules) : null,
         digitalLinkDays:
           parseInt(String(body.digitalLinkDays ?? "30"), 10) || 30,
         notifyNewOrders:
@@ -1472,8 +1784,18 @@ merchant.patch("/settings", async (c) => {
         abandonedCartEnabled:
           body.abandonedCartEnabled !== false &&
           body.abandonedCartEnabled !== "false",
-        taxRateBps: parseInt(String(body.taxRateBps ?? "0"), 10) || 0,
-        taxIncluded: body.taxIncluded === true || body.taxIncluded === "true",
+        ...(body.taxRateBps != null
+          ? { taxRateBps: parseInt(String(body.taxRateBps), 10) || 0 }
+          : {}),
+        ...(body.taxIncluded != null
+          ? {
+              taxIncluded:
+                body.taxIncluded === true || body.taxIncluded === "true",
+            }
+          : {}),
+        ...(stripeTaxFromBody !== undefined
+          ? { stripeTaxEnabled: stripeTaxFromBody }
+          : {}),
         seoTitle: body.seoTitle ? String(body.seoTitle) : null,
         seoDescription: body.seoDescription ? String(body.seoDescription) : null,
         seoOgImageUrl: body.seoOgImageUrl ? String(body.seoOgImageUrl) : null,
@@ -1488,6 +1810,20 @@ merchant.patch("/settings", async (c) => {
           ? String(body.emailOrderSubject)
           : null,
         emailOrderBody: body.emailOrderBody ? String(body.emailOrderBody) : null,
+        ...(emailTemplates !== undefined
+          ? { emailTemplates: emailTemplates ?? Prisma.JsonNull }
+          : {}),
+        ...(localeCurrencies !== undefined
+          ? {
+              localeCurrencies:
+                localeCurrencies === null
+                  ? Prisma.JsonNull
+                  : jsonForPrisma(localeCurrencies),
+            }
+          : {}),
+        ...(markets !== undefined
+          ? { markets: jsonForPrisma(markets) }
+          : {}),
         ...(theme !== undefined ? { theme } : {}),
         ...(themeDraft !== undefined ? { themeDraft } : {}),
       },
@@ -1507,6 +1843,15 @@ merchant.patch("/settings/theme-draft", async (c) => {
   }>();
   if (body.themeDraft == null || typeof body.themeDraft !== "object") {
     return c.json({ error: "themeDraft is required" }, 400);
+  }
+  const draftThemeId = getCatalogThemeId(body.themeDraft);
+  if (draftThemeId) {
+    try {
+      const { assertThemePurchased } = await import("../lib/marketplace.js");
+      await assertThemePurchased(tenant.id, draftThemeId);
+    } catch (e) {
+      return c.json({ error: e instanceof Error ? e.message : "Theme locked" }, 402);
+    }
   }
   const themeDraft = jsonForPrisma(parseStoreTheme(body.themeDraft));
   await prisma.storeSettings.upsert({
@@ -1543,6 +1888,35 @@ merchant.post("/settings/test-email", async (c) => {
     html: `<p>This is a test of your store transactional email settings (From name and Reply-to).</p><p>If you received this, delivery works.</p>`,
   });
   return c.json({ ok: true, sentTo: user.email });
+});
+
+merchant.get("/email-domain", async (c) => {
+  const { tenant } = await requireTenant(c.get("session"));
+  const { getEmailDomain } = await import("../lib/email-domain.js");
+  return c.json({ domain: await getEmailDomain(tenant.id) });
+});
+
+merchant.post("/email-domain", async (c) => {
+  const { tenant } = await requireTenant(c.get("session"));
+  const body = await c.req.json<{ domain?: string }>();
+  try {
+    const { registerEmailDomain } = await import("../lib/email-domain.js");
+    const domain = await registerEmailDomain(tenant.id, String(body.domain ?? ""));
+    return c.json({ domain });
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : "Failed" }, 400);
+  }
+});
+
+merchant.post("/email-domain/verify", async (c) => {
+  const { tenant } = await requireTenant(c.get("session"));
+  try {
+    const { refreshEmailDomain } = await import("../lib/email-domain.js");
+    const domain = await refreshEmailDomain(tenant.id);
+    return c.json({ domain });
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : "Failed" }, 400);
+  }
 });
 
 function pushThemeVersion(
@@ -1610,31 +1984,93 @@ merchant.post("/settings/theme-versions/:id/restore", async (c) => {
 
 merchant.post("/settings/publish-theme", async (c) => {
   const { tenant } = await requireTenant(c.get("session"));
-  const settings = tenant.settings;
-  const draftRaw = settings?.themeDraft ?? settings?.theme;
-  if (!draftRaw) return c.json({ error: "Nothing to publish" }, 400);
+  try {
+    await publishStoreTheme(tenant.id);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Publish failed";
+    return c.json({ error: msg }, 400);
+  }
+  const updated = await requireTenant(c.get("session"));
+  const meta = readThemeDraftMeta(updated.tenant.settings?.themeDraft);
+  return c.json({
+    ok: true,
+    tenant: updated.tenant,
+    themePublishAt: meta.publishAt,
+    themeExperiment: meta.experiment,
+  });
+});
+
+merchant.post("/settings/schedule-theme", async (c) => {
+  const { tenant } = await requireTenant(c.get("session"));
+  const body = await c.req.json<{ publishAt?: string | null }>();
+  const publishAt = body.publishAt ? String(body.publishAt).trim() : null;
+  if (publishAt && !Number.isFinite(Date.parse(publishAt))) {
+    return c.json({ error: "Invalid publishAt" }, 400);
+  }
+  const draftRaw = tenant.settings?.themeDraft ?? tenant.settings?.theme;
+  if (!draftRaw) return c.json({ error: "No theme draft" }, 400);
   const theme = parseStoreTheme(draftRaw);
-  const homeBlocks = theme.homeBlocks ?? resolveHomeBlocks(theme);
-  const publishSnapshot = {
-    id: `ver_${Date.now().toString(36)}`,
-    label: `Published ${new Date().toLocaleDateString()}`,
-    savedAt: new Date().toISOString(),
-    homeBlocks,
-    globalBlocks: theme.globalBlocks,
-  };
-  const themeWithHistory = jsonForPrisma({
-    ...theme,
-    themeVersionHistory: pushThemeVersion(theme.themeVersionHistory, publishSnapshot),
+  const meta = readThemeDraftMeta(draftRaw);
+  const nextDraft = themeDraftWithMeta(theme, {
+    publishAt,
+    experiment: meta.experiment,
   });
   await prisma.storeSettings.update({
     where: { tenantId: tenant.id },
-    data: {
-      theme: themeWithHistory,
-      themeDraft: themeWithHistory,
-    },
+    data: { themeDraft: nextDraft as Prisma.InputJsonValue },
   });
-  const updated = await requireTenant(c.get("session"));
-  return c.json({ ok: true, tenant: updated.tenant });
+  return c.json({ ok: true, publishAt });
+});
+
+merchant.post("/settings/theme-experiment", async (c) => {
+  const { tenant } = await requireTenant(c.get("session"));
+  const body = await c.req.json<{
+    enabled?: boolean;
+    trafficBPercent?: number;
+    snapshotVariantB?: boolean;
+  }>();
+  const draftRaw = tenant.settings?.themeDraft ?? tenant.settings?.theme;
+  if (!draftRaw) return c.json({ error: "No theme draft" }, 400);
+  const theme = parseStoreTheme(draftRaw);
+  const meta = readThemeDraftMeta(draftRaw);
+  const prev = meta.experiment;
+  const enabled = body.enabled === true;
+  const trafficBPercent =
+    body.trafficBPercent != null
+      ? Math.min(100, Math.max(0, Math.round(Number(body.trafficBPercent))))
+      : (prev.trafficBPercent ?? 50);
+  let variantBTheme = prev.variantBTheme;
+  if (enabled && (body.snapshotVariantB !== false || !variantBTheme)) {
+    variantBTheme = parseStoreTheme(theme);
+  }
+  const experiment = enabled
+    ? { enabled: true, trafficBPercent, variantBTheme }
+    : { enabled: false, trafficBPercent, variantBTheme };
+  const nextDraft = themeDraftWithMeta(theme, {
+    publishAt: meta.publishAt,
+    experiment,
+  });
+  await prisma.storeSettings.update({
+    where: { tenantId: tenant.id },
+    data: { themeDraft: nextDraft as Prisma.InputJsonValue },
+  });
+  return c.json({
+    ok: true,
+    themeExperiment: parseThemeExperiment(experiment),
+  });
+});
+
+merchant.post("/ai/block-edit", async (c) => {
+  const { tenant } = await requireTenant(c.get("session"));
+  void tenant;
+  const body = await c.req.json<{ prompt?: string; block?: HomeBlock }>();
+  const prompt = String(body.prompt ?? "").trim();
+  if (!prompt) return c.json({ error: "prompt required" }, 400);
+  if (!body.block || typeof body.block !== "object") {
+    return c.json({ error: "block required" }, 400);
+  }
+  const patch = applyAiBlockEdit(body.block, prompt);
+  return c.json({ patch, block: { ...body.block, ...patch } });
 });
 
 merchant.get("/platform-announcement", async (c) => {
@@ -1648,15 +2084,93 @@ merchant.get("/platform-announcement", async (c) => {
     where: { active: true },
     orderBy: { updatedAt: "desc" },
   });
-  const match = items.find(
-    (a) =>
-      a.planSlugs.length === 0 ||
-      (planSlug != null && a.planSlugs.includes(planSlug))
-  );
+  const match = items.find((a) => {
+    if (a.tenantIds.length > 0 && !a.tenantIds.includes(tenant.id)) return false;
+    if (a.planSlugs.length === 0) return true;
+    return planSlug != null && a.planSlugs.includes(planSlug);
+  });
   return c.json({
     announcement: match
       ? { title: match.title, message: match.message }
       : null,
+  });
+});
+
+merchant.get("/platform-messages", async (c) => {
+  const { tenant } = await requireTenant(c.get("session"));
+  const rows = await prisma.platformMerchantMessage.findMany({
+    where: { tenantId: tenant.id },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+  });
+  const unreadCount = rows.filter((r) => !r.readAt).length;
+  return c.json({
+    unreadCount,
+    messages: rows.map((m) => ({
+      id: m.id,
+      subject: m.subject,
+      body: m.body,
+      actorEmail: m.actorEmail,
+      readAt: m.readAt?.toISOString() ?? null,
+      merchantReply: m.merchantReply,
+      merchantRepliedAt: m.merchantRepliedAt?.toISOString() ?? null,
+      createdAt: m.createdAt.toISOString(),
+    })),
+  });
+});
+
+merchant.post("/platform-messages/:id/read", async (c) => {
+  const { tenant } = await requireTenant(c.get("session"));
+  const msg = await prisma.platformMerchantMessage.findFirst({
+    where: { id: c.req.param("id"), tenantId: tenant.id },
+  });
+  if (!msg) return c.json({ error: "Not found" }, 404);
+  if (!msg.readAt) {
+    await prisma.platformMerchantMessage.update({
+      where: { id: msg.id },
+      data: { readAt: new Date() },
+    });
+  }
+  return c.json({ ok: true });
+});
+
+merchant.post("/platform-messages/:id/reply", async (c) => {
+  const { tenant, session } = await requireTenant(c.get("session"));
+  const body = await c.req.json<{ body?: string }>();
+  const text = String(body.body ?? "").trim();
+  if (!text) return c.json({ error: "Reply required" }, 400);
+  const msg = await prisma.platformMerchantMessage.findFirst({
+    where: { id: c.req.param("id"), tenantId: tenant.id },
+  });
+  if (!msg) return c.json({ error: "Not found" }, 404);
+  const updated = await prisma.platformMerchantMessage.update({
+    where: { id: msg.id },
+    data: {
+      merchantReply: text,
+      merchantRepliedAt: new Date(),
+      readAt: msg.readAt ?? new Date(),
+    },
+  });
+  try {
+    const { sendEmail } = await import("../lib/email.js");
+    await sendEmail({
+      to: msg.actorEmail,
+      subject: `Re: ${msg.subject} (${tenant.slug})`,
+      html: `<p>Merchant reply from <strong>${tenant.name}</strong> (${session.email}):</p>
+<blockquote style="border-left:3px solid #0ea5e9;padding-left:12px">${text.replace(/\n/g, "<br/>")}</blockquote>
+<p style="font-size:12px;color:#71717a">Original: ${msg.subject}</p>`,
+      text: `Reply from ${tenant.slug}:\n\n${text}`,
+      priority: "high",
+    });
+  } catch {
+    /* optional */
+  }
+  return c.json({
+    message: {
+      id: updated.id,
+      merchantReply: updated.merchantReply,
+      merchantRepliedAt: updated.merchantRepliedAt?.toISOString() ?? null,
+    },
   });
 });
 

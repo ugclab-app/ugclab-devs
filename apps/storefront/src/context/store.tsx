@@ -18,3 +18,7 @@ export function useStore() {
   if (!ctx) throw new Error("useStore must be used within StoreProvider");
   return ctx;
 }
+
+export function useOptionalStore() {
+  return useContext(StoreCtx);
+}

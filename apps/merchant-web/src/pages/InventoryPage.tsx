@@ -3,8 +3,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import { FormAlert } from "@/components/form-alert";
 import { AdminPageShell } from "@/components/admin-page-shell";
+import { useAdminT } from "@/hooks/use-admin-t";
 
 export default function InventoryPage() {
+  const { ta, t } = useAdminT();
   const qc = useQueryClient();
   const [alert, setAlert] = useState<{ ok?: boolean; message?: string }>({});
   const [scanCode, setScanCode] = useState("");
@@ -18,8 +20,8 @@ export default function InventoryPage() {
 
   if (isLoading || !data) {
     return (
-      <AdminPageShell crumbs={[{ label: "Inventory" }]}>
-        <p className="text-zinc-500">Loading…</p>
+      <AdminPageShell crumbs={[{ label: t.nav.inventory }]}>
+        <p className="text-zinc-500">{ta("inventoryPage.loading")}</p>
       </AdminPageShell>
     );
   }
@@ -32,8 +34,9 @@ export default function InventoryPage() {
 
   return (
     <AdminPageShell
-      crumbs={[{ label: "Inventory" }]}
-      title="Inventory"
+      crumbs={[{ label: t.nav.inventory }]}
+      title={ta("inventoryPage.title")}
+      description={ta("inventoryPage.description")}
       actions={
         <form
           className="flex gap-2"

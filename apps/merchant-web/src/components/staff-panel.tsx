@@ -117,6 +117,8 @@ export function StaffPanel() {
   };
   const members = data.members as StaffMember[];
   const isOwner = (data as { isOwner?: boolean }).isOwner ?? false;
+  const seatUsed = data.seatUsed ?? members.length;
+  const seatLimit = data.seatLimit ?? 3;
 
   function applyPreset(id: string) {
     setPreset(id);
@@ -167,6 +169,11 @@ export function StaffPanel() {
           below. Orders require 2FA for everyone.
         </p>
       </div>
+
+      <p className="mb-4 text-sm text-zinc-600">
+        Seats {seatUsed} of {seatLimit}. The owner does not use a seat.
+        {seatUsed >= seatLimit ? " Buy Extra staff seats in Apps & themes to invite more." : ""}
+      </p>
 
       <FormAlert ok={alert.ok} message={alert.message} />
 

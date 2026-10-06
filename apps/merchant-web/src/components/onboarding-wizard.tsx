@@ -11,6 +11,7 @@ import {
   isStoreUrlStepDone,
   markStoreUrlStepDone,
 } from "@/lib/onboarding-store-url";
+import { useAdminT } from "@/hooks/use-admin-t";
 
 type Domain = { verified: boolean };
 
@@ -21,6 +22,7 @@ export function OnboardingWizard({
   tenantSlug: string;
   productCount: number;
 }) {
+  const { ta, t } = useAdminT();
   const [storeDone, setStoreDone] = useState(() => isStoreUrlStepDone(tenantSlug));
 
   const { data: stripe } = useQuery({
@@ -50,38 +52,38 @@ export function OnboardingWizard({
     {
       id: "stripe",
       done: stripe?.paymentsReady,
-      title: morPayments ? "Payments enabled" : "Connect Stripe",
+      title: morPayments ? ta("onboarding.paymentsEnabled") : ta("onboarding.connectStripe"),
       href: "/payments",
-      cta: "Payments",
+      cta: ta("onboarding.payments"),
     },
     {
       id: "product",
       done: productCount > 0,
-      title: "Add a product",
+      title: ta("onboarding.addProduct"),
       href: "/products/new",
-      cta: "Add product",
+      cta: ta("productsPage.addProduct"),
     },
     {
       id: "storefront",
       done: productCount > 0,
-      title: "Customize storefront",
+      title: ta("onboarding.customizeStorefront"),
       href: "/storefront",
-      cta: "Storefront",
+      cta: t.nav.storefront,
     },
     {
       id: "checkout",
       done: false,
-      title: "Test checkout",
+      title: ta("onboarding.testCheckout"),
       href: storeUrl,
-      cta: "Open store",
+      cta: ta("onboarding.openStore"),
       external: true,
     },
     {
       id: "store-url",
       done: storeDone || hasVerifiedDomain,
-      title: "Your store address",
+      title: ta("onboarding.storeAddress"),
       href: "/settings?tab=domain",
-      cta: "Custom domain",
+      cta: ta("onboarding.customDomain"),
       isStoreUrl: true,
     },
   ];
@@ -92,9 +94,9 @@ export function OnboardingWizard({
   return (
     <div className="admin-card mb-8 overflow-hidden border-violet-200">
       <div className="border-b border-violet-100 bg-violet-50 px-6 py-4">
-        <h2 className="font-semibold text-violet-900">Getting started</h2>
+        <h2 className="font-semibold text-violet-900">{ta("dashboard.gettingStarted")}</h2>
         <p className="mt-1 text-sm text-violet-700">
-          {done}/{steps.length} complete
+          {ta("onboarding.complete", { done, total: steps.length })}
         </p>
         <div className="mt-3 h-2 overflow-hidden rounded-full bg-violet-200">
           <div
@@ -159,12 +161,9 @@ export function OnboardingWizard({
                     onClick={acknowledgeStore}
                     className="ugclab-btn border border-zinc-200 bg-white px-3 py-2 text-xs"
                   >
-                    Open store
+                    {ta("onboarding.openStore")}
                   </a>
                 </div>
-                <p className="text-xs text-zinc-500">
-                  Subdomain is free. Custom domain is optional.
-                </p>
               </div>
             ) : null}
           </li>

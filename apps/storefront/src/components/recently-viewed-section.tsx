@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getMessages } from "@ugclab/i18n";
 import { storeApi } from "@/api/client";
 import { useStore } from "@/context/store";
 import { useStoreParams } from "@/hooks/use-store-params";
@@ -31,8 +30,6 @@ export function RecentlyViewedSection({ excludeId }: { excludeId?: string }) {
   const products = data?.products ?? [];
   if (products.length === 0) return null;
 
-  const sf = getMessages().storefront;
-
   return (
     <section className="mt-12 border-t border-zinc-200 pt-10">
       <h2 className="text-2xl font-bold text-zinc-900">Recently viewed</h2>
@@ -42,7 +39,7 @@ export function RecentlyViewedSection({ excludeId }: { excludeId?: string }) {
             key={p.id}
             {...productCardProps(p, {
               currency: data?.currency ?? ctx.currency,
-              typeLabel: productTypeLabel(p.type),
+              typeLabel: productTypeLabel(p.type, locale),
               locale: ctx.locale,
               tenantSlug: ctx.tenant.slug,
             })}

@@ -94,5 +94,10 @@ export async function isSlugAvailable(slug: string): Promise<boolean> {
   const existing = await prisma.tenant.findUnique({
     where: { slug },
   });
-  return !existing;
+  if (existing) return false;
+  const alias = await prisma.storeSettings.findFirst({
+    where: { storeAliases: { has: slug } },
+    select: { tenantId: true },
+  });
+  return !alias;
 }

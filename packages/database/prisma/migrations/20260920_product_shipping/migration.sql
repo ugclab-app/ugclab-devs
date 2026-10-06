@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "requiresShipping" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "hsCode" TEXT;
+ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "countryOfOrigin" CHAR(2);

@@ -1,16 +1,34 @@
+import { useState } from "react";
 import type { ColumnItem, FaqItem, FeatureItem, HomeBlock, PricingItem, TabItem } from "@ugclab/tenant/store-theme";
+import { api } from "@/api/client";
 import { MediaPicker } from "@/components/media-picker";
 import { BLOCK_CATALOG } from "./block-catalog";
+import { BlockDesignPicker } from "./block-design-picker";
+import { ReviewsBlockInspector } from "./reviews-block-inspector";
+import {
+  BodyRichTextField,
+  InteractiveBlockFields,
+  TitleSizeField,
+  VisibilityScopeField,
+} from "./block-inspector-fields";
 import { BlockStyleFields } from "./block-style-fields";
 import { LinkPathField } from "./link-picker";
+import { CatalogProductsInspector } from "./products-block-preview";
 
 export function BlockInspector({
   block,
   onChange,
+  selectedProductId,
+  onSelectProduct,
 }: {
   block: HomeBlock | null;
   onChange: (patch: Partial<HomeBlock>) => void;
+  selectedProductId?: string | null;
+  onSelectProduct?: (product: { id: string; slug: string }) => void;
 }) {
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiBusy, setAiBusy] = useState(false);
+
   if (!block) {
     return (
       <div className="p-5 text-sm text-zinc-500">
@@ -28,8 +46,61 @@ export function BlockInspector({
         <h3 className="font-semibold text-zinc-900">{label}</h3>
       </div>
 
+      <fieldset className="space-y-2 rounded-lg border border-violet-100 bg-violet-50/40 p-3">
+        <legend className="px-1 text-xs font-semibold text-violet-700">Quick edit</legend>
+        <input
+          value={aiPrompt}
+          onChange={(e) => setAiPrompt(e.target.value)}
+          placeholder='e.g. "larger", "hide title", "darker primary"'
+          className="ugclab-input w-full text-sm"
+        />
+        <button
+          type="button"
+          disabled={aiBusy || !aiPrompt.trim()}
+          className="ugclab-btn border border-violet-200 bg-white text-xs"
+          onClick={() => {
+            const prompt = aiPrompt.trim();
+            if (!prompt) return;
+            setAiBusy(true);
+            void api
+              .aiBlockEdit({ prompt, block })
+              .then((res) => {
+                onChange(res.patch as Partial<HomeBlock>);
+                setAiPrompt("");
+              })
+              .finally(() => setAiBusy(false));
+          }}
+        >
+          {aiBusy ? "Applying…" : "Apply"}
+        </button>
+      </fieldset>
+
+      <BlockDesignPicker block={block} onChange={onChange} />
+
+      {block.type === "reviews" ? (
+        <ReviewsBlockInspector block={block} onChange={onChange} />
+      ) : null}
+
+      {block.type === "products" ||
+      block.type === "new_arrivals" ||
+      block.type === "sale" ? (
+        <CatalogProductsInspector
+          block={block}
+          selectedProductId={selectedProductId}
+          onSelectProduct={onSelectProduct}
+        />
+      ) : null}
+
+      <fieldset className="space-y-2 rounded-lg border border-zinc-100 p-3">
+        <legend className="px-1 text-xs font-semibold text-zinc-500">Visibility</legend>
+        <VisibilityScopeField block={block} onChange={onChange} />
+      </fieldset>
+
+      <InteractiveBlockFields block={block} onChange={onChange} />
+
       <fieldset className="space-y-3 rounded-lg border border-zinc-100 p-3">
         <legend className="px-1 text-xs font-semibold text-zinc-500">Layout</legend>
+        <TitleSizeField block={block} onChange={onChange} />
         <label className="block text-xs">
           Vertical padding
           <select
@@ -102,9 +173,7 @@ export function BlockInspector({
             value={block.subtitle ?? ""}
             onChange={(subtitle) => onChange({ subtitle })}
           />
-          {block.type === "text_banner" ||
-          block.type === "image_text" ||
-          block.type === "discount_popup" ? (
+          {block.type === "discount_popup" ? (
             <label className="block text-xs">
               Body
               <textarea
@@ -114,7 +183,9 @@ export function BlockInspector({
                 onChange={(e) => onChange({ body: e.target.value })}
               />
             </label>
-          ) : null}
+          ) : (
+            <BodyRichTextField block={block} onChange={onChange} />
+          )}
         </fieldset>
       ) : null}
 
@@ -133,19 +204,38 @@ export function BlockInspector({
       )}
 
       {block.type === "image_text" && (
-        <label className="block text-xs">
-          Image side
-          <select
-            className="ugclab-select mt-1 text-sm"
-            value={block.imagePosition ?? "left"}
-            onChange={(e) =>
-              onChange({ imagePosition: e.target.value as "left" | "right" })
-            }
-          >
-            <option value="left">Image left</option>
-            <option value="right">Image right</option>
-          </select>
-        </label>
+        <>
+          <label className="block text-xs">
+            Layout
+            <select
+              className="ugclab-select mt-1 text-sm"
+              value={block.imageLayout ?? "side"}
+              onChange={(e) =>
+                onChange({
+                  imageLayout: e.target.value as "side" | "stacked",
+                })
+              }
+            >
+              <option value="side">Image beside text</option>
+              <option value="stacked">Image on top</option>
+            </select>
+          </label>
+          {(block.imageLayout ?? "side") === "side" ? (
+            <label className="block text-xs">
+              Image side
+              <select
+                className="ugclab-select mt-1 text-sm"
+                value={block.imagePosition ?? "left"}
+                onChange={(e) =>
+                  onChange({ imagePosition: e.target.value as "left" | "right" })
+                }
+              >
+                <option value="left">Image left</option>
+                <option value="right">Image right</option>
+              </select>
+            </label>
+          ) : null}
+        </>
       )}
 
       {hasCta(block) ? (
@@ -413,7 +503,6 @@ function hasTextFields(block: HomeBlock) {
     "products",
     "new_arrivals",
     "sale",
-    "reviews",
     "spacer",
     "divider",
     "gallery",

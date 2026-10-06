@@ -9,6 +9,8 @@ import { notifyMerchantNewOrder } from "./notifications.js";
 import { triggerPostPurchaseEmail } from "./email-automations.js";
 import { dispatchMerchantWebhooks } from "./merchant-webhooks.js";
 import { fulfillInventoryForOrder } from "./inventory.js";
+import { createAffiliateCommissionForPaidOrder } from "./affiliate.js";
+import { recordPlatformReferralForPaidOrder } from "./platform-partner.js";
 
 /** Mark order paid, decrement stock, create digital downloads, send emails. */
 export async function fulfillPaidOrder(
@@ -32,6 +34,9 @@ export async function fulfillPaidOrder(
   const settings = await prisma.storeSettings.findUnique({
     where: { tenantId: order.tenantId },
   });
+
+  const platformFeeAmount =
+    opts.platformFeeAmount != null ? opts.platformFeeAmount : order.platformFeeAmount;
 
   await prisma.$transaction(async (tx) => {
     await tx.order.update({
@@ -97,9 +102,51 @@ export async function fulfillPaidOrder(
             expiresAt,
           },
         });
+        if (order.customerId) {
+          const { randomBytes } = await import("crypto");
+          await tx.digitalEntitlement.create({
+            data: {
+              tenantId: order.tenantId,
+              customerId: order.customerId,
+              productId: line.productId,
+              orderId: order.id,
+              active: true,
+              accessToken: randomBytes(24).toString("hex"),
+              expiresAt,
+            },
+          });
+        }
+      }
+
+      if (product.sellAsGiftCard && order.customerId) {
+        const { generateGiftCardCode } = await import("./gift-card.js");
+        await tx.giftCard.create({
+          data: {
+            tenantId: order.tenantId,
+            code: generateGiftCardCode(),
+            initialBalance: line.totalAmount,
+            balanceCents: line.totalAmount,
+            currency: order.currency,
+            recipientEmail: order.guestEmail,
+            note: `Purchased on order #${order.orderNumber}`,
+            purchasedOrderId: order.id,
+          },
+        });
       }
     }
   });
+
+  try {
+    await createAffiliateCommissionForPaidOrder(orderId, platformFeeAmount);
+  } catch (e) {
+    console.error("[affiliate] commission create", e);
+  }
+
+  try {
+    await recordPlatformReferralForPaidOrder(orderId);
+  } catch (e) {
+    console.error("[platform-partner] referral", e);
+  }
 
   try {
     await fulfillInventoryForOrder(orderId);
@@ -126,6 +173,12 @@ export async function fulfillPaidOrder(
     totalAmount: order.totalAmount,
     currency: order.currency,
   }).catch(console.error);
+
+  import("./meta-capi.js")
+    .then(({ sendPurchaseConversionEvents }) =>
+      sendPurchaseConversionEvents(orderId)
+    )
+    .catch((e) => console.warn("[capi]", e));
 
   return prisma.order.findUnique({
     where: { id: orderId },

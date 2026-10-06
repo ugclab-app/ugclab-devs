@@ -15,6 +15,11 @@ import {
 } from "../lib/stripe.js";
 import { MERCHANT_WEB_URL } from "../env.js";
 import { getPaymentModel, isMorPaymentModel } from "../lib/payment-model.js";
+import { isGoPayConfigured, shouldUseGoPayCheckout } from "../lib/gopay/config.js";
+import {
+  isFinikConfigured,
+  shouldUseFinikCheckout,
+} from "../lib/finik/config.js";
 import { getMerchantBalance } from "../lib/merchant-balance.js";
 import { markOrderRefunded } from "../lib/stripe-refund.js";
 import { handleStripeDispute } from "../lib/stripe-disputes.js";
@@ -93,6 +98,22 @@ stripeRoutes.post("/webhook", async (c) => {
 async function handleStripeEvent(event: Stripe.Event) {
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
+    if (session.metadata?.type === "platform_addon") {
+      const { grantAddon } = await import("../lib/marketplace.js");
+      const kind = session.metadata.kind === "THEME" ? "THEME" : "APP";
+      const subscriptionId =
+        typeof session.subscription === "string" ? session.subscription : session.subscription?.id;
+      await grantAddon({
+        tenantId: session.metadata.tenantId ?? "",
+        kind,
+        itemId: session.metadata.itemId ?? "",
+        priceCents: Number(session.metadata.priceCents ?? 0),
+        interval: session.metadata.interval ?? "once",
+        stripeSessionId: session.id,
+        stripeSubscriptionId: subscriptionId,
+      });
+      return;
+    }
     if (session.metadata?.type === "platform_subscription") {
       const subId =
         typeof session.subscription === "string"
@@ -115,8 +136,121 @@ async function handleStripeEvent(event: Stripe.Event) {
         ? session.payment_intent
         : session.payment_intent?.id;
 
+    const subscriptionId =
+      typeof session.subscription === "string"
+        ? session.subscription
+        : session.subscription?.id;
+
+    if (session.metadata?.type === "product_subscription" && subscriptionId) {
+      await prisma.order.update({
+        where: { id: orderId },
+        data: { stripeSubscriptionId: subscriptionId },
+      });
+      const productId = session.metadata.productId;
+      const customerId = order.customerId;
+      if (productId && customerId) {
+        const sub = await getStripe().subscriptions.retrieve(subscriptionId);
+        const periodEnd = (sub as { current_period_end?: number }).current_period_end;
+        const existed = await prisma.productSubscription.findUnique({
+          where: { stripeSubscriptionId: subscriptionId },
+          select: { id: true },
+        });
+        const ps = await prisma.productSubscription.upsert({
+          where: { stripeSubscriptionId: subscriptionId },
+          create: {
+            tenantId: order.tenantId,
+            customerId,
+            productId,
+            orderId,
+            stripeSubscriptionId: subscriptionId,
+            stripeCustomerId:
+              typeof session.customer === "string" ? session.customer : null,
+            status:
+              sub.status === "trialing"
+                ? "TRIALING"
+                : sub.status === "active"
+                  ? "ACTIVE"
+                  : "INCOMPLETE",
+            interval:
+              sub.items.data[0]?.price.recurring?.interval ?? "month",
+            currentPeriodEnd: periodEnd
+              ? new Date(periodEnd * 1000)
+              : null,
+          },
+          update: {
+            status:
+              sub.status === "trialing"
+                ? "TRIALING"
+                : sub.status === "active"
+                  ? "ACTIVE"
+                  : sub.status === "past_due"
+                    ? "PAST_DUE"
+                    : "INCOMPLETE",
+            currentPeriodEnd: periodEnd
+              ? new Date(periodEnd * 1000)
+              : null,
+          },
+        });
+        const { randomBytes } = await import("crypto");
+        await prisma.digitalEntitlement.create({
+          data: {
+            tenantId: order.tenantId,
+            customerId,
+            productId,
+            subscriptionId: ps.id,
+            orderId,
+            active: true,
+            accessToken: randomBytes(24).toString("hex"),
+            expiresAt: periodEnd ? new Date(periodEnd * 1000) : null,
+          },
+        });
+        if (!existed) {
+          const product = await prisma.product.findUnique({
+            where: { id: productId },
+            select: { title: true },
+          });
+          const { emailCustomerAboutOrder } = await import("../lib/transactional-email.js");
+          emailCustomerAboutOrder(orderId, "subscriptionStarted", {
+            product: product?.title ?? "your subscription",
+            renewsAt: periodEnd ? new Date(periodEnd * 1000).toISOString().slice(0, 10) : "",
+          }).catch(() => {});
+        }
+      }
+    }
+
+    // Manual capture: authorize only — do not fulfill yet
+    if (paymentIntentId && isStripeConfigured()) {
+      const pi = await getStripe().paymentIntents.retrieve(paymentIntentId);
+      if (pi.status === "requires_capture") {
+        await prisma.order.update({
+          where: { id: orderId },
+          data: {
+            stripePaymentId: paymentIntentId,
+            paymentCaptureStatus: "AUTHORIZED",
+            authorizedAt: new Date(),
+            paymentHold: true,
+          },
+        });
+        await prisma.orderEvent.create({
+          data: {
+            tenantId: order.tenantId,
+            orderId,
+            type: "STATUS_CHANGE",
+            body: order.buyerProtection
+              ? "Payment reserved — charged when the order ships"
+              : "Payment authorized — awaiting capture",
+          },
+        });
+        if (order.buyerProtection) {
+          const { emailBuyerReserved } = await import("../lib/buyer-protection.js");
+          await emailBuyerReserved(orderId);
+        }
+        return;
+      }
+    }
+
     await fulfillPaidOrder(orderId, {
-      stripePaymentId: paymentIntentId ?? session.id,
+      stripePaymentId: paymentIntentId ?? subscriptionId ?? session.id,
       platformFeeAmount: order.platformFeeAmount,
     });
     return;
@@ -124,14 +258,138 @@ async function handleStripeEvent(event: Stripe.Event) {
 
   if (event.type === "customer.subscription.created" || event.type === "customer.subscription.updated") {
     const sub = event.data.object as Stripe.Subscription;
+    if (sub.metadata?.type === "product_subscription") {
+      const periodEnd = (sub as { current_period_end?: number }).current_period_end;
+      await prisma.productSubscription.updateMany({
+        where: { stripeSubscriptionId: sub.id },
+        data: {
+          status:
+            sub.status === "trialing"
+              ? "TRIALING"
+              : sub.status === "active"
+                ? "ACTIVE"
+                : sub.status === "past_due"
+                  ? "PAST_DUE"
+                  : sub.status === "canceled"
+                    ? "CANCELLED"
+                    : "INCOMPLETE",
+          currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000) : null,
+        },
+      });
+      return;
+    }
     await syncTenantSubscription(sub);
     return;
   }
 
   if (event.type === "customer.subscription.deleted") {
     const sub = event.data.object as Stripe.Subscription;
+    if (sub.metadata?.type === "platform_addon" && sub.metadata.tenantId && sub.metadata.itemId) {
+      await prisma.tenantAddon.updateMany({
+        where: {
+          tenantId: sub.metadata.tenantId,
+          kind: sub.metadata.kind === "THEME" ? "THEME" : "APP",
+          itemId: sub.metadata.itemId,
+        },
+        data: { status: "canceled" },
+      });
+      return;
+    }
+    if (sub.metadata?.type === "product_subscription") {
+      await prisma.productSubscription.updateMany({
+        where: { stripeSubscriptionId: sub.id },
+        data: { status: "CANCELLED" },
+      });
+      const ps = await prisma.productSubscription.findFirst({
+        where: { stripeSubscriptionId: sub.id },
+      });
+      if (ps) {
+        await prisma.digitalEntitlement.updateMany({
+          where: { subscriptionId: ps.id },
+          data: { active: false },
+        });
+        const product = await prisma.product.findUnique({
+          where: { id: ps.productId },
+          select: { title: true },
+        });
+        const { emailCustomerAboutOrder } = await import("../lib/transactional-email.js");
+        if (ps.orderId) {
+          emailCustomerAboutOrder(ps.orderId, "subscriptionCancelled", {
+            product: product?.title ?? "your subscription",
+          }).catch(() => {});
+        }
+      }
+      return;
+    }
     const tenantId = sub.metadata?.tenantId;
     if (tenantId) await clearTenantSubscription(tenantId);
+    return;
+  }
+
+  if (event.type === "invoice.payment_failed") {
+    const invoice = event.data.object as Stripe.Invoice;
+    const subId =
+      typeof invoice.subscription === "string"
+        ? invoice.subscription
+        : invoice.subscription?.id;
+    if (subId) {
+      const { markAddonPastDue } = await import("../lib/marketplace.js");
+      if (await markAddonPastDue(subId)) return;
+    }
+    if (!subId) return;
+    const ps = await prisma.productSubscription.findUnique({
+      where: { stripeSubscriptionId: subId },
+      include: { customer: true, product: true, tenant: true },
+    });
+    if (!ps?.customer?.email) return;
+    await prisma.productSubscription.update({
+      where: { id: ps.id },
+      data: { status: "PAST_DUE" },
+    });
+    if (ps.orderId) {
+      const { emailCustomerAboutOrder } = await import("../lib/transactional-email.js");
+      emailCustomerAboutOrder(ps.orderId, "subscriptionFailed", {
+        product: ps.product.title,
+      }).catch(() => {});
+    }
+    return;
+  }
+
+  if (event.type === "invoice.payment_succeeded") {
+    const invoice = event.data.object as Stripe.Invoice;
+    const renewedSubId =
+      typeof invoice.subscription === "string"
+        ? invoice.subscription
+        : invoice.subscription?.id;
+    if (renewedSubId) {
+      const periodEnd = invoice.lines?.data?.[0]?.period?.end;
+      const { markAddonRenewed } = await import("../lib/marketplace.js");
+      if (
+        await markAddonRenewed(
+          renewedSubId,
+          periodEnd ? new Date(periodEnd * 1000) : null
+        )
+      ) {
+        return;
+      }
+    }
+    if (invoice.billing_reason !== "subscription_cycle") return;
+    const subId =
+      typeof invoice.subscription === "string"
+        ? invoice.subscription
+        : invoice.subscription?.id;
+    if (!subId) return;
+    const ps = await prisma.productSubscription.findUnique({
+      where: { stripeSubscriptionId: subId },
+      include: { product: true },
+    });
+    if (!ps?.orderId) return;
+    const periodEnd = invoice.lines?.data?.[0]?.period?.end;
+    const { emailCustomerAboutOrder } = await import("../lib/transactional-email.js");
+    emailCustomerAboutOrder(ps.orderId, "subscriptionRenewed", {
+      product: ps.product.title,
+      renewsAt: periodEnd ? new Date(periodEnd * 1000).toISOString().slice(0, 10) : "",
+    }).catch(() => {});
     return;
   }
 
@@ -197,10 +455,42 @@ merchantStripe.use("*", requireAuth);
 useOwnerOnlyStripeGuards(merchantStripe);
 usePayout2faGuards(merchantStripe);
 
+async function gopayStatusForTenant(tenantId: string) {
+  const settings = await prisma.storeSettings.findUnique({
+    where: { tenantId },
+    select: { currency: true },
+  });
+  const currency = (settings?.currency ?? "USD").toUpperCase();
+  const platformConfigured = isGoPayConfigured();
+  const finikActive = shouldUseFinikCheckout(currency);
+  return {
+    platformConfigured,
+    activeForStore:
+      platformConfigured && shouldUseGoPayCheckout(currency) && !finikActive,
+    storeCurrency: currency,
+  };
+}
+
+async function finikStatusForTenant(tenantId: string) {
+  const settings = await prisma.storeSettings.findUnique({
+    where: { tenantId },
+    select: { currency: true },
+  });
+  const currency = (settings?.currency ?? "USD").toUpperCase();
+  const platformConfigured = isFinikConfigured();
+  return {
+    platformConfigured,
+    activeForStore: platformConfigured && shouldUseFinikCheckout(currency),
+    storeCurrency: currency,
+  };
+}
+
 merchantStripe.get("/status", async (c) => {
   const { tenant } = await requireTenant(c.get("session"));
   const configured = isStripeConfigured();
   const paymentModel = getPaymentModel();
+  const gopay = await gopayStatusForTenant(tenant.id);
+  const finik = await finikStatusForTenant(tenant.id);
 
   const full = await prisma.tenant.findUnique({
     where: { id: tenant.id },
@@ -220,6 +510,8 @@ merchantStripe.get("/status", async (c) => {
       planFeeBps: null,
       paymentModel,
       paymentsReady: false,
+      gopay,
+      finik,
     });
   }
 
@@ -234,6 +526,8 @@ merchantStripe.get("/status", async (c) => {
       planFeeBps: full?.subscriptionPlan?.platformFeeBps ?? 500,
       paymentModel: "mor",
       paymentsReady: true,
+      gopay,
+      finik,
     });
   }
 
@@ -269,6 +563,8 @@ merchantStripe.get("/status", async (c) => {
     planFeeBps: full?.subscriptionPlan?.platformFeeBps ?? 500,
     paymentModel: "connect",
     paymentsReady: Boolean(tenant.stripeAccountId && chargesEnabled),
+    gopay,
+    finik,
   });
 });
 
@@ -284,10 +580,13 @@ merchantStripe.get("/mor-balance", async (c) => {
     storefrontCurrency: balance.storefrontCurrency,
     payoutCurrency: balance.payoutCurrency,
     earnedCents: balance.earnedCents,
+    heldCents: balance.heldCents,
+    reserveCents: balance.reserveCents,
     platformFeesCents: balance.platformFeesCents,
     paidOutCents: balance.paidOutCents,
     pendingPayoutCents: balance.pendingPayoutCents,
     availableCents: balance.availableCents,
+    owedToCreatorsCents: balance.owedToCreatorsCents,
     payoutMinCents: getMorPayoutMinCents(),
     payoutSchedule: getMorPayoutScheduleLabel(),
     payouts: balance.payouts.map((p) => ({

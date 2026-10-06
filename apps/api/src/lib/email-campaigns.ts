@@ -7,6 +7,10 @@ import {
 } from "./campaign-personalize.js";
 import { getSegmentRecipients, type CampaignSegment } from "./email-segments.js";
 import { getStorefrontUrl } from "./storefront.js";
+import {
+  PLATFORM_FLAG_MARKETING_PAUSED,
+  tenantHasPlatformFlag,
+} from "./platform-tenant-flags.js";
 
 const DAILY_CAP = Number(process.env.MARKETING_DAILY_CAP_PER_TENANT ?? "2000");
 const BULK_CONFIRM_THRESHOLD = 500;
@@ -45,6 +49,10 @@ export async function sendEmailCampaign(campaignId: string) {
   }
   if (campaign.status === EmailCampaignStatus.SENDING) {
     throw new Error("Send in progress");
+  }
+
+  if (await tenantHasPlatformFlag(campaign.tenantId, PLATFORM_FLAG_MARKETING_PAUSED)) {
+    throw new Error("Marketing is paused by platform operations");
   }
 
   const sentToday = await countSentToday(campaign.tenantId);
@@ -109,7 +117,8 @@ export async function sendEmailCampaign(campaignId: string) {
         ctx,
         subject,
         campaign.bodyHtml,
-        campaign.plainText
+        campaign.plainText,
+        campaign.subjectB && abPct > 0 ? (useB ? "b" : "a") : undefined
       );
       const fullHtml = wrapShell(campaign.tenant.name, html, storeUrl);
       await sendEmail({ to: r.email, subject: subj, html: fullHtml, text });
@@ -170,6 +179,44 @@ export async function sendTestCampaignEmail(
     subject: `[TEST] ${subject}`,
     html: wrapShell(campaign.tenant.name, html, storeUrl),
     text,
+  });
+}
+
+/** Test send from unsaved draft (no campaign id required). */
+export async function sendTestCampaignDraft(opts: {
+  tenantId: string;
+  toEmail: string;
+  subject: string;
+  bodyHtml: string;
+  discountCode?: string | null;
+  utmCampaign?: string | null;
+}) {
+  const tenant = await prisma.tenant.findUnique({ where: { id: opts.tenantId } });
+  if (!tenant) throw new Error("Tenant not found");
+  const subject = opts.subject.trim() || "Test campaign";
+  const bodyHtml = opts.bodyHtml.trim() || "<p>Hello {{name}}</p>";
+  const ctx = await buildPersonalizeContext(
+    opts.tenantId,
+    opts.toEmail,
+    "Test User",
+    {
+      discountCode: opts.discountCode ?? null,
+      utmCampaign: opts.utmCampaign ?? "test",
+      campaignId: "draft-test",
+    }
+  );
+  const built = await buildCampaignEmail(
+    ctx,
+    subject,
+    bodyHtml,
+    htmlToPlain(bodyHtml)
+  );
+  const storeUrl = getStorefrontUrl(tenant.slug);
+  await sendEmail({
+    to: opts.toEmail,
+    subject: `[TEST] ${built.subject}`,
+    html: wrapShell(tenant.name, built.html, storeUrl),
+    text: built.text,
   });
 }
 

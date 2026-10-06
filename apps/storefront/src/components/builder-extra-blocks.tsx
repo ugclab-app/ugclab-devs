@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { titleSizeClass } from "@ugclab/tenant/block-style";
@@ -40,7 +40,13 @@ export function ContactFormBlockSection({ block }: { block: HomeBlock }) {
               setPending(true);
               setErr(null);
               try {
-                await storeApi.contact(tenant, { name, email, message });
+                const fd = new FormData(e.currentTarget);
+                await storeApi.contact(tenant, {
+                  name,
+                  email,
+                  message,
+                  website: String(fd.get("website") ?? ""),
+                });
                 setDone(true);
               } catch (ex) {
                 setErr(ex instanceof Error ? ex.message : "Send failed");
@@ -49,6 +55,14 @@ export function ContactFormBlockSection({ block }: { block: HomeBlock }) {
               }
             }}
           >
+            <input
+              type="text"
+              name="website"
+              tabIndex={-1}
+              autoComplete="off"
+              className="absolute h-0 w-0 overflow-hidden opacity-0"
+              aria-hidden
+            />
             <input
               className="ugclab-input w-full"
               placeholder="Your name"
@@ -83,25 +97,37 @@ export function ContactFormBlockSection({ block }: { block: HomeBlock }) {
   );
 }
 
+function tabButtonClass(style: HomeBlock["tabStyle"], active: boolean): string {
+  const base = "px-4 py-2 text-sm font-medium transition";
+  if (style === "pills") {
+    return `${base} rounded-full ${active ? "bg-violet-600 text-white" : "bg-zinc-100 text-zinc-600"}`;
+  }
+  if (style === "boxed") {
+    return `${base} rounded-lg border ${active ? "border-violet-300 bg-violet-50 text-violet-800" : "border-transparent text-zinc-500"}`;
+  }
+  return `${base} border-b-2 -mb-px ${active ? "border-violet-600 text-violet-700" : "border-transparent text-zinc-500"}`;
+}
+
 export function TabsBlockSection({ block }: { block: HomeBlock }) {
   const items = block.tabItems ?? [];
   const [active, setActive] = useState(0);
+  const style = block.tabStyle ?? "underline";
   if (items.length === 0) return null;
   return (
     <HomeBlockShell block={block}>
       <div>
         <BlockTitle block={block} />
-        <div className="mt-4 flex flex-wrap gap-2 border-b border-zinc-200">
+        <div
+          className={`mt-4 flex flex-wrap gap-2 ${
+            style === "underline" ? "border-b border-zinc-200" : ""
+          }`}
+        >
           {items.map((tab, i) => (
             <button
               key={i}
               type="button"
               onClick={() => setActive(i)}
-              className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
-                active === i
-                  ? "border-violet-600 text-violet-700"
-                  : "border-transparent text-zinc-500"
-              }`}
+              className={tabButtonClass(style, active === i)}
             >
               {tab.label}
             </button>
@@ -117,12 +143,29 @@ export function BlogFeedBlockSection({ block }: { block: HomeBlock }) {
   const { tenant, locale } = useStoreParams();
   const nav = { locale, tenant };
   const limit = block.blogLimit ?? 3;
-  const { data } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["blog-feed", tenant, limit],
     queryFn: () => storeApi.blogPosts(tenant, { limit: String(limit) }),
   });
   const posts = data?.posts ?? [];
-  if (posts.length === 0) return null;
+  if (isLoading) {
+    return (
+      <HomeBlockShell block={block}>
+        <BlockTitle block={block} />
+        <p className="mt-4 text-sm text-zinc-500">Loading posts…</p>
+      </HomeBlockShell>
+    );
+  }
+  if (posts.length === 0) {
+    return (
+      <HomeBlockShell block={block}>
+        <BlockTitle block={block} />
+        <p className="mt-4 rounded-xl border border-dashed border-zinc-200 bg-zinc-50 p-6 text-sm text-zinc-500">
+          No blog posts yet. Create pages with type Blog in your admin — they appear here automatically.
+        </p>
+      </HomeBlockShell>
+    );
+  }
   return (
     <HomeBlockShell block={block}>
       <BlockTitle block={block} />
@@ -142,11 +185,31 @@ export function BlogFeedBlockSection({ block }: { block: HomeBlock }) {
 
 export function CarouselBlockSection({ block }: { block: HomeBlock }) {
   const urls = block.galleryUrls ?? [];
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const autoplay = block.carouselAutoplay === true;
+  const intervalSec = block.carouselIntervalSec ?? 5;
+
+  useEffect(() => {
+    if (!autoplay || urls.length < 2 || !scrollerRef.current) return;
+    const el = scrollerRef.current;
+    const step = () => {
+      const w = el.clientWidth * 0.85;
+      const max = el.scrollWidth - el.clientWidth;
+      if (el.scrollLeft >= max - 4) el.scrollTo({ left: 0, behavior: "smooth" });
+      else el.scrollBy({ left: w, behavior: "smooth" });
+    };
+    const id = window.setInterval(step, intervalSec * 1000);
+    return () => window.clearInterval(id);
+  }, [autoplay, intervalSec, urls.length]);
+
   if (urls.length === 0) return null;
   return (
     <HomeBlockShell block={block}>
       <BlockTitle block={block} />
-      <div className="mt-4 flex gap-4 overflow-x-auto snap-x snap-mandatory pb-2">
+      <div
+        ref={scrollerRef}
+        className="mt-4 flex gap-4 overflow-x-auto snap-x snap-mandatory pb-2 scroll-smooth"
+      >
         {urls.map((url, i) => (
           <img
             key={i}
@@ -201,7 +264,7 @@ export function ProductCompareBlockSection({ block }: { block: HomeBlock }) {
             key={p.id}
             {...productCardProps(p, {
               currency: ctx.currency,
-              typeLabel: productTypeLabel(p.type),
+              typeLabel: productTypeLabel(p.type, locale),
               locale: ctx.locale,
               tenantSlug: ctx.tenant.slug,
             })}

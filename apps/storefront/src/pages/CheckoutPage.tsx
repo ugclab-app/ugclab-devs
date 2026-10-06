@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { formatMoney } from "@ugclab/i18n";
 import { storeApi } from "@/api/client";
@@ -8,6 +9,7 @@ import { storeHref } from "@/lib/store-href";
 import { CheckoutForm } from "@/components/checkout-form";
 import { CheckoutSteps } from "@/components/checkout-steps";
 import { buildStoreTitle, useDocumentSeo } from "@/hooks/use-document-seo";
+import { trackInitiateCheckout } from "@/lib/pixel-track";
 
 export function CheckoutPage() {
   const ctx = useStore();
@@ -23,6 +25,22 @@ export function CheckoutPage() {
   const lines = data?.lines ?? [];
   const subtotal = data?.total ?? 0;
   const taxRateBps = settings?.taxRateBps ?? 0;
+  const trackedCheckout = useRef(false);
+
+  useEffect(() => {
+    if (!lines.length || trackedCheckout.current) return;
+    trackedCheckout.current = true;
+    trackInitiateCheckout({
+      products: lines.map((l) => ({
+        id: l.productId,
+        title: l.title,
+        priceAmount: l.unit,
+        quantity: l.quantity,
+      })),
+      valueCents: subtotal,
+      currency: ctx.currency,
+    });
+  }, [lines, subtotal, ctx.currency]);
 
   useDocumentSeo({
     title: buildStoreTitle(
@@ -48,7 +66,11 @@ export function CheckoutPage() {
     settings?.privacyUrl ||
     settings?.refundUrl ||
     settings?.privacyPolicy ||
-    settings?.refundPolicy
+    settings?.refundPolicy ||
+    settings?.termsOfService ||
+    settings?.termsUrl ||
+    settings?.shippingPolicy ||
+    settings?.shippingUrl
   );
 
   return (
@@ -61,6 +83,7 @@ export function CheckoutPage() {
           <div className="mt-8 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
             <CheckoutForm
               subtotalAmount={subtotal}
+              productIds={[...new Set(lines.map((l) => l.productId))]}
               showPolicies={showPolicies}
               privacyHref={
                 settings?.privacyPolicy

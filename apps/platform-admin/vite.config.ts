@@ -4,6 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 
 export default defineConfig({
+  base: process.env.PLATFORM_ADMIN_BASE || "/",
   plugins: [react(), tailwindcss()],
   resolve: {
     conditions: ["development", "import", "module", "browser", "default"],

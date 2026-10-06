@@ -7,10 +7,12 @@ import {
   getStorefrontUrl,
 } from "@/lib/storefront";
 import { markStoreUrlStepDone } from "@/lib/onboarding-store-url";
+import { useAdminT } from "@/hooks/use-admin-t";
 
 type Domain = { id: string; domain: string; verified: boolean };
 
 export function StoreUrlCard({ tenantSlug }: { tenantSlug: string }) {
+  const { ta, c } = useAdminT();
   const storeUrl = getStorefrontUrl(tenantSlug);
   const displayHost = getStorefrontDisplayHost(tenantSlug);
 
@@ -24,15 +26,13 @@ export function StoreUrlCard({ tenantSlug }: { tenantSlug: string }) {
   return (
     <div className="admin-card overflow-hidden">
       <div className="border-b border-zinc-100 bg-zinc-50/80 px-6 py-4">
-        <h2 className="font-semibold text-zinc-900">Your store address</h2>
-        <p className="mt-1 text-sm text-zinc-500">
-          Free subdomain — share this link with customers right away.
-        </p>
+        <h2 className="font-semibold text-zinc-900">{ta("onboarding.storeAddress")}</h2>
+        <p className="mt-1 text-sm text-zinc-500">{ta("storeUrlCard.title")}</p>
       </div>
       <div className="space-y-4 px-6 py-5">
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-            Default URL
+            {ta("settingsPage.storeUrl")}
           </p>
           <p className="mt-1 font-mono text-sm font-semibold text-violet-700">
             {displayHost}
@@ -52,13 +52,13 @@ export function StoreUrlCard({ tenantSlug }: { tenantSlug: string }) {
             onClick={() => markStoreUrlStepDone(tenantSlug)}
             className="ugclab-btn border border-zinc-200 bg-white text-sm"
           >
-            Open store
+            {c.openStore}
           </a>
         </div>
 
         {verified.length > 0 ? (
           <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm">
-            <p className="font-medium text-emerald-900">Custom domains</p>
+            <p className="font-medium text-emerald-900">{ta("onboarding.customDomain")}</p>
             <ul className="mt-2 space-y-1 font-mono text-xs text-emerald-800">
               {verified.map((d) => (
                 <li key={d.id}>
@@ -76,14 +76,13 @@ export function StoreUrlCard({ tenantSlug }: { tenantSlug: string }) {
           </div>
         ) : (
           <p className="text-sm text-zinc-600">
-            Use your own domain?{" "}
             <Link
               to="/settings?tab=domain"
               className="font-semibold text-violet-600 hover:underline"
             >
-              Connect custom domain
+              {ta("onboarding.customDomain")}
             </Link>{" "}
-            <span className="text-zinc-400">(optional)</span>
+            <span className="text-zinc-400">({c.optional})</span>
           </p>
         )}
       </div>

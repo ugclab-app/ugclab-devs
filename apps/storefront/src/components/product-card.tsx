@@ -4,10 +4,12 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatMoney } from "@ugclab/i18n";
 import { storeApi } from "@/api/client";
 import { useStoreParams } from "@/hooks/use-store-params";
+import { useStorefrontMessages } from "@/hooks/use-storefront-messages";
 import { productImageUrl } from "@/lib/product-images";
 import { storeHref } from "@/lib/store-href";
 import type { ProductCardProduct } from "@/lib/product-card-types";
 import { ProductQuickView } from "@/components/product-quick-view";
+import { trackAddToCart } from "@/lib/pixel-track";
 
 export function ProductCard(props: ProductCardProduct) {
   const {
@@ -28,6 +30,7 @@ export function ProductCard(props: ProductCardProduct) {
   } = props;
 
   const { tenant } = useStoreParams();
+  const sf = useStorefrontMessages();
   const qc = useQueryClient();
   const nav = { locale, tenant: tenantSlug };
   const href = storeHref(`/products/${slug}`, nav);
@@ -48,6 +51,13 @@ export function ProductCard(props: ProductCardProduct) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["store-context"] });
       qc.invalidateQueries({ queryKey: ["cart"] });
+      trackAddToCart({
+        id,
+        title,
+        priceAmount,
+        currency,
+        quantity: 1,
+      });
       setAdded(true);
       window.setTimeout(() => setAdded(false), 2200);
     },
@@ -69,12 +79,12 @@ export function ProductCard(props: ProductCardProduct) {
   }
 
   const addLabel = adding
-    ? "Adding…"
+    ? sf.product.adding
     : added
-      ? "Added to cart"
+      ? sf.product.added
       : needsOptions
-        ? "Choose options"
-        : "Add to cart";
+        ? sf.product.chooseOptions
+        : sf.addToCart;
 
   return (
     <>

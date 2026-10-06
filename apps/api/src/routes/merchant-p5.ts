@@ -48,8 +48,6 @@ p5.get("/access", async (c) => {
     where: { id: session.sub },
     select: { totpEnabled: true },
   });
-  const needsOrders2fa =
-    hasPermission(access.permissions, "orders") && !user?.totpEnabled;
   const needsPayouts2fa = access.isOwner && !user?.totpEnabled;
   return c.json({
     isOwner: access.isOwner,
@@ -60,7 +58,7 @@ p5.get("/access", async (c) => {
     labels: PERMISSION_LABELS,
     presets: ROLE_PRESETS,
     totpEnabled: user?.totpEnabled ?? false,
-    needs2faForOrders: needsOrders2fa,
+    needs2faForOrders: false,
     needs2faForPayouts: needsPayouts2fa,
     all: MERCHANT_PERMISSIONS,
   });

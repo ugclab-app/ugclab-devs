@@ -2,15 +2,17 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { formatMoney } from "@ugclab/i18n";
 import { api } from "@/api/client";
+import { useAdminT } from "@/hooks/use-admin-t";
 
 export default function ReportsPage() {
+  const { ta, c } = useAdminT();
   const [range, setRange] = useState<"7" | "30" | "90">("30");
   const { data, isLoading } = useQuery({
     queryKey: ["reports", range],
     queryFn: () => api.reportsSummary(range),
   });
 
-  if (isLoading) return <p className="text-zinc-500">Loading…</p>;
+  if (isLoading) return <p className="text-zinc-500">{ta("reportsPage.loading")}</p>;
 
   const r = data as {
     currency: string;
@@ -29,7 +31,10 @@ export default function ReportsPage() {
   return (
     <div>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold">Reports</h1>
+        <div>
+          <h1 className="text-2xl font-bold">{ta("reportsPage.title")}</h1>
+          <p className="text-sm text-zinc-500">{ta("reportsPage.description")}</p>
+        </div>
         <select
           className="ugclab-input w-auto"
           value={range}

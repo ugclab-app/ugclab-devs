@@ -6,6 +6,8 @@ import {
 } from "@ugclab/database";
 import { calcTax, resolveShipping } from "./checkout.js";
 import { canEditOrder } from "./inventory.js";
+import { resolveTaxRateBps } from "./store-markets.js";
+
 
 export async function recalculateOrderTotals(orderId: string) {
   const order = await prisma.order.findUnique({
@@ -30,11 +32,20 @@ export async function recalculateOrderTotals(orderId: string) {
     : { amount: 0, label: null };
 
   const settings = order.tenant.settings;
-  const taxAmount = calcTax(
-    afterDiscount + shippingQuote.amount,
-    settings?.taxRateBps ?? 0,
-    settings?.taxIncluded ?? false
-  );
+  const stripeTax =
+    settings?.stripeTaxEnabled === true;
+  const taxRateBps = resolveTaxRateBps({
+    shippingCountry: country,
+    defaultTaxRateBps: settings?.taxRateBps ?? 0,
+    markets: settings?.markets,
+  });
+  const taxAmount = stripeTax
+    ? order.taxAmount
+    : calcTax(
+        afterDiscount + shippingQuote.amount,
+        taxRateBps,
+        settings?.taxIncluded ?? false
+      );
   const giftCardAmount = Math.min(
     order.giftCardAmount,
     afterDiscount + shippingQuote.amount + taxAmount

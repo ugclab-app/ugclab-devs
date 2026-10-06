@@ -15,6 +15,9 @@ export type OrderListRow = {
   trackingNumber: string | null;
   tags?: string[];
   itemsLabel: string;
+  paymentHold?: boolean;
+  riskLevel?: string | null;
+  fulfillmentMethod?: string | null;
   customer?: { email: string } | null;
 };
 
@@ -139,7 +142,24 @@ export function OrdersTable({
                 )}
               </td>
               <td className="px-4 py-4">
-                <OrderStatusBadge status={o.status} />
+                <div className="flex flex-col gap-1">
+                  <OrderStatusBadge status={o.status} />
+                  {o.paymentHold ? (
+                    <span className="w-fit rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-900">
+                      Hold
+                    </span>
+                  ) : null}
+                  {o.riskLevel === "high" || o.riskLevel === "medium" ? (
+                    <span className="w-fit rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-800">
+                      Risk {o.riskLevel}
+                    </span>
+                  ) : null}
+                  {o.fulfillmentMethod === "PICKUP" ? (
+                    <span className="w-fit rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-900">
+                      Pickup
+                    </span>
+                  ) : null}
+                </div>
               </td>
               <td className="px-4 py-4 text-right font-medium tabular-nums text-zinc-900">
                 {formatMoney(o.totalAmount, currency)}

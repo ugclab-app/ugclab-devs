@@ -1,16 +1,25 @@
 import { useState } from "react";
+import { api } from "@/api/client";
 import {
   filterStoreThemes,
   listAllThemePresets,
-  listFeaturedThemes,
+  resolveThemeLayoutPreview,
   type StoreThemeCategory,
   type StoreThemePreset,
 } from "./store-themes";
 import { ThemeGalleryPreview } from "./theme-gallery-preview";
+import {
+  applyThemeCatalog,
+  featuredFromCatalog,
+  useThemeCatalog,
+} from "@/hooks/use-theme-catalog";
+import { useAuth } from "@/context/auth";
+import { getStorefrontUrl } from "@/lib/storefront";
 
 const CATEGORIES: { id: StoreThemeCategory; label: string }[] = [
   { id: "all", label: "All" },
   { id: "featured", label: "Top themes" },
+  { id: "saved", label: "My themes" },
   { id: "minimal", label: "Minimal" },
   { id: "fashion", label: "Fashion" },
   { id: "beauty", label: "Beauty" },
@@ -24,17 +33,20 @@ function ThemeCard({
   theme,
   active,
   currentThemeId,
+  priceCents,
+  owned,
   onSelect,
   onApply,
 }: {
   theme: StoreThemePreset;
   active: boolean;
   currentThemeId?: string;
+  priceCents?: number;
+  owned?: boolean;
   onSelect: () => void;
   onApply: () => void;
 }) {
-  const wireframe =
-    theme.layoutPreview && theme.layoutPreview !== "default";
+  const layout = resolveThemeLayoutPreview(theme);
 
   return (
     <li>
@@ -46,41 +58,13 @@ function ThemeCard({
         onClick={onSelect}
         onDoubleClick={onApply}
       >
-        <div
-          className={`theme-gallery-card-preview ${wireframe ? "theme-gallery-card-preview--wireframe" : ""}`}
-          style={
-            wireframe
-              ? undefined
-              : {
-                  background: `linear-gradient(145deg, ${theme.preview.background} 0%, ${theme.preview.primary}22 50%, ${theme.preview.secondary}33 100%)`,
-                }
-          }
-        >
-          {wireframe ? (
-            <ThemeGalleryPreview
-              layout={theme.layoutPreview!}
-              primary={theme.preview.primary}
-              secondary={theme.preview.secondary}
-              background={theme.preview.background}
-            />
-          ) : (
-            <>
-              <div
-                className="theme-gallery-card-bar"
-                style={{ backgroundColor: theme.preview.primary }}
-              />
-              <div className="theme-gallery-card-dots">
-                <span style={{ background: theme.preview.primary }} />
-                <span style={{ background: theme.preview.secondary }} />
-                <span
-                  style={{
-                    background: theme.preview.background,
-                    border: "1px solid #e4e4e7",
-                  }}
-                />
-              </div>
-            </>
-          )}
+        <div className="theme-gallery-card-preview theme-gallery-card-preview--wireframe">
+          <ThemeGalleryPreview
+            layout={layout}
+            primary={theme.preview.primary}
+            secondary={theme.preview.secondary}
+            background={theme.preview.background}
+          />
           {theme.featured ? (
             <span className="theme-gallery-card-badge">Top</span>
           ) : null}
@@ -95,6 +79,14 @@ function ThemeCard({
             ) : null}
           </div>
           <p className="mt-0.5 line-clamp-2 text-xs text-zinc-500">{theme.description}</p>
+          {priceCents && priceCents > 0 ? (
+            <p className="mt-1 text-xs font-medium text-zinc-800">
+              ${(priceCents / 100).toFixed(0)}
+              {owned ? " · owned" : ""}
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-zinc-400">Free</p>
+          )}
           {currentThemeId === theme.id ? (
             <span className="mt-2 inline-block text-xs font-medium text-violet-600">
               Current draft
@@ -123,14 +115,73 @@ export function ThemeGalleryModal({
 }) {
   const [category, setCategory] = useState<StoreThemeCategory>("all");
   const [preview, setPreview] = useState<StoreThemePreset | null>(null);
+  const [buying, setBuying] = useState(false);
+  const [buyError, setBuyError] = useState<string | null>(null);
+  const catalogQ = useThemeCatalog(open);
+  const catalog = catalogQ.data?.themes;
+  const { tenant } = useAuth();
+  const storeDemoBase = tenant?.slug ? getStorefrontUrl(tenant.slug) : null;
+
+  function themeDemoUrl(themeId: string) {
+    if (!storeDemoBase) return null;
+    try {
+      const u = new URL(storeDemoBase);
+      u.searchParams.set("themePreview", themeId);
+      return u.toString();
+    } catch {
+      const sep = storeDemoBase.includes("?") ? "&" : "?";
+      return `${storeDemoBase}${sep}themePreview=${encodeURIComponent(themeId)}`;
+    }
+  }
+
+  function catalogMeta(id: string) {
+    return catalog?.find((row) => row.id === id);
+  }
+
+  async function buyTheme(themeId: string) {
+    setBuying(true);
+    setBuyError(null);
+    try {
+      const result = await api.buyAddon("THEME", themeId);
+      if (result.url) {
+        window.location.href = result.url;
+        return;
+      }
+      await catalogQ.refetch();
+    } catch (e) {
+      setBuyError(e instanceof Error ? e.message : "Purchase failed");
+    } finally {
+      setBuying(false);
+    }
+  }
 
   if (!open) return null;
 
-  const list = filterStoreThemes(category, customPresets);
-  const featured = listFeaturedThemes(customPresets);
-  const all = listAllThemePresets(customPresets);
-  const active = preview ?? list[0] ?? all[0];
+  const basePresets = listAllThemePresets(customPresets);
+  const catalogPresets = applyThemeCatalog(basePresets, catalog);
+  const list =
+    category === "featured"
+      ? featuredFromCatalog(basePresets, catalog)
+      : filterStoreThemes(category, customPresets).filter((t) =>
+          catalog?.length ? catalog.some((c) => c.id === t.id) : true
+        );
+  const sortedList = catalog?.length
+    ? applyThemeCatalog(list, catalog)
+    : list;
+  const featured = featuredFromCatalog(basePresets, catalog);
+  const all = catalogPresets.length ? catalogPresets : basePresets;
+  const active = preview ?? sortedList[0] ?? all[0];
   const showFeaturedSection = category === "all" && featured.length > 0;
+
+  if (catalogQ.isLoading && !catalog?.length) {
+    return (
+      <div className="theme-gallery-overlay" role="dialog" aria-modal="true">
+        <div className="theme-gallery-panel p-8 text-center text-sm text-zinc-500">
+          Loading themes…
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -194,6 +245,8 @@ export function ThemeGalleryModal({
                       theme={theme}
                       active={active?.id === theme.id}
                       currentThemeId={currentThemeId}
+                      priceCents={catalogMeta(theme.id)?.priceCents}
+                      owned={catalogMeta(theme.id)?.owned}
                       onSelect={() => setPreview(theme)}
                       onApply={() => {
                         onApply(theme);
@@ -211,14 +264,16 @@ export function ThemeGalleryModal({
 
             <ul className="theme-gallery-grid">
               {(showFeaturedSection
-                ? list.filter((t) => !t.featured)
-                : list
+                ? sortedList.filter((t) => !t.featured)
+                : sortedList
               ).map((theme) => (
                 <ThemeCard
                   key={theme.id}
                   theme={theme}
                   active={active?.id === theme.id}
                   currentThemeId={currentThemeId}
+                  priceCents={catalogMeta(theme.id)?.priceCents}
+                  owned={catalogMeta(theme.id)?.owned}
                   onSelect={() => setPreview(theme)}
                   onApply={() => {
                     onApply(theme);
@@ -231,23 +286,15 @@ export function ThemeGalleryModal({
 
           {active ? (
             <aside className="theme-gallery-detail">
-              {active.layoutPreview && active.layoutPreview !== "default" ? (
-                <div className="theme-gallery-detail-wireframe mb-4 h-40 overflow-hidden rounded-xl border border-zinc-200">
-                  <ThemeGalleryPreview
-                    layout={active.layoutPreview}
-                    primary={active.preview.primary}
-                    secondary={active.preview.secondary}
-                    background={active.preview.background}
-                  />
-                </div>
-              ) : (
-                <div
-                  className="mb-4 h-32 rounded-xl border border-zinc-200"
-                  style={{
-                    background: `linear-gradient(135deg, ${active.preview.primary}, ${active.preview.secondary})`,
-                  }}
+              <div className="theme-gallery-detail-wireframe mb-4 h-52 overflow-hidden rounded-xl border border-zinc-200">
+                <ThemeGalleryPreview
+                  layout={resolveThemeLayoutPreview(active)}
+                  primary={active.preview.primary}
+                  secondary={active.preview.secondary}
+                  background={active.preview.background}
+                  size="detail"
                 />
-              )}
+              </div>
               <h3 className="text-xl font-bold">{active.label}</h3>
               {active.inspiredBy ? (
                 <p className="mt-1 text-xs font-medium text-violet-600">
@@ -276,16 +323,52 @@ export function ThemeGalleryModal({
                   {active.homeBlocks.map((b) => b.type).join(" → ")}
                 </p>
               </div>
-              <button
-                type="button"
-                className="ugclab-btn ugclab-btn-primary mt-4 w-full"
-                onClick={() => {
-                  onApply(active);
-                  onClose();
-                }}
-              >
-                Apply {active.label}
-              </button>
+              {(() => {
+                const meta = catalogMeta(active.id);
+                const locked = (meta?.priceCents ?? 0) > 0 && meta?.owned === false;
+                return (
+                  <>
+                    {locked ? (
+                      <p className="mt-3 text-sm font-medium text-zinc-800">
+                        ${(meta!.priceCents! / 100).toFixed(0)} one-time
+                      </p>
+                    ) : null}
+                    {buyError ? (
+                      <p className="mt-2 text-xs text-red-600">{buyError}</p>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="ugclab-btn ugclab-btn-primary mt-4 w-full disabled:opacity-50"
+                      disabled={buying}
+                      onClick={() => {
+                        if (locked) {
+                          void buyTheme(active.id);
+                          return;
+                        }
+                        onApply(active);
+                        onClose();
+                      }}
+                    >
+                      {buying
+                        ? "Opening checkout…"
+                        : locked
+                          ? `Buy ${active.label}`
+                          : `Apply ${active.label}`}
+                    </button>
+                  </>
+                );
+              })()}
+              {themeDemoUrl(active.id) ? (
+                <a
+                  href={themeDemoUrl(active.id)!}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="ugclab-btn mt-2 flex w-full items-center justify-center gap-1.5 border border-violet-200 bg-violet-50 text-sm font-medium text-violet-800 hover:bg-violet-100"
+                >
+                  View live demo
+                  <span aria-hidden>↗</span>
+                </a>
+              ) : null}
               {onSaveCurrent ? (
                 <button
                   type="button"

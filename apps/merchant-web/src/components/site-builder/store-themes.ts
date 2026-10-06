@@ -1,9 +1,11 @@
 import type { HomeBlock, StoreTheme } from "@ugclab/tenant/store-theme";
 import { cloneBlocks, reidBlocks } from "@ugclab/tenant/store-theme";
+import { BRAND_THEME_PACK } from "./brand-theme-pack";
 
 export type StoreThemeCategory =
   | "all"
   | "featured"
+  | "saved"
   | "minimal"
   | "fashion"
   | "beauty"
@@ -13,7 +15,18 @@ export type StoreThemeCategory =
   | "bold";
 
 /** Wireframe style on gallery cards (Shopify Theme Store–like) */
-export type ThemeLayoutPreview = "editorial" | "jewelry" | "electronics" | "default";
+export type ThemeLayoutPreview =
+  | "editorial"
+  | "jewelry"
+  | "electronics"
+  | "catalog"
+  | "beauty"
+  | "food"
+  | "sports"
+  | "digital"
+  | "bold"
+  | "luxury"
+  | "default";
 
 export type StoreThemePreset = {
   id: string;
@@ -49,6 +62,70 @@ export type StoreThemePreset = {
     >
   >;
 };
+
+export function resolveThemeLayoutPreview(
+  theme: Pick<StoreThemePreset, "layoutPreview" | "category" | "id">
+): Exclude<ThemeLayoutPreview, "default"> {
+  if (theme.layoutPreview && theme.layoutPreview !== "default") {
+    return theme.layoutPreview;
+  }
+  const byId: Record<string, Exclude<ThemeLayoutPreview, "default">> = {
+    dawn: "catalog",
+    craft: "catalog",
+    origin: "catalog",
+    sense: "editorial",
+    studio: "editorial",
+    luxe: "luxury",
+    jewelry: "jewelry",
+    broadcast: "jewelry",
+    bistro: "food",
+    market: "food",
+    taste: "food",
+    crave: "food",
+    roastery: "food",
+    ride: "sports",
+    impact: "bold",
+    colorblock: "bold",
+    spotlight: "digital",
+    publisher: "digital",
+    course: "digital",
+    saas: "digital",
+    creator: "digital",
+    enterprise: "electronics",
+    reformation: "editorial",
+    horizon: "catalog",
+    tinker: "catalog",
+    savor: "food",
+    atelier: "luxury",
+    dwell: "catalog",
+    ritual: "bold",
+    trail: "sports",
+    venue: "editorial",
+    prestige: "luxury",
+    warehouse: "bold",
+    botanica: "beauty",
+    alpine: "sports",
+    neon: "bold",
+  };
+  const mapped = byId[theme.id];
+  if (mapped) return mapped;
+  switch (theme.category) {
+    case "fashion":
+      return "editorial";
+    case "beauty":
+      return "beauty";
+    case "food":
+      return "food";
+    case "sports":
+      return "sports";
+    case "digital":
+      return "digital";
+    case "bold":
+      return "bold";
+    default:
+      return "catalog";
+  }
+}
 
 function bid(): string {
   return `tpl_${Math.random().toString(36).slice(2, 9)}`;
@@ -634,6 +711,306 @@ const creatorBlocks = blocks([
   { type: "newsletter", title: "Creator list", subtitle: "New drops every Friday.", paddingY: "lg" },
 ]);
 
+const horizonBlocks = blocks([
+  {
+    type: "hero",
+    contentWidth: "full",
+    paddingY: "none",
+    title: "Soft focus, sharp style",
+    subtitle: "Clean fashion essentials with room to breathe.",
+    ctaLabel: "Shop collection",
+    ctaPath: "/collections",
+  },
+  { type: "new_arrivals", title: "New this week", paddingY: "lg" },
+  { type: "products", title: "Bestsellers", paddingY: "lg" },
+  {
+    type: "image_text",
+    title: "Designed for everyday",
+    subtitle: "Neutral tones. Effortless fits.",
+    imagePosition: "right",
+    paddingY: "lg",
+  },
+  { type: "newsletter", title: "Join the list", subtitle: "Early access to drops.", paddingY: "lg" },
+]);
+
+const tinkerBlocks = blocks([
+  {
+    type: "hero",
+    contentWidth: "boxed",
+    paddingY: "xl",
+    title: "Objects for calm spaces",
+    subtitle: "Airy product pages. Generous whitespace.",
+    ctaLabel: "Browse",
+    ctaPath: "/collections",
+  },
+  { type: "products", paddingY: "xl" },
+  {
+    type: "image_text",
+    title: "Made to last",
+    subtitle: "Small details, quiet materials.",
+    imagePosition: "left",
+    paddingY: "xl",
+  },
+  { type: "gallery", title: "In situ", paddingY: "lg" },
+  { type: "newsletter", title: "Studio letter", subtitle: "Occasional notes only.", paddingY: "xl" },
+]);
+
+const savorBlocks = blocks([
+  {
+    type: "hero",
+    contentWidth: "full",
+    paddingY: "none",
+    title: "HEAT & FLAVOR",
+    subtitle: "Bold food branding — sauce, snacks, and spice.",
+    ctaLabel: "Shop pantry",
+    ctaPath: "/collections",
+  },
+  {
+    type: "features",
+    title: "Why it hits",
+    features: [
+      { title: "Bold taste", text: "Recipes that punch." },
+      { title: "Bright packs", text: "Shelf-stopping labels." },
+      { title: "Fast ship", text: "Pantry to porch." },
+    ],
+  },
+  { type: "products", title: "Fan favorites", paddingY: "lg" },
+  { type: "sale", title: "Hot deals", paddingY: "md" },
+  {
+    type: "cta",
+    title: "Stock the kitchen",
+    ctaLabel: "Shop all",
+    ctaPath: "/collections",
+    bgColor: "#dc2626",
+    textColor: "#fff",
+    align: "center",
+    paddingY: "lg",
+  },
+]);
+
+const atelierBlocks = blocks([
+  {
+    type: "hero",
+    contentWidth: "full",
+    paddingY: "none",
+    title: "Quiet craft",
+    subtitle: "Editorial accessories — serif type, artistic photography.",
+    ctaLabel: "Explore",
+    ctaPath: "/collections",
+  },
+  { type: "gallery", title: "Campaign", paddingY: "lg" },
+  { type: "products", title: "The edit", paddingY: "lg" },
+  {
+    type: "image_text",
+    title: "Atelier notes",
+    subtitle: "Limited runs from independent makers.",
+    imagePosition: "right",
+    paddingY: "xl",
+  },
+  { type: "logos", title: "As featured in", paddingY: "sm" },
+  { type: "newsletter", title: "Private list", subtitle: "First look at new editions.", paddingY: "lg" },
+]);
+
+const dwellBlocks = blocks([
+  {
+    type: "hero",
+    contentWidth: "full",
+    paddingY: "none",
+    title: "Come home",
+    subtitle: "Warm earth tones for living spaces.",
+    ctaLabel: "Shop home",
+    ctaPath: "/collections",
+  },
+  { type: "featured_collection", title: "Living room", collectionSlug: "", paddingY: "lg" },
+  { type: "products", paddingY: "lg" },
+  {
+    type: "image_text",
+    title: "Layers of comfort",
+    subtitle: "Creams, soft greens, natural textures.",
+    imagePosition: "left",
+    paddingY: "lg",
+  },
+  { type: "reviews", title: "From our customers", paddingY: "md" },
+  { type: "newsletter", title: "Home journal", subtitle: "Seasonal styling tips.", paddingY: "lg", bgColor: "#f5f0e8" },
+]);
+
+const ritualBlocks = blocks([
+  {
+    type: "hero",
+    contentWidth: "full",
+    paddingY: "none",
+    title: "RITUAL",
+    subtitle: "Graphic fashion. Oversized type. High contrast.",
+    ctaLabel: "Shop now",
+    ctaPath: "/collections",
+  },
+  { type: "new_arrivals", title: "Just dropped", paddingY: "md" },
+  { type: "gallery", title: "Look", paddingY: "md" },
+  { type: "products", paddingY: "lg" },
+  {
+    type: "cta",
+    title: "OWN THE NIGHT",
+    ctaLabel: "Enter store",
+    ctaPath: "/collections",
+    bgColor: "#0a0a0a",
+    textColor: "#fafafa",
+    align: "center",
+    paddingY: "xl",
+  },
+]);
+
+/** Outdoor adventure (separate from Shopify-style Horizon fashion) */
+const trailBlocks = blocks([
+  {
+    type: "hero",
+    contentWidth: "full",
+    paddingY: "none",
+    title: "Go further outdoors",
+    subtitle: "Trail-ready gear for every season.",
+    ctaLabel: "Shop gear",
+    ctaPath: "/collections",
+  },
+  { type: "featured_collection", title: "Trail essentials", collectionSlug: "", paddingY: "lg" },
+  { type: "products", paddingY: "lg" },
+  {
+    type: "image_text",
+    title: "Built for weather",
+    subtitle: "Tested on ridgelines and city streets.",
+    imagePosition: "left",
+    paddingY: "md",
+  },
+  { type: "reviews", title: "From the trail", paddingY: "md" },
+]);
+
+const venueBlocks = blocks([
+  {
+    type: "hero",
+    contentWidth: "full",
+    paddingY: "none",
+    title: "Tonight’s lineup",
+    subtitle: "Fashion that shows up — tickets to the moment.",
+    ctaLabel: "Shop the look",
+    ctaPath: "/collections",
+  },
+  { type: "new_arrivals", title: "Just dropped", paddingY: "lg" },
+  { type: "gallery", title: "On location", paddingY: "md" },
+  { type: "products", paddingY: "lg" },
+  { type: "newsletter", title: "Guest list", subtitle: "Early access to drops.", paddingY: "lg" },
+]);
+
+const prestigeBlocks = blocks([
+  {
+    type: "hero",
+    contentWidth: "full",
+    paddingY: "none",
+    title: "Quiet luxury",
+    subtitle: "Fewer pieces. Better materials.",
+    ctaLabel: "Explore",
+    ctaPath: "/collections",
+  },
+  { type: "products", paddingY: "lg" },
+  {
+    type: "image_text",
+    title: "Crafted to last",
+    subtitle: "Artisan ateliers and limited runs.",
+    imagePosition: "right",
+    paddingY: "lg",
+  },
+  { type: "reviews", title: "Client notes", paddingY: "md" },
+  { type: "logos", title: "As seen in", paddingY: "sm" },
+]);
+
+const warehouseBlocks = blocks([
+  {
+    type: "hero",
+    contentWidth: "full",
+    paddingY: "none",
+    title: "STOCK UP",
+    subtitle: "Industrial basics at wholesale-friendly prices.",
+    ctaLabel: "Browse catalog",
+    ctaPath: "/collections",
+  },
+  {
+    type: "countdown",
+    title: "Warehouse clearance",
+    subtitle: "Ends this weekend",
+    paddingY: "md",
+  },
+  { type: "products", paddingY: "lg" },
+  {
+    type: "features",
+    title: "Why warehouse",
+    features: [
+      { title: "Bulk ready", text: "Case packs available." },
+      { title: "Fast ship", text: "Same-day pick." },
+      { title: "B2B terms", text: "Net-30 on request." },
+    ],
+  },
+  { type: "cta", title: "Open a trade account", ctaLabel: "Apply", ctaPath: "/pages/contact", paddingY: "lg" },
+]);
+
+const botanicaBlocks = blocks([
+  {
+    type: "hero",
+    contentWidth: "full",
+    paddingY: "none",
+    title: "Skin, rooted in nature",
+    subtitle: "Clean formulas. Soft ritual.",
+    ctaLabel: "Shop rituals",
+    ctaPath: "/collections",
+  },
+  { type: "featured_collection", title: "Bestsellers", collectionSlug: "", paddingY: "lg" },
+  {
+    type: "features",
+    title: "Our promise",
+    features: [
+      { title: "Clean", text: "No harsh fillers." },
+      { title: "Gentle", text: "Dermatologist tested." },
+      { title: "Refill", text: "Sustainable packaging." },
+    ],
+  },
+  { type: "products", paddingY: "lg" },
+  { type: "reviews", title: "Glow notes", paddingY: "md" },
+  { type: "newsletter", title: "Ritual club", subtitle: "Tips & early access.", paddingY: "lg", bgColor: "#fdf2f8" },
+]);
+
+const alpineBlocks = blocks([
+  {
+    type: "hero",
+    contentWidth: "full",
+    paddingY: "none",
+    title: "Peak performance",
+    subtitle: "Cold-weather layers and alpine kits.",
+    ctaLabel: "Shop alpine",
+    ctaPath: "/collections",
+  },
+  { type: "products", paddingY: "lg" },
+  {
+    type: "image_text",
+    title: "Layer system",
+    subtitle: "Base → mid → shell. Built to stack.",
+    imagePosition: "left",
+    paddingY: "md",
+  },
+  { type: "faq", title: "Fit & sizing", paddingY: "md", faqItems: [{ question: "Returns?", answer: "30 days, free." }] },
+]);
+
+const neonBlocks = blocks([
+  {
+    type: "hero",
+    contentWidth: "full",
+    paddingY: "none",
+    title: "AFTER DARK",
+    subtitle: "Neon drops. Limited stock.",
+    ctaLabel: "Shop now",
+    ctaPath: "/collections",
+  },
+  { type: "sale", title: "Flash deals", paddingY: "md" },
+  { type: "products", paddingY: "lg" },
+  { type: "countdown", title: "Drop ends in", paddingY: "sm" },
+  { type: "cta", title: "Join the waitlist", ctaLabel: "Notify me", ctaPath: "/pages/contact", paddingY: "lg" },
+]);
+
 export const STORE_THEME_PRESETS: StoreThemePreset[] = [
   {
     id: "reformation",
@@ -1096,6 +1473,291 @@ export const STORE_THEME_PRESETS: StoreThemePreset[] = [
       socialLinks: { instagram: "https://instagram.com" },
     },
   },
+  {
+    id: "horizon",
+    label: "Horizon",
+    description:
+      "Clean fashion — soft hero, white product grids, airy sans-serif. Inspired by Shopify Online Store «Horizon».",
+    category: "fashion",
+    featured: true,
+    inspiredBy: "Horizon",
+    layoutPreview: "catalog",
+    preview: { primary: "#18181b", secondary: "#a1a1aa", background: "#ffffff" },
+    primaryColor: "#18181b",
+    homeBlocks: horizonBlocks,
+    theme: {
+      secondaryColor: "#a1a1aa",
+      fontFamily: '"Inter", "Helvetica Neue", system-ui, sans-serif',
+      buttonStyle: "rounded",
+      containerMaxPx: 1280,
+      pageBgColor: "#ffffff",
+      blockGap: "lg",
+      scrollAnimation: "fade",
+      announcementEnabled: true,
+      announcementText: "Free shipping on orders over $75",
+      announcementColor: "#18181b",
+    },
+  },
+  {
+    id: "tinker",
+    label: "Tinker",
+    description:
+      "Airy lifestyle — maximal whitespace, delicate type, home & object focus. Inspired by Shopify «Tinker».",
+    category: "minimal",
+    featured: true,
+    inspiredBy: "Tinker",
+    layoutPreview: "catalog",
+    preview: { primary: "#292524", secondary: "#a8a29e", background: "#fafaf9" },
+    primaryColor: "#292524",
+    homeBlocks: tinkerBlocks,
+    theme: {
+      secondaryColor: "#a8a29e",
+      fontFamily: '"Inter", system-ui, sans-serif',
+      buttonStyle: "square",
+      containerMaxPx: 1100,
+      pageBgColor: "#fafaf9",
+      blockGap: "xl",
+      scrollAnimation: "fade",
+    },
+  },
+  {
+    id: "savor",
+    label: "Savor",
+    description:
+      "High-energy food & beverage — saturated reds, bold labels, playful grids. Inspired by Shopify «Savor».",
+    category: "food",
+    featured: true,
+    inspiredBy: "Savor",
+    layoutPreview: "food",
+    preview: { primary: "#dc2626", secondary: "#f97316", background: "#fff7ed" },
+    primaryColor: "#dc2626",
+    homeBlocks: savorBlocks,
+    theme: {
+      secondaryColor: "#f97316",
+      fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif',
+      buttonStyle: "pill",
+      pageBgColor: "#fff7ed",
+      blockGap: "md",
+      scrollAnimation: "slide",
+      announcementEnabled: true,
+      announcementText: "Hot drop — new flavors this week",
+      announcementColor: "#dc2626",
+    },
+  },
+  {
+    id: "atelier",
+    label: "Atelier",
+    description:
+      "Elegant editorial — serif headlines, muted neutrals, campaign photography. Inspired by Shopify «Atelier».",
+    category: "fashion",
+    featured: true,
+    inspiredBy: "Atelier",
+    layoutPreview: "luxury",
+    preview: { primary: "#1c1917", secondary: "#d6d3d1", background: "#f5f5f4" },
+    primaryColor: "#1c1917",
+    homeBlocks: atelierBlocks,
+    theme: {
+      secondaryColor: "#d6d3d1",
+      fontFamily: '"Cormorant Garamond", Georgia, serif',
+      buttonStyle: "square",
+      containerMaxPx: 1200,
+      pageBgColor: "#f5f5f4",
+      blockGap: "xl",
+      scrollAnimation: "fade",
+      socialLinks: { instagram: "https://instagram.com" },
+    },
+  },
+  {
+    id: "dwell",
+    label: "Dwell",
+    description:
+      "Cozy home — earthy creams, soft greens, warm living-space storytelling. Inspired by Shopify «Dwell».",
+    category: "minimal",
+    featured: true,
+    inspiredBy: "Dwell",
+    layoutPreview: "catalog",
+    preview: { primary: "#57534e", secondary: "#78716c", background: "#f5f0e8" },
+    primaryColor: "#57534e",
+    homeBlocks: dwellBlocks,
+    theme: {
+      secondaryColor: "#a8a29e",
+      fontFamily: "Georgia, serif",
+      buttonStyle: "pill",
+      pageBgColor: "#f5f0e8",
+      blockGap: "lg",
+      scrollAnimation: "fade",
+      announcementEnabled: true,
+      announcementText: "New season home edit",
+      announcementColor: "#44403c",
+    },
+  },
+  {
+    id: "ritual",
+    label: "Ritual",
+    description:
+      "Graphic fashion — oversized type, high contrast, edgy lookbooks. Inspired by Shopify «Ritual».",
+    category: "bold",
+    featured: true,
+    inspiredBy: "Ritual",
+    layoutPreview: "bold",
+    preview: { primary: "#0a0a0a", secondary: "#fafafa", background: "#f4f4f5" },
+    primaryColor: "#0a0a0a",
+    homeBlocks: ritualBlocks,
+    theme: {
+      secondaryColor: "#71717a",
+      fontFamily: '"Space Grotesk", "Helvetica Neue", sans-serif',
+      buttonStyle: "square",
+      containerMaxPx: 1400,
+      pageBgColor: "#fafafa",
+      blockGap: "md",
+      scrollAnimation: "slide",
+      announcementEnabled: true,
+      announcementText: "RITUAL — new drop live",
+      announcementColor: "#0a0a0a",
+    },
+  },
+  {
+    id: "venue",
+    label: "Venue",
+    description: "Event-ready fashion — nightlife energy with lookbook galleries.",
+    category: "fashion",
+    inspiredBy: "Venue",
+    layoutPreview: "editorial",
+    preview: { primary: "#18181b", secondary: "#f43f5e", background: "#09090b" },
+    primaryColor: "#18181b",
+    homeBlocks: venueBlocks,
+    theme: {
+      secondaryColor: "#f43f5e",
+      fontFamily: '"DM Sans", system-ui, sans-serif',
+      buttonStyle: "square",
+      pageBgColor: "#fafafa",
+      blockGap: "md",
+      scrollAnimation: "fade",
+      announcementEnabled: true,
+      announcementText: "Tonight’s drop is live",
+      announcementColor: "#18181b",
+    },
+  },
+  {
+    id: "prestige",
+    label: "Prestige",
+    description: "Quiet luxury — generous whitespace, serif typography, client reviews.",
+    category: "fashion",
+    inspiredBy: "Prestige",
+    layoutPreview: "luxury",
+    preview: { primary: "#1c1917", secondary: "#d6d3d1", background: "#fafaf9" },
+    primaryColor: "#1c1917",
+    homeBlocks: prestigeBlocks,
+    theme: {
+      secondaryColor: "#d6d3d1",
+      fontFamily: "Georgia, 'Times New Roman', serif",
+      buttonStyle: "square",
+      containerMaxPx: 1200,
+      pageBgColor: "#fafaf9",
+      blockGap: "xl",
+      scrollAnimation: "fade",
+    },
+  },
+  {
+    id: "warehouse",
+    label: "Warehouse",
+    description: "Industrial catalog — clearance countdowns and B2B-friendly features.",
+    category: "bold",
+    layoutPreview: "bold",
+    preview: { primary: "#ea580c", secondary: "#1e293b", background: "#fff7ed" },
+    primaryColor: "#ea580c",
+    homeBlocks: warehouseBlocks,
+    theme: {
+      secondaryColor: "#1e293b",
+      fontFamily: '"IBM Plex Sans", system-ui, sans-serif',
+      buttonStyle: "square",
+      pageBgColor: "#fff7ed",
+      blockGap: "md",
+      scrollAnimation: "none",
+      trustBadgesEnabled: true,
+    },
+  },
+  {
+    id: "botanica",
+    label: "Botanica",
+    description: "Clean beauty — soft gradients, ritual features, refill-friendly story.",
+    category: "beauty",
+    featured: true,
+    layoutPreview: "beauty",
+    preview: { primary: "#9d174d", secondary: "#f9a8d4", background: "#fdf2f8" },
+    primaryColor: "#9d174d",
+    homeBlocks: botanicaBlocks,
+    theme: {
+      secondaryColor: "#f9a8d4",
+      fontFamily: '"Cormorant Garamond", Georgia, serif',
+      buttonStyle: "pill",
+      pageBgColor: "#fdf2f8",
+      blockGap: "lg",
+      scrollAnimation: "fade",
+      socialLinks: { instagram: "https://instagram.com" },
+    },
+  },
+  {
+    id: "alpine",
+    label: "Alpine",
+    description: "Cold-weather sports — layer systems and performance product grids.",
+    category: "sports",
+    layoutPreview: "sports",
+    preview: { primary: "#0c4a6e", secondary: "#38bdf8", background: "#f0f9ff" },
+    primaryColor: "#0c4a6e",
+    homeBlocks: alpineBlocks,
+    theme: {
+      secondaryColor: "#38bdf8",
+      fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif',
+      buttonStyle: "rounded",
+      pageBgColor: "#f0f9ff",
+      blockGap: "md",
+      scrollAnimation: "slide",
+    },
+  },
+  {
+    id: "neon",
+    label: "Neon",
+    description: "High-contrast night drops — flash sales and countdown urgency.",
+    category: "bold",
+    layoutPreview: "bold",
+    preview: { primary: "#c026d3", secondary: "#22d3ee", background: "#0f0f12" },
+    primaryColor: "#c026d3",
+    homeBlocks: neonBlocks,
+    theme: {
+      secondaryColor: "#22d3ee",
+      fontFamily: '"Space Grotesk", system-ui, sans-serif',
+      buttonStyle: "pill",
+      pageBgColor: "#fafafa",
+      blockGap: "md",
+      scrollAnimation: "slide",
+      announcementEnabled: true,
+      announcementText: "Neon drop — tonight only",
+      announcementColor: "#c026d3",
+    },
+  },
+  {
+    id: "trail",
+    label: "Trail",
+    description: "Outdoor adventure — full-bleed hero, trail kit grids, story blocks.",
+    category: "sports",
+    layoutPreview: "sports",
+    preview: { primary: "#14532d", secondary: "#ca8a04", background: "#f7fee7" },
+    primaryColor: "#14532d",
+    homeBlocks: trailBlocks,
+    theme: {
+      secondaryColor: "#ca8a04",
+      fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif',
+      buttonStyle: "rounded",
+      pageBgColor: "#f7fee7",
+      blockGap: "lg",
+      scrollAnimation: "slide",
+      announcementEnabled: true,
+      announcementText: "Free shipping on outdoor kits over $100",
+      announcementColor: "#14532d",
+    },
+  },
+  ...BRAND_THEME_PACK,
 ];
 
 export function getStoreTheme(id: string): StoreThemePreset | undefined {
@@ -1135,6 +1797,7 @@ export function filterStoreThemes(
     return [...all].sort((a, b) => Number(b.featured) - Number(a.featured));
   }
   if (category === "featured") return all.filter((t) => t.featured);
+  if (category === "saved") return all.filter((t) => t.id.startsWith("custom_"));
   return all.filter((t) => t.category === category);
 }
 

@@ -14,6 +14,7 @@ import {
   countSentToday,
   processScheduledCampaigns,
   sendEmailCampaign,
+  sendTestCampaignDraft,
   sendTestCampaignEmail,
 } from "../lib/email-campaigns.js";
 import { EMAIL_CAMPAIGN_TEMPLATES } from "../lib/email-campaign-templates.js";
@@ -64,12 +65,15 @@ marketing.get("/marketing/campaigns/:id/ab-report", async (c) => {
   const openRate = sent > 0 ? Math.round((campaign.openCount / sent) * 1000) / 10 : 0;
   const clickRate = sent > 0 ? Math.round((campaign.clickCount / sent) * 1000) / 10 : 0;
   const hasAb = Boolean(campaign.subjectB?.trim() && campaign.abTestPercent > 0);
+  const sentB = hasAb
+    ? Math.min(sent, Math.floor((campaign.recipientCount * campaign.abTestPercent) / 100))
+    : 0;
+  const sentA = Math.max(0, sent - sentB);
+  const rateA = sentA > 0 ? campaign.openCountA / sentA : 0;
+  const rateB = sentB > 0 ? campaign.openCountB / sentB : 0;
   let winner: string | null = null;
-  if (hasAb && sent > 0) {
-    winner =
-      openRate >= 15
-        ? campaign.subject
-        : campaign.subjectB ?? campaign.subject;
+  if (hasAb && (campaign.openCountA > 0 || campaign.openCountB > 0)) {
+    winner = rateB > rateA ? campaign.subjectB : campaign.subject;
   }
   return c.json({
     campaignId: campaign.id,
@@ -83,9 +87,17 @@ marketing.get("/marketing/campaigns/:id/ab-report", async (c) => {
     abTestPercent: campaign.abTestPercent,
     subjectA: campaign.subject,
     subjectB: campaign.subjectB,
+    sentA,
+    sentB,
+    openCountA: campaign.openCountA,
+    openCountB: campaign.openCountB,
+    openRateAPct: Math.round(rateA * 1000) / 10,
+    openRateBPct: Math.round(rateB * 1000) / 10,
     suggestedWinner: winner,
     note: hasAb
-      ? `~${campaign.abTestPercent}% of sends used subject B. Pick winner by open rate and duplicate the campaign with the winning subject.`
+      ? winner
+        ? `Subject ${winner === campaign.subjectB ? "B" : "A"} has the higher open rate.`
+        : "Waiting for opens on both subjects before naming a winner."
       : null,
   });
 });
@@ -370,6 +382,57 @@ marketing.post("/marketing/campaigns/:id/test", async (c) => {
   return c.json({ ok: true, sentTo: to });
 });
 
+/** Test send without saving a campaign first. */
+marketing.post("/marketing/campaigns/test-draft", async (c) => {
+  const { tenant, access, userEmail } = await actor(c);
+  if (!hasPermission(access.permissions, "marketing")) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+  if (!process.env.RESEND_API_KEY && !process.env.SENDGRID_API_KEY) {
+    return c.json({ error: "Email provider not configured" }, 503);
+  }
+  const body = await c.req.json<{
+    email?: string;
+    subject?: string;
+    bodyHtml?: string;
+    discountCode?: string;
+    utmCampaign?: string;
+  }>();
+  const to = body.email?.trim() || userEmail;
+  if (!to) return c.json({ error: "Email required" }, 400);
+  if (!String(body.subject ?? "").trim() && !String(body.bodyHtml ?? "").trim()) {
+    return c.json({ error: "Subject or body required" }, 400);
+  }
+  await sendTestCampaignDraft({
+    tenantId: tenant.id,
+    toEmail: to,
+    subject: String(body.subject ?? ""),
+    bodyHtml: String(body.bodyHtml ?? ""),
+    discountCode: body.discountCode,
+    utmCampaign: body.utmCampaign,
+  });
+  return c.json({ ok: true, sentTo: to });
+});
+
+marketing.post("/marketing/campaigns/:id/cancel", async (c) => {
+  const { tenant, access } = await actor(c);
+  if (!hasPermission(access.permissions, "marketing")) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+  const campaign = await prisma.emailCampaign.findFirst({
+    where: { id: c.req.param("id"), tenantId: tenant.id },
+  });
+  if (!campaign) return c.json({ error: "Not found" }, 404);
+  if (campaign.status !== EmailCampaignStatus.SCHEDULED) {
+    return c.json({ error: "Only scheduled campaigns can be cancelled" }, 400);
+  }
+  const updated = await prisma.emailCampaign.update({
+    where: { id: campaign.id },
+    data: { status: EmailCampaignStatus.DRAFT, scheduledAt: null },
+  });
+  return c.json({ campaign: updated });
+});
+
 marketing.post("/marketing/campaigns/:id/send", async (c) => {
   const { tenant, session, access, userEmail } = await actor(c);
   if (!hasPermission(access.permissions, "marketing")) {
@@ -397,7 +460,16 @@ marketing.post("/marketing/campaigns/:id/send", async (c) => {
     return c.json({ error: "Send in progress" }, 409);
   }
 
-  const result = await sendEmailCampaign(campaign.id);
+  let result;
+  try {
+    result = await sendEmailCampaign(campaign.id);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Send failed";
+    if (msg.includes("paused by platform")) {
+      return c.json({ error: msg }, 403);
+    }
+    return c.json({ error: msg }, 400);
+  }
 
   await logActivity({
     tenantId: tenant.id,
@@ -470,6 +542,114 @@ marketing.post("/marketing/subscribers/import", async (c) => {
   return c.json({ imported });
 });
 
+marketing.post("/marketing/automations", async (c) => {
+  const { tenant, access } = await actor(c);
+  if (!hasPermission(access.permissions, "marketing")) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+
+  const body = await c.req.json<{
+    name?: string;
+    subject?: string;
+    bodyHtml?: string;
+    segment?: string;
+    enabled?: boolean;
+    delayHours?: number;
+  }>();
+
+  const name = String(body.name ?? "").trim() || "Custom automation";
+  const subject = String(body.subject ?? "").trim() || `Update from {{store_name}}`;
+  const bodyHtml =
+    String(body.bodyHtml ?? "").trim() ||
+    "<p>Hi {{name}},</p><p>News from {{store_name}}.</p><p><a href=\"{{store_url}}\">Visit store</a></p>";
+  const segmentRaw = String(body.segment ?? "ALL").toUpperCase();
+  const segment = SEGMENTS.includes(segmentRaw as CampaignSegment)
+    ? (segmentRaw as EmailCampaignSegment)
+    : EmailCampaignSegment.ALL;
+
+  const created = await prisma.emailAutomation.create({
+    data: {
+      tenantId: tenant.id,
+      type: EmailAutomationType.CUSTOM,
+      name,
+      segment,
+      subject,
+      bodyHtml,
+      enabled: body.enabled !== false,
+      delayHours: parseInt(String(body.delayHours ?? "0"), 10) || 0,
+    },
+  });
+
+  return c.json({ automation: created });
+});
+
+marketing.patch("/marketing/automations/id/:id", async (c) => {
+  const { tenant, access } = await actor(c);
+  if (!hasPermission(access.permissions, "marketing")) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+
+  const existing = await prisma.emailAutomation.findFirst({
+    where: { id: c.req.param("id"), tenantId: tenant.id },
+  });
+  if (!existing) return c.json({ error: "Not found" }, 404);
+
+  const body = await c.req.json<{
+    enabled?: boolean;
+    subject?: string;
+    bodyHtml?: string;
+    delayHours?: number;
+    name?: string;
+    segment?: string | null;
+  }>();
+
+  let segment = existing.segment;
+  if (body.segment !== undefined) {
+    if (body.segment === null || body.segment === "") {
+      segment = null;
+    } else {
+      const s = String(body.segment).toUpperCase();
+      segment = SEGMENTS.includes(s as CampaignSegment)
+        ? (s as EmailCampaignSegment)
+        : existing.segment;
+    }
+  }
+
+  const updated = await prisma.emailAutomation.update({
+    where: { id: existing.id },
+    data: {
+      ...(body.enabled !== undefined ? { enabled: body.enabled === true } : {}),
+      ...(body.subject !== undefined ? { subject: String(body.subject) } : {}),
+      ...(body.bodyHtml !== undefined ? { bodyHtml: String(body.bodyHtml) } : {}),
+      ...(body.delayHours !== undefined
+        ? { delayHours: parseInt(String(body.delayHours), 10) || 0 }
+        : {}),
+      ...(body.name !== undefined ? { name: String(body.name).trim() || null } : {}),
+      ...(body.segment !== undefined ? { segment } : {}),
+    },
+  });
+
+  return c.json({ automation: updated });
+});
+
+marketing.delete("/marketing/automations/id/:id", async (c) => {
+  const { tenant, access } = await actor(c);
+  if (!hasPermission(access.permissions, "marketing")) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+
+  const existing = await prisma.emailAutomation.findFirst({
+    where: { id: c.req.param("id"), tenantId: tenant.id },
+  });
+  if (!existing) return c.json({ error: "Not found" }, 404);
+  if (existing.type !== EmailAutomationType.CUSTOM) {
+    return c.json({ error: "Only custom automations can be deleted" }, 400);
+  }
+
+  await prisma.emailAutomation.delete({ where: { id: existing.id } });
+  return c.json({ ok: true });
+});
+
 marketing.patch("/marketing/automations/:type", async (c) => {
   const { tenant, access } = await actor(c);
   if (!hasPermission(access.permissions, "marketing")) {
@@ -477,7 +657,10 @@ marketing.patch("/marketing/automations/:type", async (c) => {
   }
 
   const type = c.req.param("type").toUpperCase() as EmailAutomationType;
-  if (!Object.values(EmailAutomationType).includes(type)) {
+  if (
+    !Object.values(EmailAutomationType).includes(type) ||
+    type === EmailAutomationType.CUSTOM
+  ) {
     return c.json({ error: "Invalid automation type" }, 400);
   }
 
@@ -486,12 +669,19 @@ marketing.patch("/marketing/automations/:type", async (c) => {
     subject?: string;
     bodyHtml?: string;
     delayHours?: number;
+    name?: string;
+    segment?: string | null;
   }>();
 
   await ensureDefaultAutomations(tenant.id);
 
+  const existing = await prisma.emailAutomation.findFirst({
+    where: { tenantId: tenant.id, type },
+  });
+  if (!existing) return c.json({ error: "Not found" }, 404);
+
   const updated = await prisma.emailAutomation.update({
-    where: { tenantId_type: { tenantId: tenant.id, type } },
+    where: { id: existing.id },
     data: {
       ...(body.enabled !== undefined ? { enabled: body.enabled === true } : {}),
       ...(body.subject ? { subject: body.subject } : {}),

@@ -1,4 +1,4 @@
-import type { HomeBlock, HomeSection } from "@ugclab/tenant/store-theme";
+import type { FeatureItem, HomeBlock, HomeSection } from "@ugclab/tenant/store-theme";
 import { createBlock } from "./block-catalog";
 
 export type BlockThumbLayout =
@@ -26,6 +26,11 @@ export type BlockThumbLayout =
   | "newsletter-card"
   | "countdown-bold"
   | "countdown-minimal"
+  | "reviews-grid"
+  | "reviews-carousel"
+  | "reviews-quote"
+  | "reviews-avatars"
+  | "reviews-trust"
   | "generic";
 
 export type BlockDesignVariant = {
@@ -113,25 +118,41 @@ const VARIANTS: Partial<Record<HomeSection, BlockDesignVariant[]>> = {
         ctaLabel: undefined,
       },
     },
+    {
+      id: "banner-split",
+      label: "Text + image",
+      description: "Headline left, image right",
+      thumb: "text-image-right",
+      patch: {
+        align: "left",
+        paddingY: "lg",
+        bgColor: "#ffffff",
+        textColor: "#18181b",
+        title: "Special offer",
+        subtitle: "Describe your promotion",
+        ctaLabel: "Learn more",
+      },
+    },
   ],
   image_text: [
     {
       id: "image-left",
       label: "Image left",
       thumb: "text-image-left",
-      patch: { imagePosition: "left", paddingY: "lg" },
+      patch: { imageLayout: "side", imagePosition: "left", paddingY: "lg" },
     },
     {
       id: "image-right",
       label: "Image right",
       thumb: "text-image-right",
-      patch: { imagePosition: "right", paddingY: "lg" },
+      patch: { imageLayout: "side", imagePosition: "right", paddingY: "lg" },
     },
     {
       id: "image-stacked",
       label: "Image on top",
       thumb: "text-image-stacked",
       patch: {
+        imageLayout: "stacked",
         align: "center",
         paddingY: "md",
         title: "Our story",
@@ -207,6 +228,16 @@ const VARIANTS: Partial<Record<HomeSection, BlockDesignVariant[]>> = {
         ],
       },
     },
+    {
+      id: "features-icons",
+      label: "With icons",
+      thumb: "features-icons",
+      patch: {
+        align: "center",
+        title: "Why shop with us",
+        paddingY: "lg",
+      },
+    },
   ],
   gallery: [
     {
@@ -267,6 +298,17 @@ const VARIANTS: Partial<Record<HomeSection, BlockDesignVariant[]>> = {
         paddingY: "lg",
       },
     },
+    {
+      id: "products-row",
+      label: "Compact row",
+      thumb: "products-carousel",
+      patch: {
+        title: "Trending now",
+        productColumns: 3,
+        productLimit: 4,
+        paddingY: "md",
+      },
+    },
   ],
   featured_collection: [
     {
@@ -280,6 +322,18 @@ const VARIANTS: Partial<Record<HomeSection, BlockDesignVariant[]>> = {
       label: "Compact row",
       thumb: "products-carousel",
       patch: { title: "Bestsellers", productColumns: 3, productLimit: 3 },
+    },
+    {
+      id: "collection-wide",
+      label: "Wide grid",
+      thumb: "products-grid",
+      patch: {
+        title: "Shop the collection",
+        productColumns: 4,
+        productLimit: 8,
+        contentWidth: "full",
+        paddingY: "lg",
+      },
     },
   ],
   faq: [
@@ -353,14 +407,49 @@ const VARIANTS: Partial<Record<HomeSection, BlockDesignVariant[]>> = {
     {
       id: "reviews-grid",
       label: "Quote grid",
-      thumb: "features-3",
-      patch: { title: "Customer love" },
+      thumb: "reviews-grid",
+      patch: { title: "Customer love", reviewLimit: 6, reviewSort: "newest" },
     },
     {
       id: "reviews-centered",
       label: "Centered title",
       thumb: "cta-centered",
-      patch: { align: "center", title: "What people say" },
+      patch: { align: "center", title: "What people say", reviewLimit: 6 },
+    },
+    {
+      id: "reviews-carousel",
+      label: "Carousel",
+      thumb: "reviews-carousel",
+      patch: {
+        title: "What customers say",
+        reviewLimit: 8,
+        carouselAutoplay: true,
+        carouselIntervalSec: 5,
+      },
+    },
+    {
+      id: "reviews-quote",
+      label: "Large quote",
+      thumb: "reviews-quote",
+      patch: { align: "center", title: "Featured review", reviewLimit: 1, reviewSort: "rating" },
+    },
+    {
+      id: "reviews-avatars",
+      label: "3 columns + avatar",
+      thumb: "reviews-avatars",
+      patch: { align: "center", title: "Community", reviewLimit: 3 },
+    },
+    {
+      id: "reviews-trust",
+      label: "Stars + quotes",
+      thumb: "reviews-trust",
+      patch: {
+        align: "center",
+        title: "Trusted by shoppers",
+        reviewShowAggregate: true,
+        reviewLimit: 3,
+        reviewMinRating: 5,
+      },
     },
   ],
   pricing: [
@@ -447,6 +536,20 @@ const VARIANTS: Partial<Record<HomeSection, BlockDesignVariant[]>> = {
       thumb: "products-carousel",
       patch: { title: "Just in", productColumns: 3, productLimit: 3 },
     },
+    {
+      id: "new-hero",
+      label: "With headline",
+      description: "Title + product grid",
+      thumb: "hero-left",
+      patch: {
+        title: "New arrivals",
+        subtitle: "Fresh picks this week",
+        productColumns: 4,
+        productLimit: 4,
+        align: "center",
+        paddingY: "lg",
+      },
+    },
   ],
   sale: [
     {
@@ -467,6 +570,19 @@ const VARIANTS: Partial<Record<HomeSection, BlockDesignVariant[]>> = {
         productLimit: 6,
         bgColor: "#fef2f2",
         paddingY: "lg",
+      },
+    },
+    {
+      id: "sale-minimal",
+      label: "Minimal grid",
+      description: "Simple sale grid",
+      thumb: "products-grid",
+      patch: {
+        title: "On sale",
+        productColumns: 3,
+        productLimit: 6,
+        paddingY: "md",
+        bgColor: "#ffffff",
       },
     },
   ],
@@ -689,6 +805,110 @@ export function getBlockVariants(type: HomeSection): BlockDesignVariant[] {
   return ensureMinVariants(base);
 }
 
+const LAYOUT_PATCH_KEYS = new Set<keyof HomeBlock>([
+  "align",
+  "contentWidth",
+  "paddingY",
+  "bgColor",
+  "textColor",
+  "imagePosition",
+  "imageLayout",
+  "columnCount",
+  "productColumns",
+  "productLimit",
+  "spacerHeight",
+  "titleSize",
+  "tabStyle",
+  "carouselAutoplay",
+  "carouselIntervalSec",
+  "visibilityScope",
+  "reviewLimit",
+  "reviewMinRating",
+  "reviewSort",
+  "reviewPinnedIds",
+  "reviewShowWhenEmpty",
+  "externalReviewsEmbedUrl",
+  "reviewShowAggregate",
+]);
+
+function adjustFeaturesForVariant(
+  block: HomeBlock,
+  variantId: string,
+): FeatureItem[] | undefined {
+  if (block.type !== "features") return undefined;
+  const current = block.features ?? [];
+  if (variantId === "features-4") {
+    const next = [...current];
+    while (next.length < 4) {
+      next.push({
+        title: `Feature ${next.length + 1}`,
+        text: "Short description.",
+      });
+    }
+    return next.slice(0, 4);
+  }
+  if (variantId === "features-3" || variantId === "features-icons") {
+    if (current.length >= 3) return current;
+    const next = [...current];
+    while (next.length < 3) {
+      next.push({
+        title: `Feature ${next.length + 1}`,
+        text: "Short description.",
+      });
+    }
+    return next;
+  }
+  return current;
+}
+
+export function resolveDesignVariantId(block: HomeBlock): string {
+  const variants = getBlockVariants(block.type);
+  if (
+    block.designVariantId &&
+    variants.some((v) => v.id === block.designVariantId)
+  ) {
+    return block.designVariantId;
+  }
+  if (block.type === "features") {
+    const count = block.features?.length ?? 0;
+    if (block.align === "center" && block.paddingY === "lg") return "features-icons";
+    if (count >= 4) return "features-4";
+    return "features-3";
+  }
+  if (block.type === "image_text") {
+    if (block.imageLayout === "stacked") return "image-stacked";
+    if (block.imagePosition === "right") return "image-right";
+    return "image-left";
+  }
+  if (block.type === "reviews" && block.designVariantId?.startsWith("reviews-")) {
+    return block.designVariantId;
+  }
+  return variants[0]!.id;
+}
+
+export function applyBlockDesignVariant(
+  block: HomeBlock,
+  variantId: string,
+): Partial<HomeBlock> {
+  const variants = getBlockVariants(block.type);
+  const variant = variants.find((v) => v.id === variantId) ?? variants[0]!;
+  const next: Partial<HomeBlock> = { designVariantId: variant.id };
+
+  for (const [key, value] of Object.entries(variant.patch) as [
+    keyof HomeBlock,
+    HomeBlock[keyof HomeBlock],
+  ][]) {
+    if (LAYOUT_PATCH_KEYS.has(key)) {
+      (next as Record<string, unknown>)[key] = value;
+    }
+  }
+
+  const features = adjustFeaturesForVariant(block, variant.id);
+  if (features) next.features = features;
+
+  return next;
+}
+
 export function createBlockWithVariant(type: HomeSection, variantId?: string): HomeBlock {
   const base = createBlock(type);
   const variants = getBlockVariants(type);
@@ -700,5 +920,6 @@ export function createBlockWithVariant(type: HomeSection, variantId?: string): H
     ...variant.patch,
     id: base.id,
     type: base.type,
+    designVariantId: variant.id,
   };
 }

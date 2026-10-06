@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatMoney } from "@ugclab/i18n";
 import { api } from "@/api/client";
 import { useAuth } from "@/context/auth";
+import { useAdminT } from "@/hooks/use-admin-t";
 
 type Promotion = {
   id: string;
@@ -20,6 +21,7 @@ function fmtDate(iso: string | null) {
 }
 
 export default function PromotionsPage() {
+  const { ta, c } = useAdminT();
   const { tenant } = useAuth();
   const qc = useQueryClient();
   const currency = tenant?.settings?.currency ?? "USD";
@@ -66,10 +68,8 @@ export default function PromotionsPage() {
 
   return (
     <div>
-      <h1 className="mb-2 text-2xl font-bold">Auto discounts</h1>
-      <p className="mb-8 text-sm text-zinc-500">
-        Automatic cart discounts and free shipping — with optional schedule.
-      </p>
+      <h1 className="mb-2 text-2xl font-bold">{ta("promotionsPage.title")}</h1>
+      <p className="mb-8 text-sm text-zinc-500">{ta("promotionsPage.description")}</p>
 
       <form
         className="admin-card mb-8 max-w-xl space-y-4 p-6"
@@ -139,7 +139,7 @@ export default function PromotionsPage() {
       </form>
 
       {isLoading ? (
-        <p className="text-zinc-500">Loading…</p>
+        <p className="text-zinc-500">{c.loading}</p>
       ) : promotions.length === 0 ? (
         <p className="text-zinc-500">No auto discounts yet.</p>
       ) : (

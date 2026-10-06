@@ -5,6 +5,7 @@ import { EmptyState } from "@/components/empty-state";
 import { AdminPageShell } from "@/components/admin-page-shell";
 import { useAuth } from "@/context/auth";
 import { getStorefrontUrl } from "@/lib/storefront";
+import { useAdminT } from "@/hooks/use-admin-t";
 
 const RULE_LABELS: Record<string, string> = {
   MANUAL: "Manual",
@@ -13,6 +14,7 @@ const RULE_LABELS: Record<string, string> = {
 };
 
 export default function CollectionsPage() {
+  const { ta, t } = useAdminT();
   const { tenant } = useAuth();
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
@@ -39,22 +41,22 @@ export default function CollectionsPage() {
 
   return (
     <AdminPageShell
-      crumbs={[{ label: "Collections" }]}
-      title="Collections"
-      description="Group products for category pages on your storefront."
+      crumbs={[{ label: t.nav.collections }]}
+      title={ta("collectionsPage.title")}
+      description={ta("collectionsPage.description")}
       actions={
         <Link to="/collections/new" className="ugclab-btn ugclab-btn-primary">
-          New collection
+          {ta("collectionsPage.add")}
         </Link>
       }
     >
       {isLoading ? (
-        <p className="text-zinc-500">Loading…</p>
+        <p className="text-zinc-500">{ta("collectionsPage.loading")}</p>
       ) : collections.length === 0 ? (
         <EmptyState
-          title="No collections"
-          description="Group products into collections for your storefront."
-          actionLabel="Create collection"
+          title={ta("collectionsPage.empty")}
+          description={ta("collectionsPage.description")}
+          actionLabel={ta("collectionsPage.add")}
           actionHref="/collections/new"
         />
       ) : (

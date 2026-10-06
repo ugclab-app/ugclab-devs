@@ -58,6 +58,10 @@ const CATEGORY_LABELS: Record<BlockCategory, string> = {
   marketing: "Marketing",
 };
 
+export function isContentBlock(item: BlockCatalogItem): boolean {
+  return item.category === "content";
+}
+
 export function catalogByCategory(): { category: BlockCategory; label: string; items: BlockCatalogItem[] }[] {
   const order: BlockCategory[] = ["cover", "content", "store", "social", "marketing", "layout"];
   return order.map((category) => ({
@@ -96,6 +100,7 @@ export function createBlock(type: HomeSection): HomeBlock {
         ...base,
         title: "Our story",
         subtitle: "Tell customers why you're different.",
+        imageLayout: "side",
         imagePosition: "left",
       };
     case "cta":
@@ -129,6 +134,15 @@ export function createBlock(type: HomeSection): HomeBlock {
           { question: "How long is shipping?", answer: "3–5 business days." },
           { question: "Returns?", answer: "30-day return policy." },
         ],
+      };
+    case "reviews":
+      return {
+        ...base,
+        title: "What customers say",
+        reviewLimit: 6,
+        reviewSort: "newest",
+        reviewShowWhenEmpty: true,
+        designVariantId: "reviews-grid",
       };
     case "spacer":
       return { ...base, paddingY: "none", spacerHeight: 48 };

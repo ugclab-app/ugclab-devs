@@ -1,12 +1,72 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { api } from "@/api/client";
+import { useAdminT } from "@/hooks/use-admin-t";
 import { FormAlert } from "@/components/form-alert";
 import { SettingsPanelShell } from "@/components/settings-section";
 import { StripePayoutsPanel } from "@/components/stripe-payouts-panel";
 import { MerchantMorPayoutsPanel } from "@/components/merchant-mor-payouts-panel";
 import { PaymentPayoutSettings } from "@/components/payment-payout-settings";
+
+function BuyerProtectionToggle() {
+  const qc = useQueryClient();
+  const { data } = useQuery({
+    queryKey: ["buyer-protection"],
+    queryFn: () => api.buyerProtection(),
+  });
+  const [pending, setPending] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const enabled = Boolean(data?.enabled);
+
+  async function toggle() {
+    setPending(true);
+    setMessage(null);
+    try {
+      const res = await api.saveBuyerProtection(!enabled);
+      setMessage(
+        res.enabled
+          ? "Buyer protection is on for new physical orders."
+          : "Buyer protection is off. Existing orders keep their rules."
+      );
+      await qc.invalidateQueries({ queryKey: ["buyer-protection"] });
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Could not save");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <section className="rounded-xl border border-zinc-200 bg-white p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-zinc-900">Buyer protection</h3>
+          <p className="mt-1 max-w-xl text-sm text-zinc-600">
+            Physical orders reserve the card and charge it when you ship with tracking.
+            Kyrgyzstan and pickup can ship without a carrier number. On platform payouts,
+            the money stays pending until the buyer confirms receipt or the protection
+            window ends. 10% of those earnings stays reserved for disputes. Stripe Connect
+            only delays the charge — Stripe pays you on its own schedule after capture.
+          </p>
+        </div>
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => void toggle()}
+          className="ugclab-btn ugclab-btn-primary shrink-0 text-sm disabled:opacity-50"
+        >
+          {pending ? "Saving…" : enabled ? "Turn off" : "Turn on"}
+        </button>
+      </div>
+      <p className="mt-2 text-xs text-zinc-500">
+        {enabled ? "On for new orders." : "Off. Current stores are unchanged until you turn this on."}
+      </p>
+      {message ? <p className="mt-2 text-sm text-zinc-700">{message}</p> : null}
+    </section>
+  );
+}
 
 function StatusBadge({
   ready,
@@ -41,6 +101,7 @@ function StatusBadge({
 }
 
 export function PaymentsPanel() {
+  const { ta } = useAdminT();
   const [searchParams, setSearchParams] = useSearchParams();
   const [alert, setAlert] = useState<{ ok?: boolean; message?: string }>({});
   const [pending, setPending] = useState(false);
@@ -167,6 +228,7 @@ export function PaymentsPanel() {
         </div>
       ) : mor ? (
         <div className="space-y-4">
+          <BuyerProtectionToggle />
           <p className="text-sm text-zinc-600">
             When a customer pays, funds go to the platform Stripe account. Your balance
             below is what we owe you (sales minus platform fee). Request a payout when
@@ -176,6 +238,7 @@ export function PaymentsPanel() {
         </div>
       ) : data.connected ? (
         <div className="space-y-4">
+          <BuyerProtectionToggle />
           <p className="text-sm text-zinc-600">
             Shoppers pay on Stripe Checkout. You receive the order total minus the platform
             fee; Stripe processing fees apply separately in your Stripe Dashboard.
@@ -232,6 +295,122 @@ export function PaymentsPanel() {
         </div>
       )}
     </SettingsPanelShell>
+
+    <SettingsPanelShell
+      title={ta("paymentsPage.finikTitle")}
+      description={ta("paymentsPage.finikDesc")}
+      badge={
+        data.finik?.activeForStore ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            {ta("paymentsPage.finikStoreOn")}
+          </span>
+        ) : (
+          <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-semibold text-zinc-600">
+            {data.finik?.platformConfigured
+              ? ta("paymentsPage.finikStoreOff")
+              : ta("paymentsPage.finikPlatformOff")}
+          </span>
+        )
+      }
+    >
+      <div className="mb-4 grid gap-3 sm:grid-cols-2">
+        <div className="rounded-xl border border-zinc-100 bg-zinc-50/80 p-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">
+            Platform
+          </p>
+          <p className="mt-1 text-sm font-semibold text-zinc-900">
+            {data.finik?.platformConfigured
+              ? ta("paymentsPage.finikPlatformOn")
+              : ta("paymentsPage.finikPlatformOff")}
+          </p>
+        </div>
+        <div className="rounded-xl border border-zinc-100 bg-zinc-50/80 p-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">
+            Store currency
+          </p>
+          <p className="mt-1 text-sm font-semibold text-zinc-900">
+            {data.finik?.storeCurrency ?? "—"}
+          </p>
+        </div>
+      </div>
+      <p className="text-sm text-zinc-600">{ta("paymentsPage.finikCurrencyHint")}</p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Link
+          to="/settings?tab=general"
+          className="ugclab-btn border border-zinc-200 bg-white text-sm"
+        >
+          {ta("settingsPage.tabs.general")}
+        </Link>
+        <a
+          href="https://www.finik.kg/documentation/web-sdk/integration/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="ugclab-btn border border-zinc-200 bg-white text-sm"
+        >
+          {ta("paymentsPage.finikDocs")} ↗
+        </a>
+      </div>
+    </SettingsPanelShell>
+
+    <SettingsPanelShell
+      title={ta("paymentsPage.gopayTitle")}
+      description={ta("paymentsPage.gopayDesc")}
+      badge={
+        data.gopay?.activeForStore ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            {ta("paymentsPage.gopayStoreOn")}
+          </span>
+        ) : (
+          <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-semibold text-zinc-600">
+            {data.gopay?.platformConfigured
+              ? ta("paymentsPage.gopayStoreOff")
+              : ta("paymentsPage.gopayPlatformOff")}
+          </span>
+        )
+      }
+    >
+      <div className="mb-4 grid gap-3 sm:grid-cols-2">
+        <div className="rounded-xl border border-zinc-100 bg-zinc-50/80 p-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">
+            Platform
+          </p>
+          <p className="mt-1 text-sm font-semibold text-zinc-900">
+            {data.gopay?.platformConfigured
+              ? ta("paymentsPage.gopayPlatformOn")
+              : ta("paymentsPage.gopayPlatformOff")}
+          </p>
+        </div>
+        <div className="rounded-xl border border-zinc-100 bg-zinc-50/80 p-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">
+            Store currency
+          </p>
+          <p className="mt-1 text-sm font-semibold text-zinc-900">
+            {data.gopay?.storeCurrency ?? "—"}
+          </p>
+        </div>
+      </div>
+      <p className="text-sm text-zinc-600">{ta("paymentsPage.gopayCurrencyHint")}</p>
+      <p className="mt-2 text-sm text-zinc-500">{ta("paymentsPage.gopayStripeNote")}</p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Link
+          to="/settings?tab=general"
+          className="ugclab-btn border border-zinc-200 bg-white text-sm"
+        >
+          {ta("settingsPage.tabs.general")}
+        </Link>
+        <a
+          href="https://doc.gopay.kg/v1/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="ugclab-btn border border-zinc-200 bg-white text-sm"
+        >
+          {ta("paymentsPage.gopayDocs")} ↗
+        </a>
+      </div>
+    </SettingsPanelShell>
+
     <PaymentPayoutSettings mor={mor} />
     </div>
   );

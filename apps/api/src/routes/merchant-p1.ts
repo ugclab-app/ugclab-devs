@@ -8,9 +8,9 @@ import {
 import type { AuthEnv } from "../middleware/session.js";
 import { requireAuth } from "../middleware/session.js";
 import { normalizeSlug, requireTenant } from "../lib/merchant.js";
-import { saveProductImage, uploadPublicUrl } from "../lib/uploads.js";
+import { saveProductImage, uploadPublicUrl, downloadRemoteImage } from "../lib/uploads.js";
 import { sendCustomerOrderReceipt } from "../lib/order-emails.js";
-import { renderOrderHtml } from "../lib/order-document.js";
+import { renderOrderHtml, orderToDoc } from "../lib/order-document.js";
 import { randomBytes } from "crypto";
 import { logActivity } from "../lib/activity-log.js";
 import {
@@ -23,6 +23,7 @@ import {
   sanitizeStaffPermissions,
   requireOwnerAccess,
 } from "../lib/permissions.js";
+import { tenantHasApp } from "../lib/marketplace.js";
 import { useOrderRouteGuards } from "../middleware/merchant-guards.js";
 
 const p1 = new Hono<AuthEnv>();
@@ -383,6 +384,65 @@ p1.post("/products/:id/images", async (c) => {
   return c.json({ image: { ...image, url: uploadPublicUrl(image.storageKey) } }, 201);
 });
 
+p1.post("/products/:id/images/from-url", async (c) => {
+  const { tenant } = await requireTenant(c.get("session"));
+  const product = await prisma.product.findFirst({
+    where: { id: c.req.param("id"), tenantId: tenant.id },
+    include: { images: true },
+  });
+  if (!product) return c.json({ error: "Not found" }, 404);
+
+  const body = await c.req.json<{ url?: string; alt?: string }>();
+  const url = String(body.url ?? "").trim();
+  if (!url) return c.json({ error: "url required" }, 400);
+
+  try {
+    const downloaded = await downloadRemoteImage(url);
+    const meta = await saveProductImage(tenant.id, product.id, downloaded);
+    const image = await prisma.productImage.create({
+      data: {
+        tenantId: tenant.id,
+        productId: product.id,
+        storageKey: meta.storageKey,
+        fileName: meta.fileName,
+        mimeType: meta.mimeType,
+        sortOrder: product.images.length,
+        alt: body.alt ? String(body.alt) : null,
+      },
+    });
+    return c.json(
+      { image: { ...image, url: uploadPublicUrl(image.storageKey) } },
+      201
+    );
+  } catch (e) {
+    return c.json(
+      { error: e instanceof Error ? e.message : "Import failed" },
+      400
+    );
+  }
+});
+
+/** Fetch remote image as File payload for pending uploads (new product). */
+p1.post("/media/from-url", async (c) => {
+  await requireTenant(c.get("session"));
+  const body = await c.req.json<{ url?: string }>();
+  const url = String(body.url ?? "").trim();
+  if (!url) return c.json({ error: "url required" }, 400);
+  try {
+    const downloaded = await downloadRemoteImage(url);
+    return c.json({
+      fileName: downloaded.name,
+      mimeType: downloaded.type,
+      base64: downloaded.buffer.toString("base64"),
+    });
+  } catch (e) {
+    return c.json(
+      { error: e instanceof Error ? e.message : "Import failed" },
+      400
+    );
+  }
+});
+
 p1.delete("/products/:productId/images/:imageId", async (c) => {
   const { tenant } = await requireTenant(c.get("session"));
   const image = await prisma.productImage.findFirst({
@@ -463,25 +523,7 @@ async function loadOrderDoc(tenantId: string, orderId: string) {
 }
 
 function orderDocPayload(order: NonNullable<Awaited<ReturnType<typeof loadOrderDoc>>>) {
-  const s = order.tenant.settings;
-  return {
-    orderNumber: order.orderNumber,
-    status: order.status,
-    currency: order.currency,
-    createdAt: order.createdAt,
-    tenantName: order.tenant.name,
-    contactEmail: s?.contactEmail ?? null,
-    contactPhone: s?.contactPhone ?? null,
-    businessAddress: s?.businessAddress ?? null,
-    customerEmail: order.customer?.email ?? null,
-    customerName: order.customer?.name ?? null,
-    shippingCountry: order.shippingCountry,
-    subtotalAmount: order.subtotalAmount,
-    shippingAmount: order.shippingAmount,
-    taxAmount: order.taxAmount,
-    totalAmount: order.totalAmount,
-    items: order.items,
-  };
+  return orderToDoc(order);
 }
 
 p1.get("/orders/:id/invoice", async (c) => {
@@ -583,11 +625,14 @@ p1.get("/staff", async (c) => {
     where: { id: tenant.ownerId },
     select: { id: true, email: true, name: true, avatarUrl: true },
   });
+  const extraSeats = (await tenantHasApp(tenant.id, "extra-staff")) ? 5 : 0;
   return c.json({
     owner: owner ? { ...owner, id: tenant.ownerId } : null,
     members: members.map(serializeMember),
     currentUserId: session.sub,
     isOwner: tenant.ownerId === session.sub,
+    seatUsed: members.length,
+    seatLimit: 3 + extraSeats,
   });
 });
 
@@ -615,6 +660,18 @@ p1.post("/staff/invite", async (c) => {
     where: { tenantId_email: { tenantId: tenant.id, email: emailNorm } },
   });
   if (existing) return c.json({ error: "Already invited" }, 400);
+
+  const extraSeats = (await tenantHasApp(tenant.id, "extra-staff")) ? 5 : 0;
+  const seatLimit = 3 + extraSeats;
+  const seatUsed = await prisma.tenantMember.count({ where: { tenantId: tenant.id } });
+  if (seatUsed >= seatLimit) {
+    return c.json(
+      {
+        error: `Staff seats are full (${seatUsed}/${seatLimit}). Buy Extra staff seats in Apps & themes.`,
+      },
+      402
+    );
+  }
 
   const inviteUser = await prisma.user.findUnique({ where: { email: emailNorm } });
   const inviteToken = randomBytes(24).toString("hex");
@@ -856,6 +913,55 @@ p1.post("/staff/accept-invite", async (c) => {
     },
   });
   return c.json({ ok: true });
+});
+
+p1.get("/buyer-protection", async (c) => {
+  const { tenant } = await requireTenant(c.get("session"));
+  const row = await prisma.storeSettings.findUnique({
+    where: { tenantId: tenant.id },
+    select: { buyerProtectionEnabled: true },
+  });
+  return c.json({ enabled: Boolean(row?.buyerProtectionEnabled) });
+});
+
+p1.put("/buyer-protection", async (c) => {
+  const { tenant, session } = await requireTenant(c.get("session"));
+  const ownerGate = await requireOwnerAccess(session, tenant.id);
+  if (!ownerGate.ok) return c.json({ error: ownerGate.error }, 403);
+  const body = await c.req.json<{ enabled?: boolean }>();
+  const buyerProtectionEnabled = body.enabled === true;
+  await prisma.storeSettings.update({
+    where: { tenantId: tenant.id },
+    data: { buyerProtectionEnabled },
+  });
+  return c.json({ enabled: buyerProtectionEnabled });
+});
+
+p1.get("/storefront-password", async (c) => {
+  const { tenant } = await requireTenant(c.get("session"));
+  const row = await prisma.storeSettings.findUnique({
+    where: { tenantId: tenant.id },
+    select: { storefrontPasswordHash: true },
+  });
+  return c.json({ enabled: Boolean(row?.storefrontPasswordHash) });
+});
+
+p1.put("/storefront-password", async (c) => {
+  const { tenant, session } = await requireTenant(c.get("session"));
+  const ownerGate = await requireOwnerAccess(session, tenant.id);
+  if (!ownerGate.ok) return c.json({ error: ownerGate.error }, 403);
+  const body = await c.req.json<{ password?: string }>();
+  const password = String(body.password ?? "");
+  if (password && password.length < 4) {
+    return c.json({ error: "Password must be at least 4 characters" }, 400);
+  }
+  const { hash } = await import("bcryptjs");
+  const storefrontPasswordHash = password ? await hash(password, 10) : null;
+  await prisma.storeSettings.update({
+    where: { tenantId: tenant.id },
+    data: { storefrontPasswordHash },
+  });
+  return c.json({ enabled: Boolean(storefrontPasswordHash) });
 });
 
 export { p1, parseVariantsJson, syncProductVariants, mapProductImages };
