@@ -8,6 +8,7 @@ import { ProductPage } from "@/pages/ProductPage";
 import { CollectionsPage } from "@/pages/CollectionsPage";
 import { CollectionPage } from "@/pages/CollectionPage";
 import { AccountPage } from "@/pages/AccountPage";
+import { LibraryPage } from "@/pages/LibraryPage";
 import { AccountLoginPage } from "@/pages/AccountLoginPage";
 import { AccountRegisterPage } from "@/pages/AccountRegisterPage";
 import { AccountForgotPage } from "@/pages/AccountForgotPage";
@@ -35,6 +36,7 @@ export default function App() {
         <Route path="collections" element={<CollectionsPage />} />
         <Route path="collections/:slug" element={<CollectionPage />} />
         <Route path="account" element={<AccountPage />} />
+        <Route path="library" element={<LibraryPage />} />
         <Route path="account/login" element={<AccountLoginPage />} />
         <Route path="account/register" element={<AccountRegisterPage />} />
         <Route path="account/forgot" element={<AccountForgotPage />} />

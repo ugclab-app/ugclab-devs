@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "@/api/client";
 import { Button, Input } from "@ugclab/ui";
 import { useAdminT } from "@/hooks/use-admin-t";
+import { TurnstileWidget, type TurnstileWidgetHandle } from "@/components/turnstile-widget";
 
 const platformUrl =
   import.meta.env.VITE_PLATFORM_URL ?? "http://localhost:3000";
@@ -13,6 +14,16 @@ export default function ForgotPasswordPage() {
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [turnstileSiteKey, setTurnstileSiteKey] = useState<string | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const turnstileRef = useRef<TurnstileWidgetHandle>(null);
+
+  useEffect(() => {
+    api
+      .oauthProviders()
+      .then((r) => setTurnstileSiteKey(r.turnstileSiteKey ?? null))
+      .catch(() => setTurnstileSiteKey(null));
+  }, []);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -23,12 +34,21 @@ export default function ForgotPasswordPage() {
       setError(ta("auth.enterEmail"));
       return;
     }
+    if (turnstileSiteKey && !turnstileToken) {
+      setError("Please complete the security check");
+      return;
+    }
     setLoading(true);
     try {
-      await api.forgotPassword(emailVal);
+      await api.forgotPassword(emailVal, turnstileSiteKey ? turnstileToken : undefined);
       setSent(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : ta("auth.loginFailed"));
+      // Tokens are single-use: ask for a fresh challenge after a failed attempt.
+      if (turnstileSiteKey) {
+        turnstileRef.current?.reset();
+        setTurnstileToken(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -74,7 +94,19 @@ export default function ForgotPasswordPage() {
               required
               autoFocus
             />
-            <Button type="submit" className="w-full" disabled={loading}>
+            {turnstileSiteKey ? (
+              <TurnstileWidget
+                ref={turnstileRef}
+                siteKey={turnstileSiteKey}
+                onToken={setTurnstileToken}
+                className="flex justify-center"
+              />
+            ) : null}
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={loading || (!!turnstileSiteKey && !turnstileToken)}
+            >
               {loading ? ta("auth.sendingResetLink") : ta("auth.sendResetLink")}
             </Button>
             <p className="text-center text-sm">

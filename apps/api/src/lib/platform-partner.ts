@@ -159,17 +159,17 @@ export async function attributePlatformPartner(opts: {
   refCode: string | null | undefined;
 }) {
   const code = opts.refCode?.trim().toLowerCase();
-  if (!code) return;
+  if (!code) return false;
 
   const partner = await prisma.platformPartner.findUnique({ where: { code } });
-  if (!partner || partner.status !== PlatformPartnerStatus.ACTIVE) return;
-  if (samePerson(partner, opts.ownerEmail, opts.ownerId)) return;
+  if (!partner || partner.status !== PlatformPartnerStatus.ACTIVE) return false;
+  if (samePerson(partner, opts.ownerEmail, opts.ownerId)) return false;
 
   const tenant = await prisma.tenant.findUnique({
     where: { id: opts.tenantId },
     select: { id: true, name: true, platformPartnerId: true, trialEndsAt: true },
   });
-  if (!tenant || tenant.platformPartnerId) return;
+  if (!tenant || tenant.platformPartnerId) return false;
 
   const program = await getPartnerProgram();
   const promoEnd = new Date(Date.now() + program.promoTrialDays * 86400_000);
@@ -190,6 +190,7 @@ export async function attributePlatformPartner(opts: {
     "A store signed up with your Tescommerce link",
     `${tenant.name} opened a store with your link. You earn 0.2% of each paid order. Commissions stay pending for ${program.holdDays} days.`
   );
+  return true;
 }
 
 export async function recordPlatformReferralForPaidOrder(orderId: string) {

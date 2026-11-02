@@ -1,8 +1,10 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "@/context/auth";
+import { usePlatformLocale } from "@/i18n/locale";
 import { PlatformLayout } from "@/layout/PlatformLayout";
 import LoginPage from "@/pages/LoginPage";
 import DashboardPage from "@/pages/DashboardPage";
+import TrafficPage from "@/pages/TrafficPage";
 import TenantsPage from "@/pages/TenantsPage";
 import TenantDetailPage from "@/pages/TenantDetailPage";
 import PlansPage from "@/pages/PlansPage";
@@ -22,6 +24,8 @@ import BlocksPage from "@/pages/BlocksPage";
 import SectionsPage from "@/pages/SectionsPage";
 import EmailTemplatesPage from "@/pages/EmailTemplatesPage";
 import OutreachPage from "@/pages/OutreachPage";
+import GrowthPage from "@/pages/GrowthPage";
+import InstagramPage from "@/pages/InstagramPage";
 import DomainsPage from "@/pages/DomainsPage";
 import AffiliatesPage from "@/pages/AffiliatesPage";
 import PlatformPartnersPage from "@/pages/PlatformPartnersPage";
@@ -30,19 +34,27 @@ import AnnouncementsPage from "@/pages/AnnouncementsPage";
 import MerchantMessagesPage from "@/pages/MerchantMessagesPage";
 import ReportsPage from "@/pages/ReportsPage";
 import CreateTenantPage from "@/pages/CreateTenantPage";
+import ReconcilePage from "@/pages/ReconcilePage";
+import PaymentErrorsPage from "@/pages/PaymentErrorsPage";
+import PastDuePage from "@/pages/PastDuePage";
+import BuyersPage from "@/pages/BuyersPage";
+import ChangelogPage from "@/pages/ChangelogPage";
 import InboxPage from "@/pages/InboxPage";
+import MailPage from "@/pages/MailPage";
 import SearchPage from "@/pages/SearchPage";
 import IntegrationsPage from "@/pages/IntegrationsPage";
 import ModerationPage from "@/pages/ModerationPage";
 import CompliancePage from "@/pages/CompliancePage";
+import KycPage from "@/pages/KycPage";
 import SystemPage from "@/pages/SystemPage";
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
+  const { t } = usePlatformLocale();
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center text-slate-500">
-        Loading…
+        {t.loading}
       </div>
     );
   }
@@ -64,12 +76,18 @@ export default function App() {
       >
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<DashboardPage />} />
+        <Route path="traffic" element={<TrafficPage />} />
         <Route path="inbox" element={<InboxPage />} />
+        <Route path="mail" element={<MailPage />} />
         <Route path="search" element={<SearchPage />} />
         <Route path="integrations" element={<IntegrationsPage />} />
         <Route path="moderation" element={<ModerationPage />} />
         <Route path="compliance" element={<CompliancePage />} />
+        <Route path="kyc" element={<KycPage />} />
         <Route path="revenue" element={<RevenuePage />} />
+        <Route path="reconcile" element={<ReconcilePage />} />
+        <Route path="payment-errors" element={<PaymentErrorsPage />} />
+        <Route path="billing" element={<PastDuePage />} />
         <Route path="disputes" element={<DisputesPage />} />
         <Route path="tenants" element={<TenantsPage />} />
         <Route path="tenants/new" element={<CreateTenantPage />} />
@@ -81,6 +99,7 @@ export default function App() {
         <Route path="activity" element={<ActivityPage />} />
         <Route path="plans" element={<PlansPage />} />
         <Route path="users" element={<UsersPage />} />
+        <Route path="buyers" element={<BuyersPage />} />
         <Route path="users/:id" element={<UserDetailPage />} />
         <Route path="domains" element={<DomainsPage />} />
         <Route path="affiliates" element={<AffiliatesPage />} />
@@ -90,7 +109,10 @@ export default function App() {
         <Route path="blocks" element={<BlocksPage />} />
         <Route path="sections" element={<SectionsPage />} />
         <Route path="email-templates" element={<EmailTemplatesPage />} />
+        <Route path="changelog" element={<ChangelogPage />} />
         <Route path="outreach" element={<OutreachPage />} />
+        <Route path="growth" element={<GrowthPage />} />
+        <Route path="instagram" element={<InstagramPage />} />
         <Route path="audit" element={<AuditPage />} />
         <Route path="announcements" element={<AnnouncementsPage />} />
         <Route path="merchant-messages" element={<MerchantMessagesPage />} />

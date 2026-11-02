@@ -35,7 +35,8 @@ export type PlatformPermission =
   | "blacklist:write"
   | "announcements:write"
   | "staff:invite"
-  | "outreach:send";
+  | "outreach:send"
+  | "mailbox:write";
 
 const ROLE_PERMISSIONS: Record<UserRole, PlatformPermission[] | "*"> = {
   [UserRole.SUPER_ADMIN]: "*",
@@ -57,6 +58,7 @@ const ROLE_PERMISSIONS: Record<UserRole, PlatformPermission[] | "*"> = {
     "audit:read",
     "blacklist:write",
     "announcements:write",
+    "mailbox:write",
   ],
   [UserRole.PLATFORM_SUPPORT]: [
     "dashboard:read",
@@ -69,6 +71,7 @@ const ROLE_PERMISSIONS: Record<UserRole, PlatformPermission[] | "*"> = {
     "users:impersonate",
     "moderation:write",
     "audit:read",
+    "mailbox:write",
   ],
   [UserRole.PLATFORM_FINANCE]: [
     "dashboard:read",

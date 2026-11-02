@@ -20,6 +20,7 @@ import { assertMorPayoutAmount } from "../lib/mor-payout-config.js";
 import { getPlatformActionItems } from "../lib/platform-action-items.js";
 import { notifyMerchantPayoutStatus } from "../lib/payout-emails.js";
 import { logPlatformAudit } from "../lib/platform-audit.js";
+import { sendStoreRemovedEmail } from "../lib/user-admin-email.js";
 import {
   createImpersonationUrl,
   getUserDetail,
@@ -40,6 +41,10 @@ import { registerPlatformAffiliatesRoutes } from "./platform-affiliates.js";
 import { registerPlatformMarketingRoutes } from "./platform-marketing.js";
 import { registerPlatformMerchantMessageRoutes } from "./platform-merchant-messages.js";
 import { registerPlatformPartnerAdminRoutes } from "./platform-partners.js";
+import { registerPlatformKycRoutes } from "./platform-kyc.js";
+import { registerPlatformInstagramRoutes } from "./platform-instagram.js";
+import { registerPlatformMailboxRoutes } from "./platform-mailbox.js";
+import { registerPlatformDeskRoutes } from "./platform-desk.js";
 
 const platform = new Hono<AuthEnv>();
 platform.use("*", requireSuperAdmin);
@@ -54,8 +59,17 @@ registerPlatformOpsRoutes(platform);
 registerPlatformOutreachRoutes(platform);
 registerPlatformAffiliatesRoutes(platform);
 registerPlatformPartnerAdminRoutes(platform);
+registerPlatformKycRoutes(platform);
 registerPlatformMarketingRoutes(platform);
 registerPlatformMerchantMessageRoutes(platform);
+registerPlatformInstagramRoutes(platform);
+registerPlatformMailboxRoutes(platform);
+registerPlatformDeskRoutes(platform);
+
+platform.get("/traffic", async (c) => {
+  const { getPlatformTraffic } = await import("../lib/platform-traffic.js");
+  return c.json(await getPlatformTraffic());
+});
 
 platform.get("/dashboard", async (c) => {
   const now = new Date();
@@ -532,6 +546,8 @@ platform.post("/orders/:id/cancel", async (c) => {
   emailCustomerAboutOrder(order.id, "orderCancelled", {
     reason: "Cancelled by platform",
   }).catch(() => {});
+  const { notifyOwnerOrderCancelled } = await import("../lib/owner-alerts.js");
+  notifyOwnerOrderCancelled(order.id).catch(() => {});
   await logPlatformAudit({
     actorUserId: session.sub,
     actorEmail: session.email,
@@ -832,6 +848,7 @@ platform.get("/tenants", async (c) => {
       owner: { select: { id: true, email: true, name: true } },
       subscriptionPlan: { select: { id: true, name: true, slug: true } },
       settings: { select: { currency: true } },
+      merchantKyc: { select: { status: true } },
       _count: { select: { products: true, orders: true, customers: true } },
     },
   });
@@ -870,6 +887,8 @@ platform.get("/tenants", async (c) => {
         customerCount: t._count.customers,
         gmv30d: stats?.gmv30d ?? 0,
         orders30d: stats?.orders30d ?? 0,
+        kycStatus: t.merchantKyc?.status ?? null,
+        acquisitionSource: t.acquisitionSource,
         storefrontUrl: getStorefrontUrl(t.slug),
         merchantAdminUrl: `${process.env.MERCHANT_ADMIN_URL ?? "http://localhost:3001"}`,
       };
@@ -885,6 +904,14 @@ platform.get("/tenants/:id", async (c) => {
       subscriptionPlan: true,
       settings: true,
       customDomains: true,
+      merchantKyc: {
+        select: {
+          status: true,
+          legalName: true,
+          country: true,
+          rejectReason: true,
+        },
+      },
       _count: { select: { products: true, orders: true, customers: true } },
     },
   });
@@ -1002,7 +1029,51 @@ platform.patch("/tenants/:id", async (c) => {
     },
   });
 
+  if (
+    body.status === TenantStatus.SUSPENDED &&
+    tenant.status !== TenantStatus.SUSPENDED
+  ) {
+    const { notifyStoreSuspended } = await import("../lib/owner-alerts.js");
+    notifyStoreSuspended(tenant.id).catch((err) =>
+      console.error("[email] store suspended", err)
+    );
+  }
+
   return c.json({ tenant: updated });
+});
+
+platform.delete("/tenants/:id", async (c) => {
+  const session = c.get("session");
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: c.req.param("id") },
+    include: { owner: { select: { id: true, email: true, name: true } } },
+  });
+  if (!tenant) return c.json({ error: "Not found" }, 404);
+
+  try {
+    await prisma.tenant.delete({ where: { id: tenant.id } });
+  } catch (err) {
+    console.error("[platform] delete tenant", tenant.id, err);
+    return c.json({ error: "Could not delete this store" }, 409);
+  }
+
+  await logPlatformAudit({
+    actorUserId: session.sub,
+    actorEmail: session.email,
+    action: "tenant.delete",
+    targetUserId: tenant.owner.id,
+    summary: `Deleted store ${tenant.name} (${tenant.slug})`,
+    meta: { tenantId: tenant.id, slug: tenant.slug },
+  });
+
+  const emailSent = await sendStoreRemovedEmail({
+    to: tenant.owner.email,
+    ownerName: tenant.owner.name,
+    storeName: tenant.name,
+    storeSlug: tenant.slug,
+  });
+
+  return c.json({ ok: true, emailSent });
 });
 
 platform.get("/plans", async (c) => {
@@ -1169,10 +1240,37 @@ platform.post("/tenants/:id/payouts/:payoutId/mark-paid", async (c) => {
     where: { id: c.req.param("payoutId"), tenantId: c.req.param("id") },
   });
   if (!payout) return c.json({ error: "Not found" }, 404);
-  const tenant = await prisma.tenant.findUnique({ where: { id: payout.tenantId } });
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: payout.tenantId },
+    include: { settings: true },
+  });
+  let wiseNote: string | undefined;
+  const wiseCfg = tenant?.settings?.integrations;
+  const wiseAuto =
+    wiseCfg &&
+    typeof wiseCfg === "object" &&
+    (wiseCfg as { wise?: { autoPayout?: boolean } }).wise?.autoPayout === true;
+  if (wiseAuto) {
+    const { createWiseTransfer } = await import("../lib/wise-payout.js");
+    const result = await createWiseTransfer({
+      integrations: tenant.settings?.integrations,
+      payoutCurrency: tenant.settings?.payoutCurrency ?? payout.currency,
+      amountMajor: payout.amount / 100,
+      reference: `payout-${payout.id}`,
+    });
+    wiseNote = result.ok
+      ? `Wise transfer ${result.transferId}`
+      : `Wise auto failed: ${result.error}`;
+  }
   const updated = await prisma.merchantPayout.update({
     where: { id: payout.id },
-    data: { status: "PAID", paidAt: new Date() },
+    data: {
+      status: "PAID",
+      paidAt: new Date(),
+      ...(wiseNote
+        ? { note: [payout.note, wiseNote].filter(Boolean).join(" · ") }
+        : {}),
+    },
   });
   if (tenant) {
     await notifyMerchantPayoutStatus({
@@ -1181,10 +1279,10 @@ platform.post("/tenants/:id/payouts/:payoutId/mark-paid", async (c) => {
       amount: payout.amount,
       currency: payout.currency,
       status: "PAID",
-      note: payout.note,
+      note: updated.note,
     });
   }
-  return c.json({ payout: updated });
+  return c.json({ payout: updated, wise: wiseNote ?? null });
 });
 
 platform.post("/tenants/:id/payouts", async (c) => {

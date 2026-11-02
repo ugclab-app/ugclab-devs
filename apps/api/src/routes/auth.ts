@@ -20,10 +20,22 @@ import {
 import { createStoreForOwner, signupErrorMessage } from "../lib/public-signup.js";
 import { getStorefrontDisplayHost, getStorefrontUrl } from "../lib/storefront.js";
 import { getAuthSecret, MERCHANT_WEB_URL } from "../env.js";
+import { checkRateLimit, clientIpFromHeaders } from "../lib/rate-limit.js";
 import { registerAuthPartnerRoutes, platformRefFromRequest } from "./platform-partners.js";
+import { platformTurnstileSiteKey, requirePlatformTurnstile } from "../lib/turnstile.js";
 
 export const authRoutes = new Hono();
 registerAuthPartnerRoutes(authRoutes);
+
+function rateLimited(c: import("hono").Context, key: string, max: number, windowMs = 15 * 60 * 1000) {
+  const hit = checkRateLimit(key, { max, windowMs });
+  if (hit.ok) return null;
+  c.header("Retry-After", String(hit.retryAfterSec));
+  return c.json(
+    { error: "Too many requests. Try again later.", retryAfterSec: hit.retryAfterSec },
+    429
+  );
+}
 
 function tenantPayload(tenant: {
   id: string;
@@ -42,6 +54,10 @@ function tenantPayload(tenant: {
 }
 
 authRoutes.post("/login", async (c) => {
+  const ip = clientIpFromHeaders(c.req.raw.headers);
+  const ipBlock = rateLimited(c, `auth:login:ip:${ip}`, 30);
+  if (ipBlock) return ipBlock;
+
   try {
     await assertDatabaseReady(8_000);
   } catch (err) {
@@ -62,6 +78,7 @@ authRoutes.post("/login", async (c) => {
     password?: string;
     totpCode?: string;
     rememberMe?: boolean;
+    turnstileToken?: string;
   }>();
   const email = String(body.email ?? "")
     .toLowerCase()
@@ -72,6 +89,11 @@ authRoutes.post("/login", async (c) => {
   if (!email || !password) {
     return c.json({ error: "Email and password required" }, 400);
   }
+  const captcha = await requirePlatformTurnstile(c, body);
+  if (captcha) return captcha;
+
+  const emailBlock = rateLimited(c, `auth:login:email:${email}`, 12);
+  if (emailBlock) return emailBlock;
 
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user?.passwordHash) {
@@ -109,6 +131,11 @@ authRoutes.post("/login", async (c) => {
     where: { id: user.id },
     data: { lastLoginAt: new Date() },
   });
+
+  const { noticeNewOwnerDevice } = await import("../lib/owner-alerts.js");
+  noticeNewOwnerDevice(user.id, c.req.header("user-agent") ?? null).catch((err) =>
+    console.error("[email] new device", err)
+  );
 
   const tenant = await getTenantForUser(user.id);
   const token = await signSessionForUser(
@@ -502,6 +529,11 @@ authRoutes.get("/google/callback", async (c) => {
     },
   });
 
+  const { noticeNewOwnerDevice } = await import("../lib/owner-alerts.js");
+  noticeNewOwnerDevice(user.id, c.req.header("user-agent") ?? null).catch((err) =>
+    console.error("[email] new device", err)
+  );
+
   const tenant = await getTenantForUser(user.id);
   const sessionToken = await signSessionForUser(user, undefined, tenant?.id);
   return c.redirect(
@@ -535,10 +567,17 @@ authRoutes.post("/oauth/complete", async (c) => {
 });
 
 authRoutes.get("/oauth/providers", (c) => {
-  return c.json({ google: googleOAuthConfigured() });
+  return c.json({
+    google: googleOAuthConfigured(),
+    turnstileSiteKey: platformTurnstileSiteKey(),
+  });
 });
 
 authRoutes.post("/forgot-password", async (c) => {
+  const ip = clientIpFromHeaders(c.req.raw.headers);
+  const ipBlock = rateLimited(c, `auth:forgot:ip:${ip}`, 8);
+  if (ipBlock) return ipBlock;
+
   const body = await c.req.json<{ email?: string }>().catch(() => ({}));
   const email = String((body as { email?: string }).email ?? "")
     .toLowerCase()
@@ -552,6 +591,11 @@ authRoutes.post("/forgot-password", async (c) => {
     });
 
   if (!email || !email.includes("@")) return okResponse();
+  const captcha = await requirePlatformTurnstile(c, body);
+  if (captcha) return captcha;
+
+  const emailBlock = rateLimited(c, `auth:forgot:email:${email}`, 5);
+  if (emailBlock) return emailBlock;
 
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user?.passwordHash || user.accountStatus === UserAccountStatus.BANNED) {
@@ -582,6 +626,10 @@ authRoutes.post("/forgot-password", async (c) => {
 });
 
 authRoutes.post("/reset-password", async (c) => {
+  const ip = clientIpFromHeaders(c.req.raw.headers);
+  const ipBlock = rateLimited(c, `auth:reset:ip:${ip}`, 15);
+  if (ipBlock) return ipBlock;
+
   const body = await c.req.json<{ token?: string; password?: string }>();
   const token = String(body.token ?? "").trim();
   const password = String(body.password ?? "");
@@ -619,10 +667,19 @@ authRoutes.post("/reset-password", async (c) => {
     where: { identifier: row.identifier },
   });
 
+  const { notifyPasswordChanged } = await import("../lib/owner-alerts.js");
+  notifyPasswordChanged(user.email).catch((err) =>
+    console.error("[email] password changed", err)
+  );
+
   return c.json({ ok: true, message: "Password updated. You can sign in." });
 });
 
 authRoutes.post("/magic-link", async (c) => {
+  const ip = clientIpFromHeaders(c.req.raw.headers);
+  const ipBlock = rateLimited(c, `auth:magic:ip:${ip}`, 8);
+  if (ipBlock) return ipBlock;
+
   const body = await c.req.json<{ email?: string }>().catch(() => ({}));
   const email = String((body as { email?: string }).email ?? "")
     .toLowerCase()
@@ -634,6 +691,11 @@ authRoutes.post("/magic-link", async (c) => {
     });
 
   if (!email || !email.includes("@")) return okResponse();
+  const captcha = await requirePlatformTurnstile(c, body);
+  if (captcha) return captcha;
+
+  const emailBlock = rateLimited(c, `auth:magic:email:${email}`, 5);
+  if (emailBlock) return emailBlock;
 
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user || user.accountStatus === UserAccountStatus.BANNED) {
@@ -662,6 +724,10 @@ authRoutes.post("/magic-link", async (c) => {
 });
 
 authRoutes.post("/magic-link/complete", async (c) => {
+  const ip = clientIpFromHeaders(c.req.raw.headers);
+  const ipBlock = rateLimited(c, `auth:magic-complete:ip:${ip}`, 20);
+  if (ipBlock) return ipBlock;
+
   const body = await c.req.json<{
     token?: string;
     totpCode?: string;
@@ -705,6 +771,11 @@ authRoutes.post("/magic-link/complete", async (c) => {
     where: { id: user.id },
     data: { lastLoginAt: new Date() },
   });
+
+  const { noticeNewOwnerDevice } = await import("../lib/owner-alerts.js");
+  noticeNewOwnerDevice(user.id, c.req.header("user-agent") ?? null).catch((err) =>
+    console.error("[email] new device", err)
+  );
 
   const tenant = await getTenantForUser(user.id);
   const sessionToken = await signSessionForUser(

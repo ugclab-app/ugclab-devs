@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <title>Tescommerce — Reel: Meet Tescommerce (TR)</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 1080px;
+      height: 1920px;
+      overflow: hidden;
+      background: #eef0f6;
+      font-family: "Segoe UI Variable Display", "Segoe UI", sans-serif;
+      color: #0b0d14;
+      -webkit-font-smoothing: antialiased;
+    }
+    :root { --blue: #2546f0; --ink: #0b0d14; --muted: #687083; --line: #e3e7f0; --green: #059669; --red: #e11d48; }
+    #stage { position: relative; width: 1080px; height: 1920px; overflow: hidden; }
+    .abs { position: absolute; }
+    .layer { position: absolute; inset: 0; will-change: transform, filter, opacity; }
+    .gtext { background: linear-gradient(90deg, #1f3fe8, #5b78ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    #bg { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 38%, #ffffff 0%, #f1f3f9 55%, #e4e8f2 100%); }
+    .blob { position: absolute; border-radius: 50%; }
+    #blobA { width: 1000px; height: 1000px; background: radial-gradient(circle, rgba(37, 70, 240, 0.17), transparent 65%); }
+    #blobB { width: 900px; height: 900px; background: radial-gradient(circle, rgba(91, 120, 255, 0.15), transparent 65%); }
+
+    .title { position: absolute; left: 0; right: 0; text-align: center; font-size: 104px; font-weight: 680; letter-spacing: -0.045em; line-height: 1.04; }
+    .title > div { display: block; }
+    .card { position: absolute; left: 90px; width: 900px; border-radius: 40px; background: #fff; box-shadow: 0 50px 120px rgba(20, 30, 80, 0.16), 0 0 0 1px rgba(20, 30, 80, 0.04); padding: 48px; }
+    .pill { display: inline-flex; align-items: center; gap: 12px; border-radius: 999px; white-space: nowrap; font-weight: 650; }
+    .btn { height: 110px; border-radius: 28px; display: grid; place-items: center; font-size: 38px; font-weight: 700; color: #fff; background: var(--blue); position: relative; }
+    .chip { position: absolute; padding: 22px 32px; border-radius: 26px; background: #fff; box-shadow: 0 20px 50px rgba(20, 30, 80, 0.13); font-size: 34px; font-weight: 650; white-space: nowrap; display: flex; align-items: center; gap: 16px; }
+    .chip b { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; color: #fff; font-size: 24px; font-weight: 800; }
+    .toast { position: absolute; left: 140px; width: 800px; display: flex; align-items: center; gap: 26px; padding: 30px 38px; border-radius: 32px; background: #fff; box-shadow: 0 30px 70px rgba(20, 30, 80, 0.2); font-size: 38px; font-weight: 700; }
+    .toast i { width: 76px; height: 76px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 38px; font-weight: 800; font-style: normal; flex: none; }
+    .toast small { display: block; font-size: 28px; color: var(--muted); font-weight: 600; }
+    .prod { position: absolute; left: 90px; width: 900px; display: flex; align-items: center; gap: 32px; padding: 32px 40px; border-radius: 36px; background: #fff; box-shadow: 0 24px 60px rgba(20, 30, 80, 0.12); }
+    .prod .th { width: 150px; height: 150px; border-radius: 28px; flex: none; display: grid; place-items: center; color: #fff; font-size: 60px; font-weight: 800; }
+    .prod .nm { font-size: 44px; font-weight: 700; letter-spacing: -0.02em; }
+    .prod .tg { display: inline-block; margin-top: 10px; padding: 8px 20px; border-radius: 999px; font-size: 26px; font-weight: 700; }
+    .prod .pr { margin-left: auto; font-size: 50px; font-weight: 750; letter-spacing: -0.03em; }
+    .phone { position: absolute; left: 250px; top: 560px; width: 580px; height: 1180px; border-radius: 76px; background: #0b0d14; padding: 16px; box-shadow: 0 60px 140px rgba(20, 30, 80, 0.3); }
+    .screen { width: 100%; height: 100%; border-radius: 62px; background: #fff; overflow: hidden; position: relative; }
+    .url { margin: 60px 30px 0; height: 70px; border-radius: 22px; background: #eef0f6; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 28px; font-weight: 650; color: #39404f; }
+    .hero { margin: 26px 30px 0; height: 400px; border-radius: 34px; background: linear-gradient(150deg, #1e293b, #4f46e5 70%, #7c8cff); color: #fff; padding: 40px 36px; display: flex; flex-direction: column; justify-content: flex-end; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 24px 30px 0; }
+    .gi { height: 250px; border-radius: 26px; padding: 18px; display: flex; flex-direction: column; justify-content: flex-end; color: #fff; font-size: 24px; font-weight: 700; }
+    .wallets { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 36px; }
+    .wallet { height: 110px; border-radius: 26px; display: grid; place-items: center; font-size: 36px; font-weight: 650; }
+    .cardrow { margin-top: 20px; height: 100px; border-radius: 24px; border: 3px solid var(--line); display: flex; align-items: center; padding: 0 30px; gap: 20px; font-size: 34px; color: var(--muted); }
+    .okover { position: absolute; inset: 0; border-radius: 40px; background: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .bigcheck { width: 200px; height: 200px; border-radius: 50%; background: #10b981; color: #fff; display: grid; place-items: center; font-size: 110px; font-weight: 800; }
+    .spin { width: 50px; height: 50px; border-radius: 50%; border: 6px solid rgba(255, 255, 255, 0.3); border-top-color: #fff; }
+    .feat { position: absolute; width: 420px; height: 210px; border-radius: 36px; background: #fff; box-shadow: 0 24px 60px rgba(20, 30, 80, 0.13); padding: 34px; display: flex; flex-direction: column; justify-content: space-between; font-size: 35px; font-weight: 700; letter-spacing: -0.02em; }
+    .feat b { width: 74px; height: 74px; border-radius: 22px; display: grid; place-items: center; color: #fff; font-size: 38px; font-weight: 800; }
+    .note { position: absolute; left: 90px; width: 900px; display: flex; align-items: center; gap: 26px; padding: 28px 36px; border-radius: 34px; background: #fff; box-shadow: 0 24px 60px rgba(20, 30, 80, 0.14); font-size: 34px; font-weight: 650; }
+    .note .ic { width: 84px; height: 84px; border-radius: 24px; display: grid; place-items: center; color: #fff; font-size: 26px; font-weight: 800; }
+    .note small { display: block; font-size: 26px; color: var(--muted); font-weight: 600; }
+    .note .amt { margin-left: auto; color: var(--green); font-size: 44px; font-weight: 750; }
+    .gpin { position: absolute; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; background: #10b981; box-shadow: 0 0 0 10px rgba(16, 185, 129, 0.22); }
+    .stp { display: flex; align-items: center; gap: 22px; margin-top: 30px; font-size: 40px; font-weight: 650; }
+    .stp .c { width: 58px; height: 58px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 30px; font-weight: 800; flex: none; }
+    .stp small { display: block; font-size: 28px; color: var(--muted); font-weight: 600; margin-top: 2px; }
+    .ccy { display: flex; gap: 14px; margin-top: 20px; }
+    .ccy span { padding: 12px 24px; border-radius: 999px; background: #eef0f6; font-weight: 700; font-size: 28px; color: #39404f; }
+    .ccy span.on { background: var(--blue); color: #fff; }
+    .mark { display: grid; place-items: center; color: #fff; font-weight: 700; background: linear-gradient(135deg, #1f3fe8, #5b78ff); box-shadow: 0 24px 60px rgba(37, 70, 240, 0.35); }
+    .hand { position: absolute; width: 64px; height: 64px; filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.25)); }
+    .ring { position: absolute; width: 110px; height: 110px; margin: -55px 0 0 -55px; border-radius: 50%; background: rgba(37, 70, 240, 0.3); }
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <div id="bg"></div>
+    <div class="blob" id="blobA"></div>
+    <div class="blob" id="blobB"></div>
+
+    <!-- chaos -->
+    <div class="layer" id="s-chaos">
+      <div class="title" id="chaosT" style="top:200px;font-size:90px">
+        <div><span class="gtext">10 eklenti.</span></div>
+        <div>Reddedilen ödemeler.</div>
+      </div>
+      <div id="chips"></div>
+      <div class="toast" id="declined" style="top:1440px"><i style="background:var(--red)">✕</i><div>Ödeme reddedildi<small>Kart sağlayıcısı işlemi reddetti</small></div></div>
+      <div class="toast" id="devcall" style="top:1610px"><i style="background:#f59e0b">☎</i><div>Yazılımcın aranıyor…<small>Bu hafta 3. kez</small></div></div>
+    </div>
+
+    <!-- question -->
+    <div class="layer" id="s-question">
+      <div class="title" id="qT" style="top:420px;font-size:130px"><div>Hâlâ</div><div><span class="gtext">satış yok mu?</span></div></div>
+      <div class="card" id="qCard" style="top:820px">
+        <div style="font-size:32px;font-weight:650;color:var(--muted)">Satışlar · son 30 gün</div>
+        <div style="font-size:120px;font-weight:750;letter-spacing:-0.05em">$0.00</div>
+        <svg width="804" height="80" viewBox="0 0 804 80" style="margin-top:10px">
+          <line x1="0" y1="40" x2="804" y2="40" stroke="#e3e7f0" stroke-width="3" />
+          <path id="flat" d="M0 40 L804 40" stroke="#9aa2b4" stroke-width="8" stroke-linecap="round" fill="none" stroke-dasharray="804" />
+        </svg>
+        <div style="font-size:34px;font-weight:650;color:var(--muted);margin-top:10px">0 sipariş</div>
+      </div>
+    </div>
+
+    <!-- meet -->
+    <div class="layer" id="s-meet">
+      <div class="abs" style="left:0;right:0;top:560px;display:flex;flex-direction:column;align-items:center">
+        <div class="mark" id="meetMark" style="width:220px;height:220px;border-radius:64px;font-size:128px">T</div>
+        <div class="title" id="meetT" style="position:relative;margin-top:60px"><div>Tanış:</div><div style="font-size:136px"><span class="gtext">Tescommerce.</span></div></div>
+        <div id="meetSub" style="margin-top:40px;font-size:52px;font-weight:600;letter-spacing:-0.02em;color:#39404f">Mağazan dakikalar içinde yayında.</div>
+        <div class="pill" id="meetLive" style="margin-top:60px;padding:24px 40px;background:#d1fae5;color:#047857;font-size:38px"><span style="width:20px;height:20px;border-radius:50%;background:#10b981"></span>Mağaza yayında</div>
+      </div>
+    </div>
+
+    <!-- catalog -->
+    <div class="layer" id="s-catalog">
+      <div class="title" id="catT" style="top:230px"><div>Tek katalog.</div><div><span class="gtext">Her şeyi sat.</span></div></div>
+      <div class="prod" id="pr0" style="top:620px"><div class="th" style="background:linear-gradient(135deg,#1e293b,#4f46e5)">▶</div><div><div class="nm">Film Fotoğrafçılığı Kursu</div><span class="tg" style="background:#e0e7ff;color:#3730a3">Kurs</span></div><div class="pr">$49</div></div>
+      <div class="prod" id="pr1" style="top:880px"><div class="th" style="background:linear-gradient(135deg,#7c3aed,#ec4899)">↓</div><div><div class="nm">Lightroom Preset Paketi</div><span class="tg" style="background:#fce7f3;color:#9d174d">Dijital indirme</span></div><div class="pr">$19</div></div>
+      <div class="prod" id="pr2" style="top:1140px"><div class="th" style="background:linear-gradient(135deg,#059669,#84cc16)">T</div><div><div class="nm">Stüdyo Logolu Tişört</div><span class="tg" style="background:#d1fae5;color:#065f46">Merch</span></div><div class="pr">$29</div></div>
+    </div>
+
+    <!-- storefront -->
+    <div class="layer" id="s-storefront">
+      <div class="title" id="sfT" style="top:200px"><div>Senin vitrinin.</div><div><span class="gtext">Senin alan adın.</span></div></div>
+      <div class="phone" id="phone">
+        <div class="screen">
+          <div class="url"><span style="color:#10b981">🔒</span><span id="urlTxt"></span></div>
+          <div class="hero" id="sfHero">
+            <div style="font-size:24px;font-weight:700;opacity:.75;letter-spacing:.08em">YENİ KURS</div>
+            <div style="font-size:52px;font-weight:750;letter-spacing:-0.03em;line-height:1.05;margin-top:8px">Profesyonel gibi film çek</div>
+            <div style="margin-top:22px;align-self:flex-start;padding:16px 30px;border-radius:999px;background:#fff;color:#0b0d14;font-size:26px;font-weight:700">Hemen al</div>
+          </div>
+          <div class="grid">
+            <div class="gi" id="gi0" style="background:linear-gradient(135deg,#1e293b,#4f46e5)">Kurs · $49</div>
+            <div class="gi" id="gi1" style="background:linear-gradient(135deg,#7c3aed,#ec4899)">Presetler · $19</div>
+            <div class="gi" id="gi2" style="background:linear-gradient(135deg,#059669,#84cc16)">Tişört · $29</div>
+            <div class="gi" id="gi3" style="background:linear-gradient(135deg,#f59e0b,#ef4444)">Fanzin · $15</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- checkout -->
+    <div class="layer" id="s-checkout">
+      <div class="title" id="payT" style="top:230px"><div>Alıcılar her yerden</div><div><span class="gtext">ödeme yapar.</span></div></div>
+      <div class="card" id="payCard" style="top:620px">
+        <div style="display:flex;gap:30px;align-items:center">
+          <div style="width:150px;height:150px;border-radius:28px;background:linear-gradient(135deg,#1e293b,#4f46e5);flex:none"></div>
+          <div><div style="font-size:40px;font-weight:700;letter-spacing:-0.02em">Film Fotoğrafçılığı Kursu</div><div style="font-size:52px;font-weight:750;letter-spacing:-0.03em;margin-top:4px">$49.00</div></div>
+        </div>
+        <div class="wallets"><div class="wallet" style="background:#000;color:#fff">Apple Pay</div><div class="wallet" style="border:3px solid var(--line)">Google Pay</div></div>
+        <div class="cardrow"><span style="font-weight:800;color:#1a1f71;font-style:italic">VISA</span>•••• 4242</div>
+        <div class="btn" id="payBtn" style="margin-top:30px"><span id="payTxt">$49.00 öde</span></div>
+        <div class="okover" id="paid"><div class="bigcheck" id="bigcheck">✓</div><div style="margin-top:34px;font-size:54px;font-weight:750;letter-spacing:-0.03em">$49.00 ödendi</div></div>
+      </div>
+    </div>
+
+    <!-- features -->
+    <div class="layer" id="s-features">
+      <div class="title" id="ftT" style="top:300px"><div>Gerisi mi?</div><div><span class="gtext">Hepsi dahil.</span></div></div>
+      <div id="feats"></div>
+    </div>
+
+    <!-- live -->
+    <div class="layer" id="s-live">
+      <div class="title" id="liveT" style="top:200px"><div>Siparişler</div><div><span class="gtext">her yerden gelir.</span></div></div>
+      <svg class="abs" id="globe" style="left:160px;top:520px" width="760" height="760" viewBox="0 0 900 900"></svg>
+      <div id="gpins"></div>
+      <div id="orders"></div>
+    </div>
+
+    <!-- payout -->
+    <div class="layer" id="s-payout">
+      <div class="title" id="poT" style="top:180px;font-size:88px"><div>Sonra paranı al —</div><div><span class="gtext">Shopify Payments'ın</span></div><div><span class="gtext">olmadığı yerde bile.</span></div></div>
+      <div class="card" id="poCard" style="top:620px">
+        <div style="font-size:30px;font-weight:650;color:var(--muted)">Kullanılabilir bakiye</div>
+        <div style="font-size:110px;font-weight:750;letter-spacing:-0.05em">$1,240.00</div>
+        <div class="ccy"><span class="on">USD</span><span>EUR</span></div>
+        <div class="btn" id="poBtn" style="margin-top:36px"><span id="poTxt">Ödeme talep et</span></div>
+        <div id="steps"></div>
+      </div>
+    </div>
+
+    <!-- end -->
+    <div class="layer" id="s-end">
+      <div class="abs" style="left:0;right:0;top:620px;display:flex;flex-direction:column;align-items:center">
+        <div class="mark" id="endMark" style="width:200px;height:200px;border-radius:60px;font-size:116px">T</div>
+        <div id="endWord" style="margin-top:36px;font-size:120px;font-weight:700;letter-spacing:-0.05em"></div>
+        <div id="endTag" style="margin-top:10px;font-size:54px;font-weight:600;letter-spacing:-0.02em"><span class="gtext">Mağazanı aç. Paranı al.</span></div>
+        <div id="endCta" class="pill" style="margin-top:70px;padding:30px 52px;background:var(--blue);color:#fff;font-size:42px;box-shadow:0 24px 60px rgba(37,70,240,.35)">Ücretsiz başla → link bio'da</div>
+      </div>
+    </div>
+
+    <div class="hand" id="hand"><svg width="64" height="64" viewBox="0 0 24 24"><path d="M4 2l15 11.5-6.6 1 3.8 7.4-2.9 1.4-3.8-7.5L4 20z" fill="#0b0d14" stroke="#fff" stroke-width="1.4" stroke-linejoin="round" /></svg></div>
+    <div class="ring" id="ring"></div>
+  </div>
+
+  <script>
+    const SCENES = [
+      { id: "chaos", dur: 3.4 }, { id: "question", dur: 2.4 }, { id: "meet", dur: 3.2 }, { id: "catalog", dur: 3.2 },
+      { id: "storefront", dur: 3.4 }, { id: "checkout", dur: 3.6 }, { id: "features", dur: 3.8 }, { id: "live", dur: 3.6 },
+      { id: "payout", dur: 3.8 }, { id: "end", dur: 4.4 }
+    ];
+    const plan = { scenes: [], duration: 0 };
+    {
+      let t = 0;
+      for (const s of SCENES) {
+        plan.scenes.push({ id: s.id, start: t, dur: s.dur, vo: null, voOffset: 0 });
+        t += s.dur;
+      }
+      plan.duration = t;
+    }
+    window.__plan = plan;
+
+    // ---------- helpers (same engine as reel-payments.html) ----------
+    const $ = (id) => document.getElementById(id);
+    const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+    const seg = (t, a, b) => clamp((t - a) / (b - a));
+    const lerp = (a, b, p) => a + (b - a) * p;
+    const E = {
+      out: (x) => 1 - Math.pow(1 - x, 3),
+      expo: (x) => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * x)),
+      inOut: (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2),
+      in: (x) => x * x * x,
+      back: (x) => { const c1 = 1.6, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); }
+    };
+    const set = (el, o) => { for (const k in o) el.style[k] = o[k]; };
+    const fx = (el, { x = 0, y = 0, s = 1, r = 0, o = 1, b = 0, extra = "" }) =>
+      set(el, { transform: `${extra} translate(${x}px, ${y}px) scale(${s}) rotate(${r}deg)`, opacity: o, filter: b > 0.05 ? `blur(${b}px)` : "none" });
+    const rise = (el, t, at, dist = 70, dur = 0.5) => {
+      const p = E.expo(seg(t, at, at + dur));
+      fx(el, { y: (1 - p) * dist, o: p, b: (1 - p) * 14 });
+      return p;
+    };
+    const pop = (el, t, at, extra = "") => {
+      const q = E.back(seg(t, at, at + 0.45));
+      fx(el, { extra, s: 0.5 + 0.5 * q, o: clamp(q * 1.6) });
+    };
+    const tap = (t, at, x, y) => {
+      const hand = $("hand"), ring = $("ring");
+      const pin = seg(t, at - 0.55, at - 0.05), pout = seg(t, at + 0.35, at + 0.6);
+      set(hand, { left: lerp(x + 300, x, E.inOut(pin)) + "px", top: lerp(y + 300, y, E.inOut(pin)) + "px", opacity: pin > 0 && pout < 1 ? (1 - pout) * clamp(pin * 3) : 0, transform: `scale(${t > at && t < at + 0.15 ? 0.86 : 1})` });
+      const pr = seg(t, at, at + 0.5);
+      set(ring, { left: x + 10 + "px", top: y + 10 + "px", opacity: pr > 0 && pr < 1 ? 1 - pr : 0, transform: `scale(${0.3 + pr * 1.6})` });
+    };
+    const centerOf = (id) => { const r = $(id).getBoundingClientRect(); return [r.left + r.width * 0.55, r.top + r.height * 0.55]; };
+    const titleIn = (t, id, at = 0.08) => [...$(id).children].forEach((c, i) => rise(c, t, at + i * 0.12));
+
+    // ---------- dynamic DOM ----------
+    // the "plugin stack" a typical store glues together — generic names, no brands
+    const chips = [
+      ["Ödeme eklentisi", "#2546f0", 90, 520, -4], ["Vergi uygulaması", "#e11d48", 600, 560, 5], ["E-posta aracı", "#7c3aed", 150, 700, 3],
+      ["Sepet kurtarma", "#f59e0b", 560, 740, -5], ["Yorum widget'ı", "#059669", 80, 880, -2], ["Abonelikler", "#0ea5e9", 590, 920, 4],
+      ["Sayfa oluşturucu", "#ec4899", 170, 1060, 5], ["Upsell pop-up", "#ef4444", 600, 1100, -3], ["Stok senkronu", "#14b8a6", 90, 1240, 2],
+      ["Analitik", "#6366f1", 620, 1270, -4]
+    ];
+    $("chips").innerHTML = chips.map(([n, c, x, y], i) => `<div class="chip" id="ch${i}" style="left:${x}px;top:${y}px"><b style="background:${c}">${i + 1}</b>${n}</div>`).join("");
+    const feats = [
+      ["İndirimler", "%", "#2546f0"], ["Sepet kurtarma", "↺", "#f59e0b"], ["E-posta kampanyası", "✉", "#7c3aed"],
+      ["Abonelikler", "∞", "#0ea5e9"], ["Yorumlar", "★", "#059669"], ["Stok takibi", "▦", "#e11d48"]
+    ];
+    $("feats").innerHTML = feats.map(([n, ic, c], i) =>
+      `<div class="feat" id="ft${i}" style="left:${i % 2 ? 570 : 90}px;top:${700 + Math.floor(i / 2) * 250}px"><b style="background:${c}">${ic}</b>${n}</div>`).join("");
+    const gpins = [[300, 330], [560, 260], [640, 470], [380, 560], [230, 470], [520, 640], [700, 330]];
+    $("gpins").innerHTML = gpins.map((_, i) => `<div class="gpin" id="gp${i}"></div>`).join("");
+    const orders = [["Yeni sipariş", "Kurs · $49", "+$49", "#2546f0"], ["Yeni sipariş", "Presetler · $19", "+$19", "#7c3aed"], ["Yeni abone", "Aylık · $9", "+$9", "#059669"]];
+    $("orders").innerHTML = orders.map(([a, b, amt, col], i) =>
+      `<div class="note" id="od${i}"><span class="ic" style="background:${col}">✓</span><div>${a}<small>${b}</small></div><span class="amt">${amt}</span></div>`).join("");
+    const steps = [["Ödeme talep edildi", ""], ["Onaylandı", ""], ["Wise ile gönderildi", "Genellikle 3–7 iş günü"]];
+    $("steps").innerHTML = steps.map(([a, b], i) => `<div class="stp" id="st${i}"><span class="c" id="stc${i}">✓</span><div>${a}${b ? `<small>${b}</small>` : ""}</div></div>`).join("");
+    $("endWord").innerHTML = [..."Tescommerce"].map((c, i) => `<span id="ew${i}" style="display:inline-block">${c}</span>`).join("");
+
+    function drawGlobe(t) {
+      const R = 400, cx = 450, cy = 450, rot = t * 0.4;
+      let dots = "";
+      for (let lat = -80; lat <= 80; lat += 9) {
+        const phi = (lat * Math.PI) / 180;
+        const step = Math.max(7, 9 / Math.cos(phi));
+        for (let lon = -180; lon < 180; lon += step) {
+          const lam = (lon * Math.PI) / 180 + rot;
+          const z = Math.cos(phi) * Math.cos(lam);
+          if (z < -0.05) continue;
+          const x = cx + R * Math.cos(phi) * Math.sin(lam), y = cy - R * Math.sin(phi);
+          dots += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(2.4 + z * 2.8).toFixed(2)}" fill="rgba(37,70,240,${(0.15 + z * 0.55).toFixed(2)})"/>`;
+        }
+      }
+      $("globe").innerHTML = `<circle cx="${cx}" cy="${cy}" r="${R + 8}" fill="rgba(255,255,255,0.6)" stroke="#c7d0ff" stroke-width="2"/>${dots}`;
+    }
+
+    // ---------- scenes ----------
+    const scenes = {
+      chaos(t, d) {
+        titleIn(t, "chaosT", 0);
+        // chips pile up fast and start to shake as the stack gets heavier
+        const stress = seg(t, 1.2, 3.2);
+        chips.forEach(([, , , , r0], i) => {
+          const at = 0.15 + i * 0.1;
+          const q = E.back(seg(t, at, at + 0.4));
+          const shake = Math.sin(t * 26 + i * 1.7) * 6 * stress;
+          fx($("ch" + i), { x: shake, s: 0.5 + 0.5 * q, r: r0 + Math.sin(t * 19 + i) * 2 * stress, o: clamp(q * 1.6) });
+        });
+        const dq = E.back(seg(t, 1.4, 1.85));
+        fx($("declined"), { x: Math.sin(t * 40) * 10 * seg(t, 1.5, 1.9) * (1 - seg(t, 1.9, 2.1)), s: 0.6 + 0.4 * dq, o: clamp(dq * 1.6) });
+        pop($("devcall"), t, 2.1);
+      },
+      question(t, d) {
+        titleIn(t, "qT", 0.05);
+        const pc = E.expo(seg(t, 0.3, 0.9));
+        fx($("qCard"), { y: (1 - pc) * 120, o: pc });
+        $("flat").style.strokeDashoffset = 804 * (1 - E.inOut(seg(t, 0.6, 1.6)));
+      },
+      meet(t, d) {
+        const pm = E.back(seg(t, 0.05, 0.6));
+        fx($("meetMark"), { s: 0.3 + 0.7 * pm, r: (1 - pm) * -25, o: clamp(pm * 2) });
+        titleIn(t, "meetT", 0.35);
+        rise($("meetSub"), t, 0.9, 50);
+        pop($("meetLive"), t, 1.5);
+      },
+      catalog(t, d) {
+        titleIn(t, "catT");
+        [0, 1, 2].forEach((i) => {
+          const at = 0.35 + i * 0.3;
+          const p = E.expo(seg(t, at, at + 0.5));
+          fx($("pr" + i), { x: (1 - p) * (i % 2 ? 160 : -160), o: p, b: (1 - p) * 10 });
+        });
+      },
+      storefront(t, d) {
+        titleIn(t, "sfT");
+        const pp = E.expo(seg(t, 0.15, 0.8));
+        fx($("phone"), { y: (1 - pp) * 260, o: pp });
+        const dom = "yourbrand.com";
+        $("urlTxt").textContent = dom.slice(0, Math.round(dom.length * seg(t, 0.6, 1.3)));
+        rise($("sfHero"), t, 1.3, 40);
+        [0, 1, 2, 3].forEach((i) => pop($("gi" + i), t, 1.6 + i * 0.12));
+      },
+      checkout(t, d) {
+        titleIn(t, "payT");
+        const pc = E.expo(seg(t, 0.15, 0.8));
+        fx($("payCard"), { y: (1 - pc) * 140, o: pc });
+        const at = 1.6;
+        const [x, y] = centerOf("payBtn");
+        tap(t, at, x, y);
+        $("payTxt").innerHTML = t > at + 0.05 && t < at + 0.7 ? `<span class="spin" style="display:inline-block;transform:rotate(${t * 720}deg)"></span>` : "$49.00 öde";
+        $("paid").style.opacity = seg(t, at + 0.7, at + 0.95);
+        fx($("bigcheck"), { s: E.back(seg(t, at + 0.75, at + 1.2)) });
+      },
+      features(t, d) {
+        titleIn(t, "ftT");
+        feats.forEach((_, i) => {
+          const at = 0.5 + i * 0.22;
+          const q = E.back(seg(t, at, at + 0.45));
+          fx($("ft" + i), { s: 0.4 + 0.6 * q, r: (1 - q) * (i % 2 ? 8 : -8), o: clamp(q * 1.6) });
+          fx($("ft" + i).querySelector("b"), { s: 1 + Math.sin(seg(t, at + 0.3, at + 0.7) * Math.PI) * 0.25 });
+        });
+      },
+      live(t, d) {
+        titleIn(t, "liveT");
+        drawGlobe(t);
+        const g = E.expo(seg(t, 0.1, 0.8));
+        fx($("globe"), { s: 0.8 + 0.2 * g, o: g });
+        gpins.forEach(([x, y], i) => {
+          const el = $("gp" + i);
+          set(el, { left: 160 + x * (760 / 900) + "px", top: 520 + y * (760 / 900) + "px" });
+          pop(el, t, 0.6 + i * 0.17);
+        });
+        orders.forEach((_, i) => {
+          const at = 0.9 + i * 0.45;
+          const q = E.back(seg(t, at, at + 0.45));
+          set($("od" + i), { top: 1330 + i * 170 + "px" });
+          fx($("od" + i), { x: (1 - q) * 160, o: clamp(q * 1.6) });
+        });
+      },
+      payout(t, d) {
+        titleIn(t, "poT");
+        const pc = E.expo(seg(t, 0.15, 0.8));
+        fx($("poCard"), { y: (1 - pc) * 140, o: pc });
+        const at = 1.3;
+        const [x, y] = centerOf("poBtn");
+        tap(t, at, x, y);
+        const done = t > at + 0.08;
+        $("poTxt").textContent = done ? "✓ Ödeme talep edildi" : "Ödeme talep et";
+        $("poBtn").style.background = done ? "#059669" : "";
+        steps.forEach((_, i) => {
+          const s0 = at + 0.25 + i * 0.5;
+          const q = seg(t, s0, s0 + 0.25);
+          $("stc" + i).style.background = q > 0.5 ? "#10b981" : "#dfe3ec";
+          fx($("stc" + i), { s: q > 0 && q < 1 ? 1 + Math.sin(q * Math.PI) * 0.35 : 1 });
+          $("st" + i).style.color = q > 0.5 ? "var(--ink)" : "#9aa2b4";
+        });
+      },
+      end(t, d) {
+        const pm = E.back(seg(t, 0.05, 0.6));
+        fx($("endMark"), { s: 0.3 + 0.7 * pm, r: (1 - pm) * -25, o: clamp(pm * 2) });
+        for (let i = 0; i < 11; i += 1) {
+          const p = E.expo(seg(t, 0.3 + i * 0.035, 0.75 + i * 0.035));
+          fx($("ew" + i), { y: (1 - p) * 80, o: p, b: (1 - p) * 10 });
+        }
+        rise($("endTag"), t, 0.85, 50, 0.6);
+        const pc = E.back(seg(t, 1.25, 1.75));
+        fx($("endCta"), { s: (0.7 + 0.3 * pc) * (1 + 0.025 * Math.sin(Math.max(0, t - 1.8) * 5)), o: clamp(pc * 2) });
+      }
+    };
+
+    // ---------- frame ----------
+    const ENTER = 0.45, EXIT = 0.3;
+    function renderAt(time) {
+      set($("blobA"), { left: 300 + Math.sin(time * 0.3) * 160 + "px", top: -380 + Math.cos(time * 0.25) * 100 + "px" });
+      set($("blobB"), { left: -420 + Math.cos(time * 0.27) * 120 + "px", top: 1200 + Math.sin(time * 0.33) * 120 + "px" });
+      set($("hand"), { opacity: 0 });
+      set($("ring"), { opacity: 0 });
+      for (const s of plan.scenes) {
+        const layer = $("s-" + s.id);
+        const t = time - s.start;
+        const last = s === plan.scenes[plan.scenes.length - 1];
+        if (t < -0.001 || (!last && t > s.dur)) { layer.style.visibility = "hidden"; continue; }
+        layer.style.visibility = "visible";
+        const pin = s.start === 0 ? 1 : E.expo(seg(t, 0, ENTER));
+        const pout = last ? 0 : E.in(seg(t, s.dur - EXIT, s.dur));
+        fx(layer, { s: lerp(0.94, 1, pin) * (1 + pout * 0.14), o: pin * (1 - pout), b: (1 - pin) * 16 + pout * 18 });
+        scenes[s.id](t, s.dur);
+      }
+    }
+    window.renderAt = renderAt;
+    document.fonts.ready.then(() => {
+      renderAt(0);
+      window.__ready = true;
+    });
+  </script>
+</body>
+</html>

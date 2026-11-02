@@ -84,6 +84,9 @@ export function buildThemeFromForm(fd: FormData, existing?: StoreTheme | null): 
     storeClosedMessage: String(fd.get("storeClosedMessage") ?? "").trim() || undefined,
     customCss: String(fd.get("customCss") ?? "").trim() || undefined,
     trustBadgesEnabled: fd.get("trustBadgesEnabled") === "on",
+    ...(fd.get("showPaymentIconsPresent") === "1"
+      ? { showPaymentIcons: fd.get("showPaymentIcons") === "on" }
+      : {}),
     stripeTaxEnabled: existing?.stripeTaxEnabled === true,
     stripeLinkEnabled: fd.get("stripeLinkEnabled") === "on",
     stripePaypalEnabled: fd.get("stripePaypalEnabled") === "on",

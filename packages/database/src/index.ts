@@ -46,11 +46,20 @@ function createPrismaClient(): PrismaClientNode {
 
   // Local Node: always use a real postgres URL (never Accelerate-only).
   // Accelerate-generated clients reject postgres:// with P6001; prefer TCP.
-  const pgUrl = isPostgresUrl(directUrl)
-    ? directUrl!
-    : isPostgresUrl(accelerateOrDb)
-      ? accelerateOrDb!
-      : null;
+  // On Vercel, never follow a localhost URL from a copied .env file.
+  const localUrl = (url: string | undefined) =>
+    Boolean(url && (url.includes("localhost") || url.includes("127.0.0.1")));
+  const pgUrl = process.env.VERCEL
+    ? (isPostgresUrl(accelerateOrDb) && !localUrl(accelerateOrDb)
+        ? accelerateOrDb!
+        : isPostgresUrl(directUrl) && !localUrl(directUrl)
+          ? directUrl!
+          : null)
+    : isPostgresUrl(directUrl)
+      ? directUrl!
+      : isPostgresUrl(accelerateOrDb)
+        ? accelerateOrDb!
+        : null;
 
   if (!pgUrl) {
     if (accelerateOrDb && usesAccelerate(accelerateOrDb)) {

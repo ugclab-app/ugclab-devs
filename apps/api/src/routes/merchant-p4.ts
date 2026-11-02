@@ -36,6 +36,7 @@ p4.get("/search", async (c) => {
         tenantId: tenant.id,
         OR: [
           { orderNumber: { contains: q, mode: "insensitive" } },
+          { invoiceNumber: { contains: q, mode: "insensitive" } },
           { guestEmail: { contains: q, mode: "insensitive" } },
           { customer: { email: { contains: q, mode: "insensitive" } } },
         ],
@@ -201,6 +202,8 @@ p4.post("/orders/bulk-cancel", async (c) => {
   for (const o of toCancel) {
     await releaseInventoryForOrder(o.id).catch(() => {});
     emailCustomerAboutOrder(o.id, "orderCancelled").catch(() => {});
+    const { notifyOwnerOrderCancelled } = await import("../lib/owner-alerts.js");
+    notifyOwnerOrderCancelled(o.id).catch(() => {});
   }
 
   return c.json({ updated: result.count });

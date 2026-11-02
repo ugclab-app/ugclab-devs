@@ -1,5 +1,5 @@
-/** Demo static rates: 1 unit of base → display multiplier (base assumed USD-scale). */
-const RATES: Record<string, number> = {
+/** Fallback rates (units per 1 USD), used until live rates are loaded via setFxRates. */
+const FALLBACK_RATES: Record<string, number> = {
   USD: 1,
   EUR: 0.92,
   GBP: 0.79,
@@ -8,7 +8,34 @@ const RATES: Record<string, number> = {
   KGS: 89,
   KZT: 450,
   UZS: 12_500,
+  TRY: 42,
 };
+
+export const SUPPORTED_CURRENCIES = Object.keys(FALLBACK_RATES);
+
+let RATES: Record<string, number> = { ...FALLBACK_RATES };
+
+/**
+ * Replace the active rates (units per 1 USD). Unknown codes are ignored, and a rate more than
+ * 3× away from its fallback is rejected as a bad feed rather than charged to buyers.
+ */
+export function setFxRates(rates: Record<string, number>): Record<string, number> {
+  const next: Record<string, number> = { ...FALLBACK_RATES };
+  for (const code of SUPPORTED_CURRENCIES) {
+    const r = rates[code];
+    const fallback = FALLBACK_RATES[code]!;
+    if (typeof r === "number" && Number.isFinite(r) && r > fallback / 3 && r < fallback * 3) {
+      next[code] = r;
+    }
+  }
+  next.USD = 1;
+  RATES = next;
+  return { ...RATES };
+}
+
+export function getFxRates(): Record<string, number> {
+  return { ...RATES };
+}
 
 const LOCALE_CURRENCY: Record<string, string> = {
   en: "USD",
@@ -24,6 +51,7 @@ const LOCALE_CURRENCY: Record<string, string> = {
   ky: "KGS",
   kk: "KZT",
   uz: "UZS",
+  tr: "TRY",
 };
 
 export function listDisplayCurrencies(
@@ -84,6 +112,7 @@ const LOCALE_BCP47: Record<string, string> = {
   ky: "ky-KG",
   kk: "kk-KZ",
   uz: "uz-UZ",
+  tr: "tr-TR",
   de: "de-DE",
   fr: "fr-FR",
   es: "es-ES",
@@ -98,6 +127,7 @@ export function moneyLocaleFor(displayCurrency: string, locale: string): string 
     KGS: "ru-KG",
     KZT: "kk-KZ",
     UZS: "uz-UZ",
+    TRY: "tr-TR",
   };
   const key = locale.toLowerCase().slice(0, 2);
   return map[displayCurrency] ?? LOCALE_BCP47[key] ?? locale;

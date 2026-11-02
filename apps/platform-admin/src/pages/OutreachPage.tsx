@@ -36,6 +36,8 @@ export default function OutreachPage() {
   const [name, setName] = useState("");
   const [templateKey, setTemplateKey] = useState("");
   const [message, setMessage] = useState<string | null>(null);
+  const [listText, setListText] = useState("");
+  const [listMessage, setListMessage] = useState<string | null>(null);
 
   const data = query.data as OutreachMeta | undefined;
 
@@ -188,6 +190,79 @@ export default function OutreachPage() {
                 )}
               </section>
             </div>
+
+            <section className="platform-card space-y-3 p-6">
+              <h2 className="font-semibold">Prospect list</h2>
+              <p className="text-sm text-slate-500">
+                One person per line: email, or Name, email. Send uses the same daily limit and skips anyone already registered.
+              </p>
+              <textarea
+                className="ugclab-input w-full font-mono text-sm"
+                rows={5}
+                placeholder={"Alex, alex@example.com\nsam@example.com"}
+                value={listText}
+                onChange={(e) => setListText(e.target.value)}
+              />
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="ugclab-btn border border-slate-200 bg-white text-sm"
+                  onClick={async () => {
+                    setListMessage(null);
+                    try {
+                      const res = await api.addOutreachProspects(
+                        listText,
+                        templateKey || payload.defaultTemplateKey
+                      );
+                      setListText("");
+                      setListMessage(
+                        `Added ${res.added}. Already registered ${res.registered}. Skipped ${res.skipped}.`
+                      );
+                      await qc.invalidateQueries({ queryKey: ["outreach"] });
+                    } catch (err) {
+                      setListMessage(err instanceof Error ? err.message : "Could not add the list.");
+                    }
+                  }}
+                >
+                  Add to list
+                </button>
+                <button
+                  type="button"
+                  className="ugclab-btn ugclab-btn-primary text-sm"
+                  disabled={!payload.emailConfigured || payload.limits.remaining <= 0}
+                  onClick={async () => {
+                    setListMessage(null);
+                    try {
+                      const res = await api.sendOutreachProspects();
+                      setListMessage(
+                        `Sent ${res.sent}. Marked registered ${res.registered}. ${res.remaining} left today.`
+                      );
+                      await qc.invalidateQueries({ queryKey: ["outreach"] });
+                    } catch (err) {
+                      setListMessage(err instanceof Error ? err.message : "Could not send the list.");
+                    }
+                  }}
+                >
+                  Send pending
+                </button>
+              </div>
+              {listMessage ? <p className="text-sm text-slate-700">{listMessage}</p> : null}
+              {payload.prospects.length === 0 ? (
+                <p className="text-sm text-slate-500">No prospects yet.</p>
+              ) : (
+                <ul className="divide-y divide-slate-100 text-sm">
+                  {payload.prospects.map((row) => (
+                    <li key={row.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                      <span>
+                        <span className="font-mono">{row.email}</span>
+                        {row.name ? <span className="ml-2 text-slate-500">{row.name}</span> : null}
+                      </span>
+                      <span className="text-xs font-semibold uppercase text-slate-500">{row.status}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
 
             <section className="platform-card p-6">
               <h2 className="font-semibold">Recent sends</h2>

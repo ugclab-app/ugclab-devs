@@ -8,7 +8,7 @@
     "start": "tsx src/dev-server.ts",
     "build": "npm run build -w @ugclab/i18n && npm run build -w @ugclab/tenant && tsc --noEmit",
     "lint": "tsc --noEmit",
-    "test": "tsx --test src/lib/finik/finik.test.ts",
+    "test": "tsx --test src/lib/finik/finik.test.ts src/lib/fx-pricing.test.ts src/lib/rate-limit.test.ts src/lib/catalog-feeds.test.ts src/lib/license-keys.test.ts src/lib/loyalty.test.ts src/lib/checkout-extras.test.ts src/lib/store-import.test.ts src/lib/order-math.test.ts",
     "test:finik": "tsx --test src/lib/finik/finik.test.ts",
     "deploy": "cd ../.. && vercel --prod --yes"
   },

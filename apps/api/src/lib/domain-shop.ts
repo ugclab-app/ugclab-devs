@@ -216,7 +216,130 @@ export async function searchDomains(query: string): Promise<{
   return { query: base, entri, results, registrars };
 }
 
-/** External checkout: registrar links (variant 1). Entri direct order = future. */
+export type EntriDnsRecord = {
+  type: "CNAME";
+  host: string;
+  value: string;
+  ttl: number;
+};
+
+export function storefrontDnsRecords(): EntriDnsRecord[] {
+  const target = process.env.STOREFRONT_CNAME_TARGET ?? "cname.tescommerce.com";
+  return [
+    { type: "CNAME", host: "@", value: target, ttl: 300 },
+    { type: "CNAME", host: "www", value: target, ttl: 300 },
+  ];
+}
+
+/** JWT for the in-app Entri purchase window. The secret never leaves the server. */
+export async function createEntriPurchaseSession(input: {
+  userId: string;
+  domain: string;
+}): Promise<{
+  applicationId: string;
+  token: string;
+  userId: string;
+  domain: string;
+  dnsRecords: EntriDnsRecord[];
+}> {
+  if (!isEntriSellConfigured()) {
+    throw new Error("Entri is not configured");
+  }
+  const domain = normalizeDomainInput(input.domain);
+  if (!domain || !domain.includes(".")) {
+    throw new Error("Enter a full domain, for example mybrand.com");
+  }
+  const applicationId = process.env.ENTRI_APPLICATION_ID!.trim();
+  const secret = process.env.ENTRI_CLIENT_SECRET!.trim();
+  const dnsRecords = storefrontDnsRecords();
+  const res = await fetch(ENTRI_TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({
+      applicationId,
+      secret,
+      product: "sell",
+      freeDomain: false,
+      disableMailUpsell: true,
+      userId: input.userId,
+      domain,
+      dnsRecords,
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`Entri session failed: ${(await res.text()).slice(0, 200)}`);
+  }
+  const data = (await res.json()) as { auth_token?: string };
+  if (!data.auth_token) throw new Error("Entri session: no token");
+  return {
+    applicationId,
+    token: data.auth_token,
+    userId: input.userId,
+    domain,
+    dnsRecords,
+  };
+}
+
+function purchaseRows(data: unknown): Array<Record<string, unknown> | string> {
+  const root =
+    data && typeof data === "object" && !Array.isArray(data)
+      ? (data as Record<string, unknown>)
+      : null;
+  const list = Array.isArray(data)
+    ? data
+    : Array.isArray(root?.domains)
+      ? root.domains
+      : Array.isArray(root?.results)
+        ? root.results
+        : Array.isArray(root?.data)
+          ? root.data
+          : [];
+  return list.filter(
+    (row): row is Record<string, unknown> | string =>
+      typeof row === "string" || (row != null && typeof row === "object")
+  );
+}
+
+function rowMatchesDomain(row: Record<string, unknown> | string, apex: string) {
+  const name = (typeof row === "string" ? row : String(row.domain ?? row.name ?? ""))
+    .toLowerCase()
+    .trim();
+  return name === apex || name === `www.${apex}` || (name.length > 0 && name.endsWith(`.${apex}`));
+}
+
+/** Whether Entri shows this store bought the domain, and whether that purchase was free. */
+export async function entriSoldDomainToUser(
+  userId: string,
+  domain: string
+): Promise<{ sold: boolean; free: boolean }> {
+  if (!isEntriSellConfigured()) return { sold: false, free: false };
+  const apex = normalizeDomainInput(domain).replace(/^www\./, "");
+  if (!apex) return { sold: false, free: false };
+  const token = await getEntriAuthToken();
+  const applicationId = process.env.ENTRI_APPLICATION_ID!.trim();
+  const query = new URLSearchParams({ userId, domain: apex });
+  const urls = [
+    `https://api.goentri.com/sell/domains?${query}`,
+    `${ENTRI_SELL_V1}/domains?${query}`,
+  ];
+  for (const url of urls) {
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        applicationId,
+        Accept: "application/json",
+      },
+    });
+    if (!res.ok) continue;
+    const match = purchaseRows(await res.json()).find((row) => rowMatchesDomain(row, apex));
+    if (!match) continue;
+    const free = typeof match === "object" && match.freeDomain === true;
+    return { sold: true, free };
+  }
+  return { sold: false, free: false };
+}
+
+/** External checkout links stay available for registrars Entri does not sell. */
 export function getPurchaseLinksForDomain(domain: string) {
   const host = normalizeDomainInput(domain);
   return {
@@ -224,7 +347,7 @@ export function getPurchaseLinksForDomain(domain: string) {
     mode: isEntriSellConfigured() ? ("entri_plus_registrars" as const) : ("registrar_links" as const),
     registrars: registrarBuyLinks(host),
     note: isEntriSellConfigured()
-      ? "Complete purchase at a registrar below, then connect the domain in the Connect tab."
-      : "Add ENTRI_APPLICATION_ID and ENTRI_CLIENT_SECRET for live availability checks.",
+      ? "Buy inside Tescommerce with Entri. Other registrars stay available below."
+      : "Add ENTRI_APPLICATION_ID and ENTRI_CLIENT_SECRET to sell domains inside Tescommerce.",
   };
 }

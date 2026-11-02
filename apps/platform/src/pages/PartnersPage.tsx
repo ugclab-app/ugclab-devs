@@ -65,7 +65,7 @@ export function PartnersPage() {
           <Link to="/" className="text-lg font-bold text-zinc-900">
             Tescommerce
           </Link>
-          <a href={`${merchantAdminUrl}/login`} className="text-sm font-medium text-violet-700">
+          <a href={`${merchantAdminUrl}/login`} className="text-sm font-medium text-brand-700">
             Partner login
           </a>
         </div>

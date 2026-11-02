@@ -16,8 +16,12 @@ export function BuilderShellChrome({
 }) {
   const nav = (theme.navLinks ?? []).filter((l) => l.header !== false).slice(0, 5);
   const showAnnouncement = theme.announcementEnabled !== false;
+  const annParts = (theme.announcementText ?? "")
+    .split(/\r?\n|\|/)
+    .map((part) => part.trim())
+    .filter(Boolean);
   const annText =
-    theme.announcementText?.trim() || "Announce something — free shipping, a sale, or news";
+    annParts.join("  ·  ") || "Announce something — free shipping, a sale, or news";
   const annColor = theme.announcementColor || primaryColor;
   const layout = theme.headerLayout ?? "logo-left";
 

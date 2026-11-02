@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Tescommerce</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 1920px;
+      height: 1080px;
+      overflow: hidden;
+      background: #f6f3fb;
+      font-family: "Segoe UI", sans-serif;
+      color: #18141f;
+      -webkit-font-smoothing: antialiased;
+    }
+    #stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; }
+    .orb { position: absolute; border-radius: 50%; filter: blur(10px); pointer-events: none; }
+    .orb-a {
+      width: 760px; height: 760px; top: -240px; right: -120px;
+      background: radial-gradient(circle, rgba(91, 33, 182, 0.2), transparent 68%);
+      animation: drift 8s ease-in-out infinite alternate;
+    }
+    .orb-b {
+      width: 640px; height: 640px; bottom: -220px; left: -140px;
+      background: radial-gradient(circle, rgba(13, 148, 136, 0.16), transparent 68%);
+      animation: drift 10s ease-in-out infinite alternate-reverse;
+    }
+    @keyframes drift { to { transform: translate3d(48px, -32px, 0); } }
+
+    .scene {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      visibility: hidden;
+    }
+    .scene.on { opacity: 1; visibility: visible; }
+
+    .hero { text-align: center; }
+    h1 {
+      margin: 0;
+      font-size: 104px;
+      line-height: 1.02;
+      letter-spacing: -0.048em;
+      font-weight: 680;
+    }
+    #line1 { display: inline-block; animation: inLeft 0.48s cubic-bezier(0.16, 1.3, 0.3, 1) both; }
+    .line2 {
+      display: block;
+      margin-top: 6px;
+      background: linear-gradient(90deg, #7c3aed, #4f46e5 55%, #6d28d9);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      opacity: 0;
+      transform: translateX(80px);
+    }
+    .line2.on { opacity: 1; transform: none; transition: 0.4s cubic-bezier(0.16, 1.3, 0.3, 1); }
+    @keyframes inLeft {
+      from { opacity: 0; transform: translateX(-90px); }
+      to { opacity: 1; transform: none; }
+    }
+    .badge {
+      display: inline-flex;
+      margin-top: 36px;
+      padding: 12px 18px;
+      border-radius: 999px;
+      background: #fff;
+      border: 1px solid rgba(167, 139, 250, 0.5);
+      color: #6d28d9;
+      font-size: 22px;
+      font-weight: 700;
+      opacity: 0;
+      transform: scale(0.86);
+    }
+    .badge.on { opacity: 1; transform: none; transition: 0.35s cubic-bezier(0.16, 1.4, 0.3, 1); }
+
+    #plans {
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      gap: 22px;
+      width: 1680px;
+    }
+    .plan {
+      width: 0;
+      opacity: 0;
+      overflow: hidden;
+      flex: none;
+      transform: translateY(36px) scale(0.96);
+    }
+    .plan.on {
+      width: 470px;
+      opacity: 1;
+      overflow: visible;
+      transform: none;
+      transition: width 0.55s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s ease, transform 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .plan.hot.on { width: 510px; transform: translateY(-22px); }
+    .card {
+      width: 470px;
+      background: #fff;
+      border-radius: 28px;
+      padding: 32px 32px 28px;
+      border: 1px solid rgba(255, 255, 255, 0.9);
+      box-shadow: 0 24px 60px rgba(48, 20, 80, 0.1);
+    }
+    .plan.hot .card {
+      width: 510px;
+      border: 2px solid #5b21b6;
+      box-shadow: 0 30px 70px rgba(91, 33, 182, 0.18);
+    }
+    .pop-label {
+      display: inline-flex;
+      margin-bottom: 14px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: #f3e8ff;
+      color: #5b21b6;
+      font-size: 14px;
+      font-weight: 750;
+      letter-spacing: 0.02em;
+      opacity: 0;
+    }
+    .plan.hot.on .pop-label { animation: feat 0.35s 0.15s both; }
+    .name { font-size: 22px; font-weight: 700; color: #5b21b6; }
+    .price {
+      margin-top: 6px;
+      font-size: 72px;
+      line-height: 0.95;
+      letter-spacing: -0.05em;
+      font-weight: 760;
+    }
+    .period { font-size: 22px; font-weight: 650; color: #6b6280; letter-spacing: -0.02em; }
+    .desc { margin: 8px 0 18px; color: #4b4458; font-size: 18px; }
+    .feat {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 36px;
+      font-size: 18px;
+      font-weight: 650;
+      opacity: 0;
+    }
+    .plan.on .feat { animation: feat 0.32s cubic-bezier(0.16, 1.2, 0.3, 1) both; }
+    .plan.on .feat:nth-child(1) { animation-delay: 0.12s; }
+    .plan.on .feat:nth-child(2) { animation-delay: 0.22s; }
+    .plan.on .feat:nth-child(3) { animation-delay: 0.32s; }
+    .plan.on .feat:nth-child(4) { animation-delay: 0.42s; }
+    .plan.on .feat:nth-child(5) { animation-delay: 0.52s; }
+    @keyframes feat {
+      from { opacity: 0; transform: translateX(-14px); }
+      to { opacity: 1; transform: none; }
+    }
+    .tick {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #d1fae5;
+      color: #047857;
+      display: grid;
+      place-items: center;
+      flex: none;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .plan-cta {
+      margin-top: 18px;
+      height: 48px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      font-weight: 750;
+      font-size: 18px;
+      background: #f4f0fa;
+      color: #3b2658;
+    }
+    .plan.hot .plan-cta { background: #5b21b6; color: #fff; }
+
+    .end { text-align: center; display: flex; flex-direction: column; align-items: center; }
+    .mark {
+      width: 108px;
+      height: 108px;
+      border-radius: 32px;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      font-size: 60px;
+      font-weight: 760;
+      background: linear-gradient(135deg, #0d9488, #059669);
+      box-shadow: 0 16px 40px rgba(13, 148, 136, 0.28);
+      position: relative;
+      overflow: hidden;
+    }
+    .scene.on .mark { animation: pop 0.45s cubic-bezier(0.16, 1.45, 0.3, 1) both; }
+    @keyframes pop {
+      from { opacity: 0; transform: scale(0.6) rotate(-8deg); }
+      to { opacity: 1; transform: none; }
+    }
+    .shine {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.7) 50%, transparent 70%);
+      transform: translateX(-130%);
+    }
+    .mark.spark .shine { animation: shine 0.8s ease forwards; }
+    @keyframes shine { to { transform: translateX(130%); } }
+    .word, .site, .cta, .fine { opacity: 0; transform: translateY(12px); }
+    .word.on, .site.on, .cta.on, .fine.on { opacity: 1; transform: none; transition: 0.32s cubic-bezier(0.16, 1.3, 0.3, 1); }
+    .word { margin-top: 18px; font-size: 72px; font-weight: 760; letter-spacing: -0.045em; }
+    .site { margin-top: 6px; font-size: 26px; font-weight: 700; color: #5b21b6; }
+    .cta {
+      margin-top: 26px;
+      background: #5b21b6;
+      color: #fff;
+      border-radius: 14px;
+      padding: 16px 26px;
+      font-size: 22px;
+      font-weight: 750;
+    }
+    .fine { margin-top: 14px; font-size: 18px; color: #6b6280; }
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <div class="orb orb-a"></div>
+    <div class="orb orb-b"></div>
+
+    <section class="scene on" id="hero">
+      <div class="hero">
+        <h1>
+          <span id="line1">Open a store.</span>
+          <span class="line2" id="line2">and get paid</span>
+        </h1>
+        <div class="badge" id="badge">An alternative to Shopify</div>
+      </div>
+    </section>
+
+    <section class="scene" id="plansScene">
+      <div id="plans">
+        <article class="plan" id="starter">
+          <div class="card">
+            <div class="name">Starter</div>
+            <div class="price">Free <span class="period">forever</span></div>
+            <div class="desc">Perfect to validate your idea</div>
+            <div class="feat"><span class="tick">✓</span>Up to 50 products</div>
+            <div class="feat"><span class="tick">✓</span>Subdomain store</div>
+            <div class="feat"><span class="tick">✓</span>5% platform fee</div>
+            <div class="feat"><span class="tick">✓</span>Email support</div>
+            <div class="plan-cta">Start free</div>
+          </div>
+        </article>
+        <article class="plan hot" id="growth">
+          <div class="card">
+            <div class="pop-label">Most popular</div>
+            <div class="name">Growth</div>
+            <div class="price">$29 <span class="period">/month</span></div>
+            <div class="desc">For growing brands</div>
+            <div class="feat"><span class="tick">✓</span>Unlimited products</div>
+            <div class="feat"><span class="tick">✓</span>Custom domain</div>
+            <div class="feat"><span class="tick">✓</span>0% platform fee</div>
+            <div class="feat"><span class="tick">✓</span>Stripe Tax ready</div>
+            <div class="feat"><span class="tick">✓</span>Priority support</div>
+            <div class="plan-cta">Start trial</div>
+          </div>
+        </article>
+        <article class="plan" id="pro">
+          <div class="card">
+            <div class="name">Pro</div>
+            <div class="price">$79 <span class="period">/month</span></div>
+            <div class="desc">Teams &amp; power sellers</div>
+            <div class="feat"><span class="tick">✓</span>Everything in Growth</div>
+            <div class="feat"><span class="tick">✓</span>Staff accounts</div>
+            <div class="feat"><span class="tick">✓</span>API access</div>
+            <div class="feat"><span class="tick">✓</span>Advanced analytics</div>
+            <div class="plan-cta">Get started</div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="scene" id="end">
+      <div class="end">
+        <div class="mark" id="mark">T<span class="shine"></span></div>
+        <div class="word" id="endWord">Tescommerce</div>
+        <div class="site" id="endSite">tescommerce.com</div>
+        <div class="cta" id="endCta">Get started free</div>
+        <div class="fine" id="endFine">No credit card required · First stores are free while we launch</div>
+      </div>
+    </section>
+  </div>
+  <script>
+    function show(id) {
+      document.querySelectorAll(".scene").forEach((el) => el.classList.toggle("on", el.id === id));
+    }
+    function reveal(id, on) {
+      document.getElementById(id).classList.toggle("on", on);
+    }
+    function setHero(phase) {
+      show("hero");
+      document.getElementById("line1").textContent = phase >= 2 ? "Open a store" : "Open a store.";
+      reveal("line2", phase >= 2);
+      reveal("badge", phase >= 3);
+    }
+    function setPlans(which) {
+      show("plansScene");
+      ["starter", "growth", "pro"].forEach((id) => {
+        document.getElementById(id).classList.toggle("on", which.includes(id));
+      });
+    }
+    function setEnd(phase) {
+      show("end");
+      reveal("endWord", phase >= 2);
+      reveal("endSite", phase >= 3);
+      reveal("endCta", phase >= 4);
+      reveal("endFine", phase >= 4);
+      if (phase >= 4) document.getElementById("mark").classList.add("spark");
+    }
+
+    const timeline = [
+      { name: "hero-line", ms: 800, apply: () => setHero(1) },
+      { name: "hero-paid", ms: 1000, apply: () => setHero(2) },
+      { name: "hero-badge", ms: 1100, apply: () => setHero(3) },
+      { name: "starter", ms: 3400, apply: () => setPlans(["starter"]) },
+      { name: "growth", ms: 3800, apply: () => setPlans(["starter", "growth"]) },
+      { name: "pro", ms: 3400, apply: () => setPlans(["starter", "growth", "pro"]) },
+      { name: "trio", ms: 2600, apply: () => setPlans(["starter", "growth", "pro"]) },
+      { name: "end-mark", ms: 400, apply: () => setEnd(1) },
+      { name: "end-word", ms: 400, apply: () => setEnd(2) },
+      { name: "end-url", ms: 400, apply: () => setEnd(3) },
+      { name: "end-cta", ms: 2600, apply: () => setEnd(4) }
+    ];
+
+    window.__filmMs = timeline.reduce((sum, step) => sum + step.ms, 0);
+    const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const shot = new URLSearchParams(location.search).get("shot");
+
+    async function play() {
+      for (const step of timeline) {
+        step.apply();
+        if (shot && step.name === shot) {
+          await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          window.__filmReady = true;
+          return;
+        }
+        if (!shot) await wait(step.ms);
+      }
+      if (shot) window.__filmReady = true;
+      window.__filmDone = true;
+    }
+    play();
+  </script>
+</body>
+</html>

@@ -26,7 +26,7 @@ export function CartPage() {
   });
 
   const update = useMutation({
-    mutationFn: (body: { productId: string; variantId?: string; quantity: number }) =>
+    mutationFn: (body: { productId: string; variantId?: string; quantity: number; unitAmountCents?: number }) =>
       storeApi.updateCart(tenant, body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cart"] });
@@ -35,7 +35,7 @@ export function CartPage() {
   });
 
   const remove = useMutation({
-    mutationFn: (body: { productId: string; variantId?: string }) =>
+    mutationFn: (body: { productId: string; variantId?: string; unitAmountCents?: number }) =>
       storeApi.removeFromCart(tenant, body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cart"] });
@@ -86,7 +86,7 @@ export function CartPage() {
           <ul className="space-y-4">
             {lines.map((line) => (
               <li
-                key={`${line.productId}:${line.variantId ?? ""}`}
+                key={`${line.productId}:${line.variantId ?? ""}:${line.unitAmountCents ?? ""}`}
                 className="flex gap-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm"
               >
                 <Link to={storeHref(`/products/${line.slug}`, nav)} className="shrink-0">
@@ -126,6 +126,7 @@ export function CartPage() {
                             productId: line.productId,
                             variantId: line.variantId,
                             quantity: qty,
+                            unitAmountCents: line.unitAmountCents,
                           });
                         }
                       }}
@@ -138,6 +139,7 @@ export function CartPage() {
                       remove.mutate({
                         productId: line.productId,
                         variantId: line.variantId,
+                        unitAmountCents: line.unitAmountCents,
                       })
                     }
                   >

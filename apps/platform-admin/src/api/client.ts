@@ -1,5 +1,7 @@
 const API = "/api";
 
+type MoneyRow = { currency: string; cents: number };
+
 export type UserDto = {
   id: string;
   email: string;
@@ -44,6 +46,34 @@ export const api = {
       paymentModel?: string;
       actionItems?: unknown[];
     }>("/platform/dashboard"),
+  traffic: () =>
+    request<{
+      generatedAt: string;
+      liveWindowSeconds: number;
+      visitorsRightNow: number;
+      storesWithVisitors: number;
+      stores: { tenantId: string; name: string; slug: string; visitors: number }[];
+      liveSources: { source: string; visitors: number }[];
+      visitors: {
+        store: string;
+        slug: string;
+        tenantId: string;
+        country: string | null;
+        path: string | null;
+        stage: string;
+        source: string;
+        medium: string | null;
+        campaign: string | null;
+        lastSeenAt: string;
+      }[];
+      orders30d: {
+        totalOrders: number;
+        totalRevenue: number;
+        bySource: { source: string; orders: number; revenue: number }[];
+        byCampaign: { campaign: string; orders: number; revenue: number }[];
+        byAffiliate: { partner: string; code: string; orders: number; revenue: number }[];
+      };
+    }>("/platform/traffic"),
   system: () =>
     request<{
       paymentModel: string;
@@ -149,6 +179,10 @@ export const api = {
     request(`/platform/tenants/${id}`, {
       method: "PATCH",
       body: JSON.stringify(body),
+    }),
+  deleteTenant: (id: string) =>
+    request<{ ok: true; emailSent: boolean }>(`/platform/tenants/${id}`, {
+      method: "DELETE",
     }),
   plans: () => request<{ plans: unknown[] }>("/platform/plans"),
   users: (opts?: { q?: string; role?: string }) => {
@@ -361,7 +395,71 @@ export const api = {
         createdAt: string;
       }[];
       emailConfigured: boolean;
+      prospects: {
+        id: string;
+        email: string;
+        name: string | null;
+        templateKey: string;
+        status: string;
+        sentAt: string | null;
+        registeredAt: string | null;
+      }[];
     }>("/platform/outreach"),
+  addOutreachProspects: (text: string, templateKey?: string) =>
+    request<{ added: number; registered: number; skipped: number }>("/platform/outreach/prospects", {
+      method: "POST",
+      body: JSON.stringify({ text, templateKey }),
+    }),
+  sendOutreachProspects: () =>
+    request<{ sent: number; registered: number; remaining: number }>(
+      "/platform/outreach/prospects/send",
+      { method: "POST" }
+    ),
+  growth: () =>
+    request<{
+      signups: number;
+      bySource: { outreach: number; partner: number; direct: number; earlier: number };
+      withProduct: number;
+      withPaidOrder: number;
+      stores: {
+        id: string;
+        name: string;
+        slug: string;
+        ownerEmail: string;
+        source: string;
+        hasProduct: boolean;
+        hasPaidOrder: boolean;
+        createdAt: string;
+      }[];
+    }>("/platform/growth"),
+  instagramPosts: () =>
+    request<{
+      posts: {
+        id: string;
+        title: string;
+        caption: string;
+        hashtags: string;
+        imageUrl: string | null;
+        format: string;
+        updatedAt: string;
+      }[];
+    }>("/platform/instagram-posts"),
+  saveInstagramPost: (
+    body: {
+      title: string;
+      caption: string;
+      hashtags: string;
+      imageUrl: string;
+      format: string;
+    },
+    id?: string
+  ) =>
+    request<{ post: { id: string } }>(
+      id ? `/platform/instagram-posts/${id}` : "/platform/instagram-posts",
+      { method: id ? "PATCH" : "POST", body: JSON.stringify(body) }
+    ),
+  deleteInstagramPost: (id: string) =>
+    request(`/platform/instagram-posts/${id}`, { method: "DELETE" }),
   sendOutreach: (email: string, name?: string, templateKey?: string) =>
     request<{ ok: boolean; sentTo: string; templateKey: string; remaining: number }>(
       "/platform/outreach/send",
@@ -502,12 +600,139 @@ export const api = {
     ),
   cohortReport: () => request<{ cohort: unknown[] }>("/platform/reports/cohort"),
   inbox: () => request<{ items: unknown[]; counts: Record<string, number> }>("/platform/inbox"),
+  mailbox: (params?: { q?: string; closed?: boolean }) => {
+    const search = new URLSearchParams();
+    if (params?.q) search.set("q", params.q);
+    if (params?.closed) search.set("closed", "1");
+    const qs = search.toString();
+    return request<{
+      address: { email: string; from: string };
+      aliases?: string[];
+      forwardTo?: string | null;
+      emailConfigured: boolean;
+      receivingConfigured: boolean;
+      replies: { label: string; body: string }[];
+      threads: {
+        id: string;
+        subject: string;
+        correspondentEmail: string;
+        correspondentName: string | null;
+        status: string;
+        unread: boolean;
+        lastMessageAt: string;
+      }[];
+    }>(`/platform/mailbox${qs ? `?${qs}` : ""}`);
+  },
+  mailboxThread: (id: string) =>
+    request<{
+      thread: {
+        id: string;
+        subject: string;
+        correspondentEmail: string;
+        correspondentName: string | null;
+        status: string;
+        unread: boolean;
+        lastMessageAt: string;
+      };
+      messages: {
+        id: string;
+        direction: string;
+        fromEmail: string;
+        toEmail: string;
+        subject: string;
+        textBody: string;
+        attachments: { id: string; filename: string; contentType?: string; size?: number }[];
+        canDownload: boolean;
+        actorEmail: string | null;
+        createdAt: string;
+      }[];
+      notes: { id: string; body: string; actorEmail: string; createdAt: string }[];
+      stores: {
+        id: string;
+        name: string;
+        slug: string;
+        status: string;
+        paidOrders: number;
+        latestPayout: {
+          amountCents: number;
+          currency: string;
+          status: string;
+          createdAt: string;
+        } | null;
+      }[];
+    }>(`/platform/mailbox/${id}`),
+  sendMailbox: (body: { to: string; subject: string; body: string }) =>
+    request<{ threadId: string }>("/platform/mailbox", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  replyMailbox: (id: string, body: string) =>
+    request<{ threadId: string }>(`/platform/mailbox/${id}/reply`, {
+      method: "POST",
+      body: JSON.stringify({ body }),
+    }),
+  setMailboxStatus: (id: string, status: string) =>
+    request<{ ok: boolean; status: string }>(`/platform/mailbox/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    }),
+  addMailboxNote: (id: string, body: string) =>
+    request<{ note: { id: string; body: string; actorEmail: string; createdAt: string } }>(
+      `/platform/mailbox/${id}/notes`,
+      { method: "POST", body: JSON.stringify({ body }) }
+    ),
   search: (q: string) =>
     request<{ stores: unknown[]; orders: unknown[]; users: unknown[]; domains: unknown[] }>(
       `/platform/search?q=${encodeURIComponent(q)}`
     ),
   stripeEvents: () =>
     request<{ events: unknown[]; stripeConfigured: boolean }>("/platform/stripe/events"),
+  replayStripeEvent: (id: string) =>
+    request<{ ok: boolean; type: string }>(`/platform/stripe/events/${id}/replay`, { method: "POST" }),
+  reconcile: () =>
+    request<{
+      stripe: { available: MoneyRow[]; pending: MoneyRow[] } | null;
+      stripeError: string | null;
+      owedToMerchants: MoneyRow[];
+      payoutsInFlight: MoneyRow[];
+      paidLast30Days: MoneyRow[];
+      paidAllTime: MoneyRow[];
+      heldForProtection: MoneyRow[];
+    }>("/platform/reconcile"),
+  paymentErrors: () =>
+    request<{
+      stripe: { id: string; type: string; processed: boolean; error: string | null; createdAt: string; replayable: boolean }[];
+      gopay: { id: string; type: string; processed: boolean; error: string | null; createdAt: string }[];
+      finik: { id: string; type: string; processed: boolean; error: string | null; createdAt: string }[];
+      stuckOrders: { id: string; orderNumber: string; provider: string | null; store: string; tenantId: string; createdAt: string }[];
+    }>("/platform/payment-errors"),
+  pastDue: () =>
+    request<{
+      stores: { id: string; name: string; slug: string; status: string | null; plan: string; ownerEmail: string; days: number; canRetry: boolean }[];
+    }>("/platform/billing/past-due"),
+  retryPastDue: (tenantId: string) =>
+    request<{ status: string | null }>(`/platform/billing/past-due/${tenantId}/retry`, { method: "POST" }),
+  buyers: (email: string) =>
+    request<{
+      buyers: { id: string; email: string; name: string | null; country: string | null; orders: number; store: string; tenantId: string; createdAt: string }[];
+    }>(`/platform/buyers?email=${encodeURIComponent(email)}`),
+  exportBuyer: (email: string) => request<Record<string, unknown>>(`/platform/buyers/export?email=${encodeURIComponent(email)}`),
+  eraseBuyer: (email: string) =>
+    request<{ customers: number; orders: number }>("/platform/buyers/erase", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+  inboxStaff: () => request<{ staff: { id: string; email: string; name: string | null }[] }>("/platform/inbox/staff"),
+  inboxAssignments: () => request<{ assignments: Record<string, string> }>("/platform/inbox/assignments"),
+  assignInbox: (itemId: string, email: string) =>
+    request<{ ok: boolean }>(`/platform/inbox/${encodeURIComponent(itemId)}/assignee`, {
+      method: "PUT",
+      body: JSON.stringify({ email }),
+    }),
+  changelog: () =>
+    request<{ items: { id: string; title: string; message: string; active: boolean; createdAt: string }[] }>(
+      "/platform/changelog"
+    ),
   resyncOrder: (orderId: string) =>
     request(`/platform/stripe/resync-order/${orderId}`, { method: "POST" }),
   resyncSubscription: (tenantId: string) =>
@@ -532,6 +757,33 @@ export const api = {
     request(`/platform/tenants/${id}/features`, {
       method: "PATCH",
       body: JSON.stringify(flags),
+    }),
+  kycSubmissions: (status?: string, q?: string) => {
+    const params = new URLSearchParams();
+    if (status) params.set("status", status);
+    if (q) params.set("q", q);
+    const qs = params.toString();
+    return request<{
+      submissions: {
+        id: string;
+        status: "PENDING" | "APPROVED" | "REJECTED";
+        legalName: string;
+        country: string;
+        passportNumber: string;
+        payoutLegalName: string | null;
+        hasSelfie: boolean;
+        rejectReason: string | null;
+        reviewedByEmail: string | null;
+        reviewedAt: string | null;
+        submittedAt: string;
+        tenant: { id: string; name: string; slug: string };
+      }[];
+    }>(`/platform/kyc${qs ? `?${qs}` : ""}`);
+  },
+  reviewKyc: (id: string, status: "APPROVED" | "REJECTED" | "PENDING", reason?: string) =>
+    request(`/platform/kyc/${id}/review`, {
+      method: "POST",
+      body: JSON.stringify({ status, reason }),
     }),
   blacklist: () => request<{ entries: unknown[] }>("/platform/blacklist"),
   addBlacklist: (body: { type: string; value: string; reason?: string }) =>

@@ -1,0 +1,67 @@
+{
+  "voice": "Brian - Deep, Resonant and Comforting",
+  "voiceId": "nPczCjzI2devNBz1zQrb",
+  "model": "eleven_multilingual_v2",
+  "segments": [
+    {
+      "id": "chaos",
+      "text": "Ten plugins. Declined payments. A developer on speed dial.",
+      "file": "01-chaos.mp3",
+      "dur": 3.84
+    },
+    {
+      "id": "question",
+      "text": "And still no sales?",
+      "file": "02-question.mp3",
+      "dur": 1.44
+    },
+    {
+      "id": "meet",
+      "text": "Meet Tescommerce. Your store, live in minutes.",
+      "file": "03-meet.mp3",
+      "dur": 3.47
+    },
+    {
+      "id": "catalog",
+      "text": "Sell courses, downloads and merch from one catalog.",
+      "file": "04-catalog.mp3",
+      "dur": 3.66
+    },
+    {
+      "id": "storefront",
+      "text": "Design a storefront on your own domain, that looks great on every screen.",
+      "file": "05-storefront.mp3",
+      "dur": 3.94
+    },
+    {
+      "id": "checkout",
+      "text": "Take cards, Apple Pay and Google Pay from buyers anywhere.",
+      "file": "06-checkout.mp3",
+      "dur": 3.53
+    },
+    {
+      "id": "features",
+      "text": "Run discounts. Win back abandoned carts. Send email campaigns. Sell subscriptions, collect reviews, and track inventory. All built in.",
+      "file": "07-features.mp3",
+      "dur": 9.87
+    },
+    {
+      "id": "live",
+      "text": "Watch orders roll in, live, from around the world.",
+      "file": "08-live.mp3",
+      "dur": 3.76
+    },
+    {
+      "id": "payout",
+      "text": "Then get paid, even where Shopify Payments can't reach.",
+      "file": "09-payout.mp3",
+      "dur": 3.16
+    },
+    {
+      "id": "end",
+      "text": "Tescommerce. Open a store, and get paid.",
+      "file": "10-end.mp3",
+      "dur": 3.24
+    }
+  ]
+}

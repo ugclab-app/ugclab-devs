@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: API lint + test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Prisma generate
+        run: npm run db:generate -w @ugclab/database
+        env:
+          # generate-only; no live DB required for client types
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ugclab?schema=public
+          DIRECT_URL: postgresql://postgres:postgres@localhost:5432/ugclab?schema=public
+
+      - name: API typecheck
+        run: npm run lint -w @ugclab/api
+
+      - name: API unit tests
+        run: npm run test -w @ugclab/api

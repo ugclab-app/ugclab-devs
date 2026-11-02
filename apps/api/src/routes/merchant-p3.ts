@@ -1,8 +1,8 @@
 import { Hono } from "hono";
-import { PromotionType, prisma } from "@ugclab/database";
+import { PromotionType, ProductStatus, ProductType, prisma } from "@ugclab/database";
 import type { AuthEnv } from "../middleware/session.js";
 import { requireAuth } from "../middleware/session.js";
-import { requireTenant } from "../lib/merchant.js";
+import { normalizeSlug, requireTenant } from "../lib/merchant.js";
 import { getMerchantAnalytics, analyticsToCsv } from "../lib/analytics.js";
 import { parseAnalyticsRange } from "../lib/analytics-range.js";
 import {
@@ -290,6 +290,179 @@ p3.post("/orders/import.csv", async (c) => {
     created += 1;
   }
   return c.json({ created });
+});
+
+/**
+ * Store migration: auto-detects Shopify / WooCommerce / Etsy exports.
+ * `?dry=1` returns a preview without writing.
+ */
+p3.post("/import/store", async (c) => {
+  const { tenant } = await requireTenant(c.get("session"));
+  const form = await c.req.parseBody();
+  const file = form.file;
+  if (!(file instanceof File)) return c.json({ error: "CSV required" }, 400);
+  const dry = c.req.query("dry") === "1" || form.dry === "1";
+  const withImages = form.images !== "0";
+  const text = await file.text();
+  const { parseStoreImport } = await import("../lib/store-import.js");
+  const parsed = parseStoreImport(text);
+
+  if (dry) {
+    return c.json({
+      source: parsed.source,
+      kind: parsed.kind,
+      count: parsed.rows.length,
+      warnings: parsed.warnings,
+      sample: parsed.rows.slice(0, 10),
+    });
+  }
+
+  const errors: string[] = [];
+  let created = 0;
+  let skipped = 0;
+
+  if (parsed.kind === "products") {
+    const currency = tenant.settings?.currency ?? "USD";
+    const { saveProductImage, downloadRemoteImage } = await import("../lib/uploads.js");
+    for (const row of parsed.rows) {
+      const slug = normalizeSlug(row.handle) || normalizeSlug(row.title);
+      if (!slug) {
+        skipped += 1;
+        continue;
+      }
+      const dup = await prisma.product.findUnique({
+        where: { tenantId_slug: { tenantId: tenant.id, slug } },
+      });
+      if (dup) {
+        skipped += 1;
+        errors.push(`“${row.title}”: slug ${slug} already exists`);
+        continue;
+      }
+      try {
+        const product = await prisma.product.create({
+          data: {
+            tenantId: tenant.id,
+            title: row.title.slice(0, 200),
+            slug,
+            description: row.descriptionHtml,
+            type: row.isDigital ? ProductType.DIGITAL : ProductType.PHYSICAL,
+            status: row.published ? ProductStatus.ACTIVE : ProductStatus.DRAFT,
+            priceAmount: row.priceCents,
+            compareAt: row.compareAtCents,
+            currency,
+            inventory: row.isDigital ? null : row.inventory ?? 0,
+            weightGrams: row.weightGrams,
+            requiresShipping: !row.isDigital,
+            sku: row.sku,
+            barcode: row.barcode,
+            tags: row.tags.slice(0, 30),
+            variants: row.variants.length
+              ? {
+                  create: row.variants.slice(0, 100).map((v) => ({
+                    tenantId: tenant.id,
+                    title: v.title.slice(0, 120),
+                    sku: v.sku,
+                    priceAmount: v.priceCents,
+                    inventory: v.inventory,
+                    weightGrams: v.weightGrams,
+                  })),
+                }
+              : undefined,
+          },
+        });
+        created += 1;
+        if (withImages) {
+          let sort = 0;
+          for (const url of row.imageUrls.slice(0, 5)) {
+            try {
+              const dl = await downloadRemoteImage(url);
+              const meta = await saveProductImage(tenant.id, product.id, dl);
+              await prisma.productImage.create({
+                data: {
+                  tenantId: tenant.id,
+                  productId: product.id,
+                  storageKey: meta.storageKey,
+                  fileName: meta.fileName,
+                  mimeType: meta.mimeType,
+                  sortOrder: sort++,
+                },
+              });
+            } catch (e) {
+              errors.push(`“${row.title}”: image skipped (${e instanceof Error ? e.message : "download failed"})`);
+            }
+          }
+        }
+      } catch (e) {
+        skipped += 1;
+        errors.push(`“${row.title}”: ${e instanceof Error ? e.message : "failed"}`);
+      }
+    }
+  } else if (parsed.kind === "customers") {
+    for (const row of parsed.rows) {
+      const existing = await prisma.customer.findUnique({
+        where: { tenantId_email: { tenantId: tenant.id, email: row.email } },
+      });
+      if (existing) {
+        skipped += 1;
+        continue;
+      }
+      await prisma.customer.create({
+        data: {
+          tenantId: tenant.id,
+          email: row.email,
+          name: row.name,
+          country: row.country,
+          marketingOptOut: !row.acceptsMarketing,
+        },
+      });
+      created += 1;
+    }
+  } else {
+    const currency = tenant.settings?.currency ?? "USD";
+    for (const row of parsed.rows) {
+      const exists = await prisma.order.findFirst({
+        where: { tenantId: tenant.id, orderNumber: row.orderNumber },
+      });
+      if (exists) {
+        skipped += 1;
+        continue;
+      }
+      let customer = await prisma.customer.findUnique({
+        where: { tenantId_email: { tenantId: tenant.id, email: row.email } },
+      });
+      if (!customer) {
+        customer = await prisma.customer.create({
+          data: { tenantId: tenant.id, email: row.email, country: row.country },
+        });
+      }
+      await prisma.order.create({
+        data: {
+          tenantId: tenant.id,
+          customerId: customer.id,
+          orderNumber: row.orderNumber,
+          status: row.paid ? "PAID" : "PENDING",
+          currency: row.currency ?? currency,
+          subtotalAmount: row.totalCents,
+          totalAmount: row.totalCents,
+          shippingCountry: row.country,
+          guestEmail: row.email,
+          accessToken: crypto.randomUUID().replace(/-/g, ""),
+          tags: [`imported:${parsed.source}`],
+          ...(row.createdAt ? { createdAt: row.createdAt } : {}),
+        },
+      });
+      created += 1;
+    }
+  }
+
+  return c.json({
+    source: parsed.source,
+    kind: parsed.kind,
+    created,
+    skipped,
+    errors: errors.slice(0, 50),
+    warnings: parsed.warnings,
+  });
 });
 
 export { p3 };

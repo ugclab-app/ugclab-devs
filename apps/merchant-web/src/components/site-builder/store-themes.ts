@@ -1,6 +1,7 @@
 import type { HomeBlock, StoreTheme } from "@ugclab/tenant/store-theme";
 import { cloneBlocks, reidBlocks } from "@ugclab/tenant/store-theme";
 import { BRAND_THEME_PACK } from "./brand-theme-pack";
+import { PREMIUM_THEME_PACK } from "./premium-theme-pack";
 
 export type StoreThemeCategory =
   | "all"
@@ -42,6 +43,12 @@ export type StoreThemePreset = {
   preview: { primary: string; secondary: string; background: string };
   primaryColor: string;
   homeBlocks: HomeBlock[];
+  /** Catalog id when this card is a library copy of a store theme. */
+  catalogId?: string;
+  productPageBlocks?: HomeBlock[];
+  collectionBlocks?: HomeBlock[];
+  cartBlocks?: HomeBlock[];
+  notFoundBlocks?: HomeBlock[];
   theme: Partial<
     Pick<
       StoreTheme,
@@ -70,11 +77,19 @@ export function resolveThemeLayoutPreview(
     return theme.layoutPreview;
   }
   const byId: Record<string, Exclude<ThemeLayoutPreview, "default">> = {
+    verdant: "catalog",
+    bloom: "beauty",
+    clay: "food",
+    nightrest: "luxury",
+    crunch: "bold",
+    playkit: "catalog",
+    sprint: "sports",
+    ridge: "sports",
     dawn: "catalog",
     craft: "catalog",
     origin: "catalog",
     sense: "editorial",
-    studio: "editorial",
+    studio: "beauty",
     luxe: "luxury",
     jewelry: "jewelry",
     broadcast: "jewelry",
@@ -94,14 +109,14 @@ export function resolveThemeLayoutPreview(
     enterprise: "electronics",
     reformation: "editorial",
     horizon: "catalog",
-    tinker: "catalog",
+    tinker: "luxury",
     savor: "food",
     atelier: "luxury",
-    dwell: "catalog",
+    dwell: "digital",
     ritual: "bold",
     trail: "sports",
-    venue: "editorial",
-    prestige: "luxury",
+    venue: "electronics",
+    prestige: "jewelry",
     warehouse: "bold",
     botanica: "beauty",
     alpine: "sports",
@@ -1506,7 +1521,7 @@ export const STORE_THEME_PRESETS: StoreThemePreset[] = [
     category: "minimal",
     featured: true,
     inspiredBy: "Tinker",
-    layoutPreview: "catalog",
+    layoutPreview: "luxury",
     preview: { primary: "#292524", secondary: "#a8a29e", background: "#fafaf9" },
     primaryColor: "#292524",
     homeBlocks: tinkerBlocks,
@@ -1757,6 +1772,7 @@ export const STORE_THEME_PRESETS: StoreThemePreset[] = [
       announcementColor: "#14532d",
     },
   },
+  ...PREMIUM_THEME_PACK,
   ...BRAND_THEME_PACK,
 ];
 
@@ -1768,8 +1784,9 @@ export function customToPreset(c: import("@ugclab/tenant/store-theme").CustomThe
   return {
     id: c.id,
     label: c.label,
-    description: `Your saved theme`,
+    description: c.catalogId ? "Installed from the theme library" : "Your saved theme",
     category: "minimal",
+    catalogId: c.catalogId,
     preview: {
       primary: c.primaryColor,
       secondary: c.theme.secondaryColor ?? "#71717a",
@@ -1777,14 +1794,187 @@ export function customToPreset(c: import("@ugclab/tenant/store-theme").CustomThe
     },
     primaryColor: c.primaryColor,
     homeBlocks: c.homeBlocks,
+    productPageBlocks: c.productPageBlocks,
+    collectionBlocks: c.collectionBlocks,
+    cartBlocks: c.cartBlocks,
+    notFoundBlocks: c.notFoundBlocks,
     theme: c.theme,
   };
+}
+
+export type ThemePageLayouts = {
+  productPageBlocks: HomeBlock[];
+  collectionBlocks: HomeBlock[];
+  cartBlocks: HomeBlock[];
+  notFoundBlocks: HomeBlock[];
+};
+
+/** Product, collection, cart, and 404 sections that ship with a theme. */
+export function themePageLayouts(
+  preset: Pick<
+    StoreThemePreset,
+    | "category"
+    | "label"
+    | "primaryColor"
+    | "productPageBlocks"
+    | "collectionBlocks"
+    | "cartBlocks"
+    | "notFoundBlocks"
+  >
+): ThemePageLayouts {
+  if (preset.productPageBlocks?.length) {
+    return {
+      productPageBlocks: cloneBlocks(preset.productPageBlocks),
+      collectionBlocks: cloneBlocks(preset.collectionBlocks ?? []),
+      cartBlocks: cloneBlocks(preset.cartBlocks ?? []),
+      notFoundBlocks: cloneBlocks(preset.notFoundBlocks ?? []),
+    };
+  }
+
+  const accent = preset.primaryColor;
+  const kind = preset.category;
+  const productPageBlocks = blocks(
+    kind === "bold"
+      ? [
+          {
+            type: "countdown",
+            title: "Offer ends soon",
+            subtitle: "This price is on the product for a limited time.",
+            paddingY: "md",
+            bgColor: accent,
+            textColor: "#ffffff",
+          },
+          {
+            type: "features",
+            title: "Why buy here",
+            paddingY: "md",
+            features: [
+              { title: "Fast dispatch", text: "Orders leave the warehouse the same day." },
+              { title: "Easy returns", text: "30 days, no questions." },
+              { title: "Secure checkout", text: "Card payments on this page." },
+            ],
+          },
+          { type: "reviews", title: "Recent reviews", paddingY: "md" },
+        ]
+      : kind === "food"
+        ? [
+            {
+              type: "features",
+              title: "What's in it",
+              paddingY: "md",
+              features: [
+                { title: "Ingredients", text: "Listed on every product." },
+                { title: "Freshness", text: "Packed to order." },
+                { title: "Delivery", text: "Tracked to your door." },
+              ],
+            },
+            { type: "faq", title: "Questions", paddingY: "md", faqItems: [{ question: "How should I store this?", answer: "See the note on the product." }] },
+            { type: "reviews", title: "What people say", paddingY: "md" },
+          ]
+        : kind === "beauty"
+          ? [
+              {
+                type: "image_text",
+                title: "How to use it",
+                subtitle: "A short ritual, written for this product.",
+                imagePosition: "right",
+                paddingY: "md",
+              },
+              { type: "reviews", title: "Reviews", paddingY: "md" },
+              { type: "newsletter", title: "Restock alerts", subtitle: "We'll email you when it returns.", paddingY: "lg" },
+            ]
+          : kind === "fashion"
+            ? [
+                {
+                  type: "image_text",
+                  title: "Details",
+                  subtitle: "Fabric, fit, and how it is made.",
+                  imagePosition: "left",
+                  paddingY: "md",
+                },
+                { type: "reviews", title: "Fit notes", paddingY: "md" },
+                {
+                  type: "faq",
+                  title: "Shipping & returns",
+                  paddingY: "md",
+                  faqItems: [{ question: "What is the return window?", answer: "30 days, unworn, with tags." }],
+                },
+              ]
+            : [
+                {
+                  type: "features",
+                  title: "Good to know",
+                  paddingY: "md",
+                  features: [
+                    { title: "Shipping", text: "Tracked delivery." },
+                    { title: "Returns", text: "30 days." },
+                    { title: "Support", text: "We reply by email." },
+                  ],
+                },
+                { type: "reviews", title: "Reviews", paddingY: "md" },
+                { type: "faq", title: "FAQ", paddingY: "md", faqItems: [{ question: "When will it arrive?", answer: "The product page shows the shipping estimate." }] },
+              ]
+  );
+
+  const collectionBlocks = blocks([
+    {
+      type: "text_banner",
+      title: preset.label,
+      subtitle: "Everything in this collection.",
+      ctaLabel: "Shop all",
+      ctaPath: "/collections",
+      align: "center",
+      paddingY: "lg",
+      bgColor: accent,
+      textColor: "#ffffff",
+    },
+    { type: "products", title: "Products", paddingY: "lg", productColumns: 3 },
+    {
+      type: "features",
+      paddingY: "md",
+      features: [
+        { title: "Filter", text: "Narrow by what you need." },
+        { title: "Sort", text: "Newest, price, or name." },
+        { title: "In stock", text: "Sold-out items stay visible." },
+      ],
+    },
+  ]);
+
+  const cartBlocks = blocks([
+    {
+      type: "features",
+      title: "Before you pay",
+      paddingY: "md",
+      features: [
+        { title: "Secure checkout", text: "Payment is encrypted." },
+        { title: "Shipping", text: "Calculated at the next step." },
+        { title: "Returns", text: "30 days on eligible items." },
+      ],
+    },
+  ]);
+
+  const notFoundBlocks = blocks([
+    {
+      type: "cta",
+      title: "This page is not in the shop",
+      subtitle: "The link may be old. The catalog is still here.",
+      ctaLabel: "Back to the store",
+      ctaPath: "/",
+      align: "center",
+      paddingY: "lg",
+    },
+    { type: "products", title: "Popular right now", paddingY: "md", productLimit: 4 },
+  ]);
+
+  return { productPageBlocks, collectionBlocks, cartBlocks, notFoundBlocks };
 }
 
 export function listAllThemePresets(
   custom?: import("@ugclab/tenant/store-theme").CustomThemePreset[]
 ): StoreThemePreset[] {
-  const saved = (custom ?? []).map(customToPreset);
+  const saved = (custom ?? [])
+    .filter((c) => c.id.startsWith("custom_"))
+    .map(customToPreset);
   return [...STORE_THEME_PRESETS, ...saved];
 }
 
@@ -1797,7 +1987,7 @@ export function filterStoreThemes(
     return [...all].sort((a, b) => Number(b.featured) - Number(a.featured));
   }
   if (category === "featured") return all.filter((t) => t.featured);
-  if (category === "saved") return all.filter((t) => t.id.startsWith("custom_"));
+  if (category === "saved") return (custom ?? []).map(customToPreset);
   return all.filter((t) => t.category === category);
 }
 

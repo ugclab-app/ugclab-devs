@@ -9,6 +9,11 @@ export function publicSignupUrl(): string {
   return base ? `${base}/api/public/signup` : "/api/public/signup";
 }
 
+export function publicCaptchaUrl(): string {
+  const base = publicApiBase();
+  return base ? `${base}/api/public/captcha` : "/api/public/captcha";
+}
+
 export function publicPartnerUrl(path: string): string {
   const base = publicApiBase();
   return base ? `${base}/api/public${path}` : `/api/public${path}`;

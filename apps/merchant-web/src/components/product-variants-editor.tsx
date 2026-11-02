@@ -5,6 +5,7 @@ export type VariantRow = {
   sku: string;
   price: string;
   inventory: string;
+  supplierVariantId?: string;
 };
 
 export function ProductVariantsEditor({

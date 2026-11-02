@@ -27,8 +27,9 @@ export function BlockPreview({
   const edit = onPatch;
 
   if (block.type === "hero") {
-    const heroBg = block.imageUrl
-      ? `linear-gradient(rgba(0,0,0,.45),rgba(0,0,0,.4)), url(${block.imageUrl}) center/cover`
+    const slide = block.slides?.find((item) => item.imageUrl)?.imageUrl;
+    const heroBg = block.imageUrl || slide
+      ? `linear-gradient(rgba(0,0,0,.45),rgba(0,0,0,.4)), url(${block.imageUrl || slide}) center/cover`
       : `linear-gradient(rgba(15,23,42,.45),rgba(15,23,42,.35)), url(https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1400&q=60) center/cover`;
     return (
       <div
@@ -190,7 +191,9 @@ export function BlockPreview({
         {block.discountCode ? (
           <p className="mt-2 font-mono text-lg font-bold text-violet-700">{block.discountCode}</p>
         ) : null}
-        <p className="mt-2 text-xs text-zinc-500">Shown site-wide · delay {block.popupDelaySec ?? 3}s</p>
+        <p className="mt-2 text-xs text-zinc-500">
+          {block.collectEmail ? "Photo and email signup" : "Promo code"} · delay {block.popupDelaySec ?? 3}s
+        </p>
       </div>
     );
   }

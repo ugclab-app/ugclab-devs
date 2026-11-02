@@ -9,6 +9,7 @@ import { LocaleSwitcher } from "@/components/locale-switcher";
 import { CurrencySwitcher } from "@/components/currency-switcher";
 import { CountrySwitcher } from "@/components/country-switcher";
 import { StoreSearch } from "@/components/store-search";
+import { CartDrawer } from "@/components/cart-drawer";
 
 export function StoreHeader() {
   const ctx = useStore();
@@ -21,6 +22,7 @@ export function StoreHeader() {
   const minimal = layout === "minimal";
   const centered = layout === "logo-center";
   const [menuOpen, setMenuOpen] = useState(false);
+  const [cartOpen, setCartOpen] = useState(false);
 
   const brand = (
     <Link
@@ -121,7 +123,7 @@ export function StoreHeader() {
         </Link>
       ) : null}
       {!ctx.theme.storeClosed ? (
-        <Link to={storeHref("/cart", nav)} className="relative inline-flex">
+        <button type="button" className="relative inline-flex" onClick={() => setCartOpen(true)}>
           <Button variant="secondary">{ctx.cartLabel}</Button>
           {ctx.cartCount > 0 ? (
             <span
@@ -131,7 +133,7 @@ export function StoreHeader() {
               {ctx.cartCount > 99 ? "99+" : ctx.cartCount}
             </span>
           ) : null}
-        </Link>
+        </button>
       ) : null}
     </div>
   );
@@ -169,9 +171,9 @@ export function StoreHeader() {
             <div className="flex items-center gap-2 md:hidden">
               {menuButton}
               {!ctx.theme.storeClosed ? (
-                <Link to={storeHref("/cart", nav)} className="relative inline-flex">
+                <button type="button" className="relative inline-flex" onClick={() => setCartOpen(true)}>
                   <Button variant="secondary">{ctx.cartLabel}</Button>
-                </Link>
+                </button>
               ) : null}
             </div>
           </div>
@@ -182,6 +184,7 @@ export function StoreHeader() {
           </div>
         </div>
       )}
+      <CartDrawer open={cartOpen} onClose={() => setCartOpen(false)} />
     </header>
   );
 }

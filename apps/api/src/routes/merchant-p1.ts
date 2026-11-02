@@ -44,6 +44,7 @@ function parseVariantsJson(raw: unknown) {
           v.inventory === "" || v.inventory == null
             ? null
             : parseInt(String(v.inventory), 10),
+        supplierVariantId: String(v.supplierVariantId ?? "").trim() || null,
       }))
       .filter((v) => v.title);
   } catch {
@@ -66,6 +67,7 @@ async function syncProductVariants(
       sku: v.sku,
       priceAmount: v.priceAmount,
       inventory: v.inventory,
+      supplierVariantId: v.supplierVariantId,
     })),
   });
 }
@@ -704,6 +706,13 @@ p1.post("/staff/invite", async (c) => {
     where: { id: session.sub },
     select: { email: true },
   });
+  if (inviteUser) {
+    const { notifyStaffJoined } = await import("../lib/owner-alerts.js");
+    notifyStaffJoined(tenant.id, emailNorm, inviteUser.name).catch((err) =>
+      console.error("[email] staff joined", err)
+    );
+  }
+
   const emailSent = inviteUser
     ? false
     : await sendStaffInviteEmail({
@@ -912,6 +921,10 @@ p1.post("/staff/accept-invite", async (c) => {
       inviteExpiresAt: null,
     },
   });
+  const { notifyStaffJoined } = await import("../lib/owner-alerts.js");
+  notifyStaffJoined(member.tenantId, user.email, user.name).catch((err) =>
+    console.error("[email] staff joined", err)
+  );
   return c.json({ ok: true });
 });
 

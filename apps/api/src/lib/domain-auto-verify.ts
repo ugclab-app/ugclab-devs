@@ -36,6 +36,10 @@ export async function autoVerifyPendingDomains(limit = 50) {
         summary: `Auto-verified ${d.domain}`,
         meta: { domainId: d.id, tenantId: d.tenantId, via: "cron" },
       });
+      const { notifyDomainConnected } = await import("./owner-alerts.js");
+      notifyDomainConnected(d.tenantId, d.domain).catch((err) =>
+        console.error("[email] domain connected", err)
+      );
       verified += 1;
     } else {
       await prisma.customDomain.update({

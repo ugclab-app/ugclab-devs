@@ -36,6 +36,7 @@ type NavLabelKey = keyof {
   abandonedCarts: string;
   shipping: string;
   inventory: string;
+  suppliers: string;
   discounts: string;
   discountsCodes: string;
   discountsAuto: string;
@@ -137,6 +138,7 @@ const navItems: NavItem[] = [
   },
   { to: "/shipping", labelKey: "shipping", fallback: "Shipping", perm: "shipping" },
   { to: "/inventory", labelKey: "inventory", fallback: "Inventory", perm: "products" },
+  { to: "/suppliers", labelKey: "suppliers", fallback: "Suppliers", perm: "products" },
   {
     to: "/discounts",
     labelKey: "discounts",

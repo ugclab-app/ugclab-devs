@@ -21,34 +21,63 @@ function wrapShell(storeName: string, inner: string, storeUrl: string) {
 }
 
 export async function ensureDefaultAutomations(tenantId: string) {
+  const settings = await prisma.storeSettings.findUnique({
+    where: { tenantId },
+    select: { defaultLocale: true },
+  });
+  const tr = (settings?.defaultLocale ?? "en").toLowerCase().startsWith("tr");
   const defaults: {
     type: EmailAutomationType;
     subject: string;
     bodyHtml: string;
     delayHours: number;
-  }[] = [
-    {
-      type: EmailAutomationType.WELCOME,
-      subject: "Welcome to {{store_name}}",
-      bodyHtml:
-        "<p>Hi {{name}},</p><p>Thanks for joining {{store_name}}. Explore our latest products.</p><p><a href=\"{{store_url}}\">Start shopping</a></p>",
-      delayHours: 0,
-    },
-    {
-      type: EmailAutomationType.POST_PURCHASE,
-      subject: "Thanks for your order at {{store_name}}",
-      bodyHtml:
-        "<p>Hi {{name}},</p><p>We appreciate your purchase. Need anything else?</p><p><a href=\"{{store_url}}\">Shop again</a></p>",
-      delayHours: 1,
-    },
-    {
-      type: EmailAutomationType.WINBACK,
-      subject: "We miss you at {{store_name}}",
-      bodyHtml:
-        "<p>Hi {{name}},</p><p>Come back and see what's new{{last_order_date}}.</p><p><a href=\"{{store_url}}\">Return to store</a></p>",
-      delayHours: 0,
-    },
-  ];
+  }[] = tr
+    ? [
+        {
+          type: EmailAutomationType.WELCOME,
+          subject: "{{store_name}} mağazasına hoş geldiniz",
+          bodyHtml:
+            "<p>Merhaba {{name}},</p><p>{{store_name}} ailesine katıldığınız için teşekkürler. Yeni ürünlerimize göz atın.</p><p><a href=\"{{store_url}}\">Alışverişe başla</a></p>",
+          delayHours: 0,
+        },
+        {
+          type: EmailAutomationType.POST_PURCHASE,
+          subject: "{{store_name}} siparişiniz için teşekkürler",
+          bodyHtml:
+            "<p>Merhaba {{name}},</p><p>Satın alımınız için teşekkür ederiz. Başka bir şeye mi bakıyorsunuz?</p><p><a href=\"{{store_url}}\">Tekrar alışveriş yap</a></p>",
+          delayHours: 1,
+        },
+        {
+          type: EmailAutomationType.WINBACK,
+          subject: "{{store_name}} sizi özledi",
+          bodyHtml:
+            "<p>Merhaba {{name}},</p><p>Geri dönün ve yeniliklere bakın{{last_order_date}}.</p><p><a href=\"{{store_url}}\">Mağazaya dön</a></p>",
+          delayHours: 0,
+        },
+      ]
+    : [
+        {
+          type: EmailAutomationType.WELCOME,
+          subject: "Welcome to {{store_name}}",
+          bodyHtml:
+            "<p>Hi {{name}},</p><p>Thanks for joining {{store_name}}. Explore our latest products.</p><p><a href=\"{{store_url}}\">Start shopping</a></p>",
+          delayHours: 0,
+        },
+        {
+          type: EmailAutomationType.POST_PURCHASE,
+          subject: "Thanks for your order at {{store_name}}",
+          bodyHtml:
+            "<p>Hi {{name}},</p><p>We appreciate your purchase. Need anything else?</p><p><a href=\"{{store_url}}\">Shop again</a></p>",
+          delayHours: 1,
+        },
+        {
+          type: EmailAutomationType.WINBACK,
+          subject: "We miss you at {{store_name}}",
+          bodyHtml:
+            "<p>Hi {{name}},</p><p>Come back and see what's new{{last_order_date}}.</p><p><a href=\"{{store_url}}\">Return to store</a></p>",
+          delayHours: 0,
+        },
+      ];
 
   for (const d of defaults) {
     const existing = await prisma.emailAutomation.findFirst({

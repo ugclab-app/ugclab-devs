@@ -37,18 +37,24 @@ export async function resolveTenantFromHost(
     }
   }
 
-  const custom = await prisma.customDomain.findFirst({
-    where: { domain: hostWithoutPort, verified: true },
-    include: { tenant: true },
-  });
+  const normalized = hostWithoutPort.toLowerCase();
+  const candidates = normalized.startsWith("www.")
+    ? [normalized, normalized.slice(4)]
+    : [normalized];
 
-  if (custom?.tenant.status === "ACTIVE") {
-    return {
-      id: custom.tenant.id,
-      slug: custom.tenant.slug,
-      name: custom.tenant.name,
-      status: custom.tenant.status,
-    };
+  for (const domain of candidates) {
+    const custom = await prisma.customDomain.findFirst({
+      where: { domain, verified: true },
+      include: { tenant: true },
+    });
+    if (custom?.tenant.status === "ACTIVE") {
+      return {
+        id: custom.tenant.id,
+        slug: custom.tenant.slug,
+        name: custom.tenant.name,
+        status: custom.tenant.status,
+      };
+    }
   }
 
   return null;

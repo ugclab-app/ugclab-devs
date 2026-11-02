@@ -296,6 +296,12 @@ export function registerPlatformDomainsRoutes(platform: Hono<AuthEnv>) {
         meta: { domainId: record.id, tenantId: record.tenantId, via: "dns" },
       });
       const vercel = await addDomainToVercelProject(record.domain);
+      if (!record.verified) {
+        const { notifyDomainConnected } = await import("../lib/owner-alerts.js");
+        notifyDomainConnected(record.tenantId, record.domain).catch((err) =>
+          console.error("[email] domain connected", err)
+        );
+      }
       return c.json({
         ok: true,
         dnsOk: true,
@@ -345,6 +351,12 @@ export function registerPlatformDomainsRoutes(platform: Hono<AuthEnv>) {
       summary: `Manually verified domain ${record.domain}`,
       meta: { domainId: record.id, tenantId: record.tenantId, via: "manual" },
     });
+    if (!record.verified) {
+      const { notifyDomainConnected } = await import("../lib/owner-alerts.js");
+      notifyDomainConnected(record.tenantId, record.domain).catch((err) =>
+        console.error("[email] domain connected", err)
+      );
+    }
     return c.json({ domain: mapPlatformDomainRow(updated) });
   });
 
@@ -459,6 +471,12 @@ export function registerPlatformDomainsRoutes(platform: Hono<AuthEnv>) {
         summary: `Bulk DNS verified ${record.domain}`,
         meta: { domainId: id, tenantId: record.tenantId, via: "bulk-dns" },
       });
+      if (!record.verified) {
+        const { notifyDomainConnected } = await import("../lib/owner-alerts.js");
+        notifyDomainConnected(record.tenantId, record.domain).catch((err) =>
+          console.error("[email] domain connected", err)
+        );
+      }
       results.push({ id, ok: true });
     }
 

@@ -11,6 +11,10 @@ import { processScheduledThemePublish } from "../lib/theme-meta.js";
 import { processStockAlerts } from "../lib/stock-alerts.js";
 import { processBuyerProtection } from "../lib/buyer-protection.js";
 import { releaseMaturePlatformReferrals } from "../lib/platform-partner.js";
+import { syncAllSupplierTracking } from "../lib/suppliers.js";
+import { processActivationNudges } from "../lib/activation-nudge.js";
+import { refreshFxRatesIfStale } from "../lib/fx-rates.js";
+import { processWebhookRetries } from "../lib/merchant-webhooks.js";
 
 let lastWeeklyReportDay = -1;
 
@@ -28,6 +32,36 @@ export async function runScheduledJobs() {
     } catch (e) {
       console.error("[cron] domain auto-verify", e);
     }
+  }
+
+  try {
+    const fx = await refreshFxRatesIfStale();
+    if (fx.refreshed) console.log("[cron] FX rates refreshed");
+  } catch (e) {
+    console.error("[cron] FX rates", e);
+  }
+
+  try {
+    const nudged = await processActivationNudges();
+    if (nudged.sent > 0) console.log(`[cron] activation nudges sent: ${nudged.sent}`);
+  } catch (e) {
+    console.error("[cron] activation nudge", e);
+  }
+
+  try {
+    const tracking = await syncAllSupplierTracking();
+    if (tracking.updated > 0) {
+      console.log(`[cron] supplier tracking updated: ${tracking.updated}`);
+    }
+  } catch (e) {
+    console.error("[cron] supplier tracking", e);
+  }
+
+  try {
+    const wh = await processWebhookRetries();
+    if (wh.retried > 0) console.log(`[cron] webhook retries: ${wh.retried}`);
+  } catch (e) {
+    console.error("[cron] webhook retries", e);
   }
 
   await processAbandonedCartReminders();

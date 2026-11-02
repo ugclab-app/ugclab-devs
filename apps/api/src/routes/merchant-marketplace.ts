@@ -17,9 +17,12 @@ marketplace.use("*", requireAuth);
 
 marketplace.get("/marketplace", async (c) => {
   const { tenant } = await requireTenant(c.get("session"));
-  await ensureMarketplace();
-  await ensureThemeCatalog();
-  await reconcileAddonCheckouts(tenant.id).catch(() => {});
+  await Promise.all([ensureMarketplace(), ensureThemeCatalog()]);
+  // Stripe reconciliation is best-effort; never let it hold the page hostage.
+  await Promise.race([
+    reconcileAddonCheckouts(tenant.id).catch(() => {}),
+    new Promise<void>((r) => setTimeout(r, 5000)),
+  ]);
   const [themes, apps, ownedThemes, ownedApps, purchases] = await Promise.all([
     prisma.storeThemeCatalog.findMany({
       where: { published: true, deprecated: false },

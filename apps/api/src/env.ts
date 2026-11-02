@@ -3,10 +3,14 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 try {
-  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
-  // override: true — shell/turbo stale DATABASE_URL must not win over repo .env
-  config({ path: path.join(root, ".env"), override: true });
-  config({ path: path.join(root, ".env.local"), override: true });
+  // On Vercel the dashboard env is the source of truth. A copied .env would
+  // point Prisma at localhost and every login returns 500.
+  if (!process.env.VERCEL) {
+    const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+    // override: true — shell/turbo stale DATABASE_URL must not win over repo .env
+    config({ path: path.join(root, ".env"), override: true });
+    config({ path: path.join(root, ".env.local"), override: true });
+  }
 } catch {
   /* Vercel uses dashboard env vars; local .env is optional */
 }

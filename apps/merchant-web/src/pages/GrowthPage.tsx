@@ -1,7 +1,12 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/api/client";
+import {
+  api,
+  type GrowthSettingsDto,
+  type WebhookDeliveryDto,
+  type WebhookTestResult,
+} from "@/api/client";
 import { FormAlert } from "@/components/form-alert";
 import { AffiliatesPanel } from "@/components/affiliates-panel";
 import { TelegramBotPanel } from "@/components/telegram-bot-panel";
@@ -23,6 +28,463 @@ const TABS = [
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
+
+type CheckoutFieldType = "text" | "date" | "textarea";
+type CheckoutFieldRow = { label: string; type: CheckoutFieldType; required: boolean };
+const MAX_CHECKOUT_FIELDS = 10;
+
+function toStringList(v: unknown): string[] {
+  if (Array.isArray(v)) return v.map((x) => String(x));
+  if (typeof v === "string") return v.split(",").map((s) => s.trim()).filter(Boolean);
+  return [];
+}
+
+function toCheckoutFieldRows(v: unknown): CheckoutFieldRow[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .map((raw) => {
+      const f = (raw ?? {}) as { label?: unknown; type?: unknown; required?: unknown };
+      const type: CheckoutFieldType =
+        f.type === "date" || f.type === "textarea" ? f.type : "text";
+      return { label: String(f.label ?? ""), type, required: f.required === true };
+    })
+    .slice(0, MAX_CHECKOUT_FIELDS);
+}
+
+function CheckoutOptionsForm({
+  settings,
+  pending,
+  run,
+}: {
+  settings: GrowthSettingsDto;
+  pending: boolean;
+  run: (fn: () => Promise<unknown>, msg: string) => Promise<void>;
+}) {
+  const [fields, setFields] = useState<CheckoutFieldRow[]>(() =>
+    toCheckoutFieldRows(settings.checkoutFields)
+  );
+  const [turnstileSiteKey, setTurnstileSiteKey] = useState(settings.turnstileSiteKey ?? "");
+  const [turnstileSecretKey, setTurnstileSecretKey] = useState("");
+  const turnstileSecretSet = settings.turnstileSecretSet === true;
+
+  return (
+    <form
+      className="max-w-lg space-y-4 rounded-xl border border-zinc-200 p-5"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const fd = new FormData(e.currentTarget);
+        const secret = turnstileSecretKey.trim();
+        void run(
+          () =>
+            api.patchGrowthSettings({
+              bnplEnabled: fd.get("bnplEnabled") === "on",
+              tipsEnabled: fd.get("tipsEnabled") === "on",
+              tipPresets: String(fd.get("tipPresets") ?? ""),
+              blockedCountries: String(fd.get("blockedCountries") ?? ""),
+              checkoutFields: fields
+                .filter((f) => f.label.trim())
+                .map((f) => ({
+                  label: f.label.trim(),
+                  type: f.type,
+                  required: f.required,
+                })),
+              invoicePrefix: String(fd.get("invoicePrefix") ?? "").trim(),
+              invoiceNextNumber: Math.max(
+                1,
+                parseInt(String(fd.get("invoiceNextNumber") ?? "1"), 10) || 1
+              ),
+              turnstileSiteKey: turnstileSiteKey.trim(),
+              // Empty secret field = leave the stored secret unchanged.
+              ...(secret ? { turnstileSecretKey: secret } : {}),
+            }),
+          "Checkout options saved"
+        ).then(() => setTurnstileSecretKey(""));
+      }}
+    >
+      <h2 className="text-base font-semibold text-zinc-900">Checkout options</h2>
+
+      <div className="space-y-1">
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            name="bnplEnabled"
+            defaultChecked={settings.bnplEnabled === true}
+          />
+          Buy now, pay later (Klarna / Afterpay / Affirm via Stripe)
+        </label>
+        <p className="pl-6 text-xs text-zinc-500">
+          Shown automatically when the checkout currency supports it. Enable the methods in your
+          Stripe Dashboard too.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            name="tipsEnabled"
+            defaultChecked={settings.tipsEnabled === true}
+          />
+          Allow tips at checkout
+        </label>
+        <label className="block text-xs font-medium text-zinc-600">
+          Tip presets (percent, comma-separated)
+          <input
+            name="tipPresets"
+            defaultValue={toStringList(settings.tipPresets).join(", ")}
+            placeholder="10, 15, 20"
+            className="ugclab-input mt-1 w-full"
+          />
+        </label>
+      </div>
+
+      <label className="block text-xs font-medium text-zinc-600">
+        Do not sell to countries (ISO-2, comma-separated)
+        <textarea
+          name="blockedCountries"
+          rows={2}
+          defaultValue={toStringList(settings.blockedCountries).join(", ")}
+          placeholder="RU, BY, IR"
+          className="ugclab-input mt-1 w-full font-mono text-xs uppercase"
+        />
+      </label>
+
+      <div className="space-y-2">
+        <div>
+          <p className="text-xs font-medium text-zinc-600">Custom checkout fields</p>
+          <p className="text-xs text-zinc-500">
+            Ask buyers for extra information at checkout. Up to {MAX_CHECKOUT_FIELDS} fields;
+            answers appear on the order.
+          </p>
+        </div>
+        {fields.map((f, idx) => (
+          <div key={idx} className="flex flex-wrap items-center gap-2">
+            <input
+              value={f.label}
+              onChange={(e) =>
+                setFields((prev) =>
+                  prev.map((r, i) => (i === idx ? { ...r, label: e.target.value } : r))
+                )
+              }
+              placeholder="Label (e.g. Gift message)"
+              className="ugclab-input min-w-0 flex-1"
+            />
+            <select
+              value={f.type}
+              onChange={(e) =>
+                setFields((prev) =>
+                  prev.map((r, i) =>
+                    i === idx ? { ...r, type: e.target.value as CheckoutFieldType } : r
+                  )
+                )
+              }
+              className="ugclab-select w-28"
+              aria-label="Field type"
+            >
+              <option value="text">Text</option>
+              <option value="date">Date</option>
+              <option value="textarea">Long text</option>
+            </select>
+            <label className="flex items-center gap-1.5 text-xs text-zinc-700">
+              <input
+                type="checkbox"
+                checked={f.required}
+                onChange={(e) =>
+                  setFields((prev) =>
+                    prev.map((r, i) => (i === idx ? { ...r, required: e.target.checked } : r))
+                  )
+                }
+              />
+              Required
+            </label>
+            <button
+              type="button"
+              onClick={() => setFields((prev) => prev.filter((_, i) => i !== idx))}
+              className="text-xs text-red-600 hover:underline"
+            >
+              Remove
+            </button>
+          </div>
+        ))}
+        {fields.length < MAX_CHECKOUT_FIELDS ? (
+          <button
+            type="button"
+            onClick={() =>
+              setFields((prev) => [...prev, { label: "", type: "text", required: false }])
+            }
+            className="ugclab-btn border border-zinc-200 bg-white text-xs"
+          >
+            Add field
+          </button>
+        ) : null}
+      </div>
+
+      <div className="space-y-2 border-t border-zinc-100 pt-4">
+        <p className="text-xs font-medium text-zinc-600">Invoice numbering</p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <label className="block text-xs font-medium text-zinc-600">
+            Invoice prefix
+            <input
+              name="invoicePrefix"
+              defaultValue={settings.invoicePrefix ?? ""}
+              placeholder="INV-"
+              className="ugclab-input mt-1 w-full font-mono"
+            />
+          </label>
+          <label className="block text-xs font-medium text-zinc-600">
+            Next number
+            <input
+              name="invoiceNextNumber"
+              type="number"
+              min={1}
+              step={1}
+              defaultValue={Math.max(1, Number(settings.invoiceNextNumber ?? 1) || 1)}
+              className="ugclab-input mt-1 w-full"
+            />
+          </label>
+        </div>
+        <p className="text-xs text-zinc-500">
+          Leave the prefix empty to use order numbers. Numbers are assigned when an order is paid.
+        </p>
+      </div>
+
+      <div className="space-y-2 border-t border-zinc-100 pt-4">
+        <p className="text-xs font-medium text-zinc-600">Bot protection (Cloudflare Turnstile)</p>
+        <label className="block text-xs font-medium text-zinc-600">
+          Site key
+          <input
+            value={turnstileSiteKey}
+            onChange={(e) => setTurnstileSiteKey(e.target.value)}
+            placeholder="0x4AAAAAAA…"
+            className="ugclab-input mt-1 w-full font-mono"
+            autoComplete="off"
+          />
+        </label>
+        <label className="block text-xs font-medium text-zinc-600">
+          Secret key
+          <input
+            type="password"
+            value={turnstileSecretKey}
+            onChange={(e) => setTurnstileSecretKey(e.target.value)}
+            placeholder={turnstileSecretSet ? "••••••• (saved)" : "0x4AAAAAAA…"}
+            className="ugclab-input mt-1 w-full font-mono"
+            autoComplete="new-password"
+          />
+        </label>
+        <p className="text-xs text-zinc-500">
+          Shows a captcha on checkout and customer login. Create keys at dash.cloudflare.com →
+          Turnstile; add your storefront domain.
+          {turnstileSecretSet || turnstileSiteKey ? (
+            <>
+              {" "}
+              <button
+                type="button"
+                disabled={pending}
+                className="text-red-600 hover:underline"
+                onClick={() =>
+                  void run(
+                    () => api.patchGrowthSettings({ turnstileSecretKey: "", turnstileSiteKey: "" }),
+                    "Turnstile keys removed"
+                  ).then(() => {
+                    setTurnstileSiteKey("");
+                    setTurnstileSecretKey("");
+                  })
+                }
+              >
+                Remove
+              </button>
+            </>
+          ) : null}
+        </p>
+      </div>
+
+      <button type="submit" disabled={pending} className="ugclab-btn ugclab-btn-primary">
+        Save checkout options
+      </button>
+    </form>
+  );
+}
+
+type WebhookRecord = {
+  id: string;
+  url: string;
+  events?: string[];
+  active?: boolean;
+  createdAt?: string;
+};
+
+function describeWebhookTest(r: WebhookTestResult): { ok: boolean; text: string } {
+  if (r.status === "SUCCESS") {
+    return { ok: true, text: `Delivered${r.statusCode ? ` (${r.statusCode})` : ""}` };
+  }
+  if (r.status === null) {
+    return r.ok ? { ok: true, text: "Queued" } : { ok: false, text: r.error ?? "Failed" };
+  }
+  const reason = r.statusCode ? `HTTP ${r.statusCode}` : (r.error ?? "no response");
+  return {
+    ok: false,
+    text: `Failed: ${reason}${r.status === "PENDING" ? " — will retry" : ""}`,
+  };
+}
+
+const DELIVERY_STATUS_CLASS: Record<WebhookDeliveryDto["status"], string> = {
+  SUCCESS: "bg-emerald-50 text-emerald-700",
+  PENDING: "bg-amber-50 text-amber-700",
+  FAILED: "bg-red-50 text-red-700",
+};
+
+function WebhookRow({
+  webhook,
+  pending,
+  run,
+}: {
+  webhook: WebhookRecord;
+  pending: boolean;
+  run: (fn: () => Promise<unknown>, msg: string) => Promise<void>;
+}) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [testResult, setTestResult] = useState<WebhookTestResult | null>(null);
+  const active = webhook.active !== false;
+
+  const deliveriesKey = ["webhook-deliveries", webhook.id];
+  const { data, isLoading } = useQuery({
+    queryKey: deliveriesKey,
+    queryFn: () => api.webhookDeliveries(webhook.id),
+    enabled: open,
+  });
+  const deliveries = data?.deliveries ?? [];
+  const test = testResult ? describeWebhookTest(testResult) : null;
+
+  return (
+    <li className="space-y-2 px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className={`truncate font-mono text-xs ${active ? "" : "text-zinc-400 line-through"}`}>
+            {webhook.url}
+          </p>
+          {webhook.events?.length ? (
+            <p className="text-xs text-zinc-500">{webhook.events.join(", ")}</p>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap items-center gap-3 text-xs">
+          <label className="flex items-center gap-1.5 text-zinc-700">
+            <input
+              type="checkbox"
+              checked={active}
+              disabled={pending}
+              onChange={(e) =>
+                void run(
+                  () => api.patchMerchantWebhook(webhook.id, { active: e.target.checked }),
+                  e.target.checked ? "Webhook enabled" : "Webhook disabled"
+                )
+              }
+            />
+            Enabled
+          </label>
+          <button
+            type="button"
+            disabled={pending}
+            className="text-violet-700 hover:underline"
+            onClick={() =>
+              void run(async () => {
+                setTestResult(await api.testMerchantWebhook(webhook.id));
+                await qc.invalidateQueries({ queryKey: deliveriesKey });
+              }, "Test event sent")
+            }
+          >
+            Send test
+          </button>
+          <button
+            type="button"
+            className="text-zinc-700 hover:underline"
+            onClick={() => setOpen((v) => !v)}
+          >
+            {open ? "Hide deliveries" : "Deliveries"}
+          </button>
+          <button
+            type="button"
+            className="text-red-600 hover:underline"
+            onClick={() => void run(() => api.deleteMerchantWebhook(webhook.id), "Deleted")}
+          >
+            Remove
+          </button>
+        </div>
+      </div>
+
+      {test ? (
+        <p className={`text-xs ${test.ok ? "text-emerald-700" : "text-red-700"}`}>
+          Test: {test.text}
+        </p>
+      ) : null}
+
+      {open ? (
+        <div className="overflow-x-auto rounded-lg border border-zinc-100">
+          {isLoading ? (
+            <p className="px-3 py-2 text-xs text-zinc-500">Loading…</p>
+          ) : deliveries.length === 0 ? (
+            <p className="px-3 py-2 text-xs text-zinc-500">No deliveries yet.</p>
+          ) : (
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-zinc-50 text-left text-[11px] uppercase text-zinc-500">
+                  <th className="px-3 py-2">Time</th>
+                  <th className="px-3 py-2">Event</th>
+                  <th className="px-3 py-2">Status</th>
+                  <th className="px-3 py-2 text-right">Attempts</th>
+                  <th className="px-3 py-2">Result</th>
+                  <th className="px-3 py-2">Next retry</th>
+                  <th className="px-3 py-2" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100">
+                {deliveries.map((d) => (
+                  <tr key={d.id}>
+                    <td className="whitespace-nowrap px-3 py-2 text-zinc-600">
+                      {new Date(d.createdAt).toLocaleString()}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 font-mono">{d.event}</td>
+                    <td className="px-3 py-2">
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${DELIVERY_STATUS_CLASS[d.status] ?? "bg-zinc-100 text-zinc-600"}`}
+                      >
+                        {d.status}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-right">{d.attempts}</td>
+                    <td className="max-w-[14rem] truncate px-3 py-2 text-zinc-600" title={d.lastError ?? undefined}>
+                      {d.lastStatusCode ? `HTTP ${d.lastStatusCode}` : (d.lastError ?? "—")}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-zinc-600">
+                      {d.status === "PENDING" && d.nextAttemptAt
+                        ? new Date(d.nextAttemptAt).toLocaleString()
+                        : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <button
+                        type="button"
+                        disabled={pending}
+                        className="text-violet-700 hover:underline"
+                        onClick={() =>
+                          void run(async () => {
+                            await api.redeliverWebhookDelivery(d.id);
+                            await qc.invalidateQueries({ queryKey: deliveriesKey });
+                          }, "Redelivery attempted")
+                        }
+                      >
+                        Redeliver
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      ) : null}
+    </li>
+  );
+}
 
 export default function GrowthPage() {
   const { ta, c } = useAdminT();
@@ -61,8 +523,8 @@ export default function GrowthPage() {
 
   if (isLoading) return <p className="text-zinc-500">{c.loading}</p>;
 
-  const settings = (data?.settings ?? {}) as Record<string, unknown>;
-  const integrations = (settings.integrations ?? {}) as Record<string, string | boolean>;
+  const settings = (data?.settings ?? {}) as GrowthSettingsDto;
+  const integrations = (settings.integrations ?? {}) as Record<string, unknown>;
   const upsell = (settings.postCheckoutUpsell ?? {}) as {
     enabled?: boolean;
     headline?: string;
@@ -71,7 +533,7 @@ export default function GrowthPage() {
   const giftCards = (data?.giftCards ?? []) as Array<Record<string, unknown>>;
   const bundles = (data?.bundles ?? []) as Array<Record<string, unknown>>;
   const warehouses = (data?.warehouses ?? []) as Array<Record<string, unknown>>;
-  const webhooks = (data?.webhooks ?? []) as Array<Record<string, unknown>>;
+  const webhooks = (data?.webhooks ?? []) as WebhookRecord[];
   const apiKeys = (data?.apiKeys ?? []) as Array<Record<string, unknown>>;
   const products = (data?.products ?? []) as Array<{
     id: string;
@@ -422,6 +884,7 @@ export default function GrowthPage() {
                       tiktokAccessToken: fd.get("tiktokAccessToken"),
                       gtmId: fd.get("gtmId"),
                       aiCatalogEnabled: fd.get("aiCatalogEnabled") === "on",
+                      productFeedsEnabled: fd.get("productFeedsEnabled") === "on",
                     },
                   }),
                 "Integrations saved"
@@ -480,10 +943,167 @@ export default function GrowthPage() {
               Enable public AI catalog feed (
               <code className="text-xs">/api/store/ai-catalog</code>)
             </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                name="productFeedsEnabled"
+                defaultChecked={integrations.productFeedsEnabled === true}
+              />
+              Enable Google / Meta / TikTok product feeds
+            </label>
+            {integrations.productFeedsEnabled === true && tenant?.slug ? (
+              <div className="rounded-lg border border-zinc-100 bg-zinc-50 p-3 text-xs text-zinc-600 space-y-1.5 break-all">
+                <p className="font-medium text-zinc-800">Feed URLs (add in ads manager)</p>
+                <p>
+                  Google:{" "}
+                  <code>
+                    /api/store/feeds/google-merchant.xml?tenant={tenant.slug}
+                  </code>
+                </p>
+                <p>
+                  Meta:{" "}
+                  <code>
+                    /api/store/feeds/meta-catalog.csv?tenant={tenant.slug}
+                  </code>
+                </p>
+                <p>
+                  TikTok:{" "}
+                  <code>
+                    /api/store/feeds/tiktok-catalog.csv?tenant={tenant.slug}
+                  </code>
+                </p>
+              </div>
+            ) : null}
             <button type="submit" disabled={pending} className="ugclab-btn ugclab-btn-primary">
               Save
             </button>
           </form>
+
+          <form
+            className="max-w-lg space-y-3 rounded-xl border border-zinc-200 p-5"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const fd = new FormData(e.currentTarget);
+              const prev = (integrations.twilio && typeof integrations.twilio === "object"
+                ? integrations.twilio
+                : {}) as Record<string, unknown>;
+              void run(
+                () =>
+                  api.patchGrowthSettings({
+                    integrations: {
+                      ...integrations,
+                      twilio: {
+                        ...prev,
+                        accountSid: String(fd.get("twilioSid") ?? ""),
+                        authToken: String(fd.get("twilioToken") ?? "") || prev.authToken,
+                        fromSms: String(fd.get("fromSms") ?? ""),
+                        fromWhatsapp: String(fd.get("fromWhatsapp") ?? ""),
+                        merchantPhone: String(fd.get("merchantPhone") ?? ""),
+                        notifyOrders: fd.get("twilioNotify") === "on",
+                      },
+                    },
+                  }),
+                "SMS / WhatsApp saved"
+              );
+            }}
+          >
+            <h2 className="text-base font-semibold text-zinc-900">SMS / WhatsApp (Twilio)</h2>
+            <p className="text-sm text-zinc-500">
+              Order alerts to your phone. Leave token blank to keep the current secret.
+            </p>
+            <input name="twilioSid" placeholder="Account SID" defaultValue={String((integrations.twilio as { accountSid?: string } | undefined)?.accountSid ?? "")} className="ugclab-input w-full" />
+            <input name="twilioToken" type="password" autoComplete="off" placeholder="Auth token" className="ugclab-input w-full" />
+            <input name="fromSms" placeholder="From SMS (+…)" defaultValue={String((integrations.twilio as { fromSms?: string } | undefined)?.fromSms ?? "")} className="ugclab-input w-full" />
+            <input name="fromWhatsapp" placeholder="From WhatsApp (+…)" defaultValue={String((integrations.twilio as { fromWhatsapp?: string } | undefined)?.fromWhatsapp ?? "")} className="ugclab-input w-full" />
+            <input name="merchantPhone" placeholder="Your phone (+…)" defaultValue={String((integrations.twilio as { merchantPhone?: string } | undefined)?.merchantPhone ?? "")} className="ugclab-input w-full" />
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="twilioNotify" defaultChecked={(integrations.twilio as { notifyOrders?: boolean } | undefined)?.notifyOrders === true} />
+              Notify on new paid orders
+            </label>
+            <button type="submit" disabled={pending} className="ugclab-btn ugclab-btn-primary">
+              Save messaging
+            </button>
+          </form>
+
+          <form
+            className="max-w-lg space-y-3 rounded-xl border border-zinc-200 p-5"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const fd = new FormData(e.currentTarget);
+              const prev = (integrations.wise && typeof integrations.wise === "object"
+                ? integrations.wise
+                : {}) as Record<string, unknown>;
+              void run(
+                () =>
+                  api.patchGrowthSettings({
+                    integrations: {
+                      ...integrations,
+                      wise: {
+                        ...prev,
+                        apiToken: String(fd.get("wiseToken") ?? "") || prev.apiToken,
+                        profileId: String(fd.get("wiseProfile") ?? ""),
+                        recipientEmail: String(fd.get("wiseEmail") ?? ""),
+                        currency: String(fd.get("wiseCurrency") ?? "USD"),
+                        autoPayout: fd.get("wiseAuto") === "on",
+                      },
+                    },
+                  }),
+                "Wise settings saved"
+              );
+            }}
+          >
+            <h2 className="text-base font-semibold text-zinc-900">Wise payouts</h2>
+            <p className="text-sm text-zinc-500">
+              Used when platform ops approve a MoR payout. Requires a Wise API token.
+            </p>
+            <input name="wiseToken" type="password" autoComplete="off" placeholder="API token" className="ugclab-input w-full" />
+            <input name="wiseProfile" placeholder="Profile ID" defaultValue={String((integrations.wise as { profileId?: string } | undefined)?.profileId ?? "")} className="ugclab-input w-full" />
+            <input name="wiseEmail" type="email" placeholder="Recipient email" defaultValue={String((integrations.wise as { recipientEmail?: string } | undefined)?.recipientEmail ?? "")} className="ugclab-input w-full" />
+            <input name="wiseCurrency" placeholder="Currency" defaultValue={String((integrations.wise as { currency?: string } | undefined)?.currency ?? "USD")} className="ugclab-input w-full" />
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="wiseAuto" defaultChecked={(integrations.wise as { autoPayout?: boolean } | undefined)?.autoPayout === true} />
+              Try auto-transfer when payout is approved
+            </label>
+            <button type="submit" disabled={pending} className="ugclab-btn ugclab-btn-primary">
+              Save Wise
+            </button>
+          </form>
+
+          <form
+            className="max-w-lg space-y-3 rounded-xl border border-zinc-200 p-5"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const fd = new FormData(e.currentTarget);
+              void run(
+                () =>
+                  api.patchGrowthSettings({
+                    loyaltyEnabled: fd.get("loyaltyEnabled") === "on",
+                    loyaltyEarnPerMajor: Number(fd.get("earn") ?? 1) || 1,
+                    loyaltyRedeemCentsPerPoint: Number(fd.get("redeem") ?? 1) || 1,
+                  }),
+                "Loyalty saved"
+              );
+            }}
+          >
+            <h2 className="text-base font-semibold text-zinc-900">Loyalty points</h2>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="loyaltyEnabled" defaultChecked={Boolean(settings.loyaltyEnabled)} />
+              Enable loyalty program
+            </label>
+            <label className="block text-xs font-medium text-zinc-600">
+              Points earned per 1.00 spent
+              <input name="earn" type="number" min={0} defaultValue={Number(settings.loyaltyEarnPerMajor ?? 1)} className="ugclab-input mt-1 w-full" />
+            </label>
+            <label className="block text-xs font-medium text-zinc-600">
+              Cents value per redeemed point
+              <input name="redeem" type="number" min={0} defaultValue={Number(settings.loyaltyRedeemCentsPerPoint ?? 1)} className="ugclab-input mt-1 w-full" />
+            </label>
+            <button type="submit" disabled={pending} className="ugclab-btn ugclab-btn-primary">
+              Save loyalty
+            </button>
+          </form>
+
+          <CheckoutOptionsForm settings={settings} pending={pending} run={run} />
 
           <div className="max-w-lg space-y-3 rounded-xl border border-zinc-200 p-5">
             <h2 className="text-base font-semibold text-zinc-900">UTM link generator</h2>
@@ -565,7 +1185,8 @@ export default function GrowthPage() {
               Use a key as <code className="text-xs">Authorization: Bearer ugc_…</code> against{" "}
               <code className="text-xs">/api/v1</code> —{" "}
               <code className="text-xs">GET /products</code>,{" "}
-              <code className="text-xs">GET /orders</code>.
+              <code className="text-xs">GET /orders</code>. OpenAPI:{" "}
+              <code className="text-xs">/api/v1/openapi.json</code>.
             </p>
           </div>
           <form
@@ -586,6 +1207,10 @@ export default function GrowthPage() {
             <button type="submit" disabled={pending} className="ugclab-btn ugclab-btn-primary">
               Add webhook
             </button>
+            <p className="text-xs text-zinc-500">
+              Retries: 1m, 5m, 30m, 2h, 12h. Signature header{" "}
+              <code className="text-[11px]">X-UGCLab-Signature: sha256=HMAC(body, secret)</code>.
+            </p>
           </form>
           {webhookSecret ? (
             <p className="rounded-lg bg-amber-50 p-3 text-sm font-mono break-all">
@@ -615,18 +1240,7 @@ export default function GrowthPage() {
           ) : null}
           <ul className="text-sm divide-y rounded-xl border">
             {webhooks.map((w) => (
-              <li key={String(w.id)} className="px-4 py-2 flex justify-between gap-2">
-                <span className="truncate">{String(w.url)}</span>
-                <button
-                  type="button"
-                  className="text-red-600"
-                  onClick={() =>
-                    void run(() => api.deleteMerchantWebhook(String(w.id)), "Deleted")
-                  }
-                >
-                  Remove
-                </button>
-              </li>
+              <WebhookRow key={w.id} webhook={w} pending={pending} run={run} />
             ))}
             {apiKeys.map((k) => (
               <li key={String(k.id)} className="px-4 py-2 text-zinc-600">

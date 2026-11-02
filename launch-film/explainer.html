@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Tescommerce — Explainer</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 1920px;
+      height: 1080px;
+      overflow: hidden;
+      background: #eef0f6;
+      font-family: "Segoe UI Variable Display", "Segoe UI", sans-serif;
+      color: #0b0d14;
+      -webkit-font-smoothing: antialiased;
+    }
+    :root { --blue: #2546f0; --blue2: #5b78ff; --ink: #0b0d14; --muted: #687083; --line: #e3e7f0; }
+    #stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; }
+    .abs { position: absolute; }
+    .layer { position: absolute; inset: 0; will-change: transform, filter, opacity; }
+    .center { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+    .blue { color: var(--blue); }
+    .gtext {
+      background: linear-gradient(90deg, #1f3fe8, #5b78ff);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    /* background */
+    #bg { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 40%, #ffffff 0%, #f1f3f9 55%, #e6e9f2 100%); }
+    .blob { position: absolute; border-radius: 50%; }
+    #blobA { width: 1100px; height: 1100px; background: radial-gradient(circle, rgba(37, 70, 240, 0.16), transparent 65%); }
+    #blobB { width: 900px; height: 900px; background: radial-gradient(circle, rgba(91, 120, 255, 0.14), transparent 65%); }
+    #arcs { position: absolute; inset: 0; }
+
+    /* generic ui */
+    .win {
+      position: absolute;
+      background: #fff;
+      border-radius: 26px;
+      box-shadow: 0 50px 120px rgba(20, 30, 80, 0.16), 0 0 0 1px rgba(20, 30, 80, 0.05);
+      overflow: hidden;
+    }
+    .bar { height: 56px; display: flex; align-items: center; gap: 9px; padding: 0 22px; background: #f6f7fb; border-bottom: 1px solid var(--line); }
+    .dot { width: 13px; height: 13px; border-radius: 50%; background: #dfe3ec; }
+    .url { margin-left: 16px; flex: 1; height: 34px; border-radius: 10px; background: #fff; display: flex; align-items: center; padding: 0 16px; font-size: 17px; color: var(--muted); gap: 10px; }
+    .pill { display: inline-flex; align-items: center; gap: 10px; border-radius: 999px; white-space: nowrap; font-weight: 600; }
+    .thumb { border-radius: 16px; position: relative; overflow: hidden; }
+    .thumb::after { content: ""; position: absolute; inset: 26%; border-radius: 50%; border: 6px solid rgba(255, 255, 255, 0.78); }
+    .th1 { background: linear-gradient(135deg, #f59e0b, #ec4899); }
+    .th2 { background: linear-gradient(135deg, #1e293b, #4f46e5); }
+    .th3 { background: linear-gradient(135deg, #e7e5e4, #a8a29e); }
+    .th3::after { border-radius: 10px 10px 18px 18px; border-color: #57534e; inset: 22% 28%; }
+    .th4 { background: linear-gradient(135deg, #14b8a6, #0ea5e9); }
+    .th5 { background: linear-gradient(135deg, #a78bfa, #2546f0); }
+    .th6 { background: linear-gradient(135deg, #fde68a, #f97316); }
+    .mark {
+      display: grid;
+      place-items: center;
+      color: #fff;
+      font-weight: 700;
+      background: linear-gradient(135deg, #1f3fe8, #5b78ff);
+      box-shadow: 0 20px 50px rgba(37, 70, 240, 0.35);
+    }
+    .ring { position: absolute; width: 70px; height: 70px; margin: -35px 0 0 -35px; border-radius: 50%; background: rgba(37, 70, 240, 0.3); }
+    .hand { position: absolute; width: 40px; height: 40px; filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.25)); }
+
+    /* 1 chaos */
+    .bub {
+      position: absolute;
+      padding: 18px 30px;
+      border-radius: 999px;
+      font-size: 30px;
+      font-weight: 600;
+      white-space: nowrap;
+      box-shadow: 0 18px 40px rgba(20, 30, 80, 0.14);
+    }
+    .bub.b { background: var(--blue); color: #fff; }
+    .bub.w { background: #fff; color: var(--blue); }
+    .bub.s { font-size: 22px; padding: 13px 22px; }
+
+    /* headlines */
+    .h-xl { font-size: 136px; font-weight: 650; letter-spacing: -0.045em; line-height: 1; white-space: nowrap; }
+    .h-l { font-size: 92px; font-weight: 650; letter-spacing: -0.04em; line-height: 1.02; white-space: nowrap; }
+    .word { display: inline-block; margin-right: 0.24em; }
+
+    /* products grid */
+    .admin { display: grid; grid-template-columns: 250px 1fr; height: calc(100% - 56px); }
+    .side { background: #f8f9fc; border-right: 1px solid var(--line); padding: 26px 16px; }
+    .brandrow { display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 20px; margin: 0 10px 26px; }
+    .nav { padding: 13px 14px; border-radius: 11px; font-size: 18px; font-weight: 600; color: var(--muted); }
+    .nav.act { background: #e9edff; color: var(--blue); }
+    .main { padding: 30px 36px; }
+    .main h4 { margin: 0 0 22px; font-size: 32px; letter-spacing: -0.03em; }
+    .pgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .pc { border: 1px solid var(--line); border-radius: 20px; padding: 14px; background: #fff; }
+    .pc .thumb { height: 190px; }
+    .pc .n { margin-top: 12px; font-size: 19px; font-weight: 650; }
+    .pc .row { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; }
+    .pc .p { font-size: 22px; font-weight: 700; }
+    .tag { padding: 5px 11px; border-radius: 999px; font-size: 13px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+    .tag.d { background: #e9edff; color: var(--blue); }
+    .tag.ph { background: #fef3c7; color: #b45309; }
+
+    /* storefront */
+    .shop { position: absolute; inset: 56px 0 0 0; padding: 26px 40px; }
+    .shead { display: flex; align-items: center; justify-content: space-between; font-weight: 800; letter-spacing: 0.2em; font-size: 22px; }
+    .shead nav { display: flex; gap: 30px; font-size: 16px; letter-spacing: 0.04em; font-weight: 600; opacity: 0.7; }
+    .cart { padding: 9px 18px; border-radius: 999px; font-size: 15px; letter-spacing: 0.04em; }
+    .hero { margin-top: 22px; height: 250px; border-radius: 22px; padding: 42px 46px; }
+    .hero .k { font-size: 15px; font-weight: 750; letter-spacing: 0.16em; }
+    .hero .t { margin-top: 10px; font-size: 52px; font-weight: 700; letter-spacing: -0.04em; }
+    .hero .b { display: inline-block; margin-top: 18px; padding: 12px 22px; border-radius: 12px; font-weight: 700; font-size: 17px; }
+    .srow { margin-top: 24px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
+    .si { border-radius: 18px; padding: 12px; }
+    .si .thumb { height: 170px; }
+    .si .n { margin-top: 10px; font-size: 16px; font-weight: 650; }
+    .si .p { font-size: 17px; font-weight: 750; }
+    .t1 { background: #fff; color: #0b0d14; }
+    .t1 .cart, .t1 .hero .b { background: #2546f0; color: #fff; }
+    .t1 .hero { background: linear-gradient(120deg, #e9edff, #c9d4ff); }
+    .t1 .hero .k, .t1 .si .p { color: #2546f0; }
+    .t1 .si { background: #f6f7fb; }
+    .t2 { background: #fffaf3; color: #1c1917; }
+    .t2 .cart, .t2 .hero .b { background: #c2410c; color: #fff; }
+    .t2 .hero { background: linear-gradient(120deg, #ffedd5, #fecaca); }
+    .t2 .hero .k, .t2 .si .p { color: #c2410c; }
+    .t2 .si { background: #fff1e2; }
+    .t3 { background: #0b0b10; color: #f5f5f4; }
+    .t3 .cart, .t3 .hero .b { background: #a3e635; color: #0b0b10; }
+    .t3 .hero { background: linear-gradient(120deg, #1f2937, #111827); }
+    .t3 .hero .k, .t3 .si .p { color: #a3e635; }
+    .t3 .si { background: #17171f; }
+    .phone { position: absolute; width: 330px; height: 680px; border-radius: 54px; background: #0b0d14; padding: 13px; box-shadow: 0 50px 100px rgba(11, 13, 20, 0.35); }
+    .phone .scr { position: relative; width: 100%; height: 100%; border-radius: 42px; overflow: hidden; }
+    .phone .shop { inset: 0; padding: 50px 18px 18px; }
+    .phone .shead { font-size: 15px; }
+    .phone .cart { padding: 6px 12px; font-size: 12px; }
+    .phone .hero { height: 170px; padding: 22px; margin-top: 16px; border-radius: 18px; }
+    .phone .hero .t { font-size: 28px; }
+    .phone .hero .b { padding: 8px 14px; font-size: 13px; margin-top: 12px; }
+    .phone .srow { grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+    .phone .si { padding: 8px; border-radius: 14px; }
+    .phone .si .thumb { height: 100px; }
+    .phone .si .n { font-size: 12px; margin-top: 6px; }
+    .phone .si .p { font-size: 13px; }
+
+    /* checkout */
+    .sheet { position: absolute; width: 640px; padding: 40px; border-radius: 30px; background: #fff; box-shadow: 0 50px 120px rgba(20, 30, 80, 0.18); }
+    .sheet .top { display: flex; gap: 20px; align-items: center; }
+    .sheet .thumb { width: 110px; height: 110px; flex: none; }
+    .sheet .n { font-size: 24px; font-weight: 650; }
+    .sheet .p { font-size: 40px; font-weight: 750; letter-spacing: -0.03em; }
+    .apay { margin-top: 30px; height: 76px; border-radius: 18px; background: #000; color: #fff; display: grid; place-items: center; font-size: 28px; font-weight: 600; position: relative; overflow: hidden; }
+    .gpay { margin-top: 14px; height: 76px; border-radius: 18px; border: 2px solid var(--line); display: grid; place-items: center; font-size: 26px; font-weight: 600; }
+    .cardrow { margin-top: 14px; height: 68px; border-radius: 16px; border: 2px solid var(--line); display: flex; align-items: center; padding: 0 22px; font-size: 22px; color: var(--muted); gap: 14px; }
+    .okover { position: absolute; inset: 0; background: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 30px; }
+    .bigcheck { width: 150px; height: 150px; border-radius: 50%; background: #10b981; color: #fff; display: grid; place-items: center; font-size: 80px; font-weight: 800; }
+    .spin { width: 34px; height: 34px; border-radius: 50%; border: 4px solid rgba(255, 255, 255, 0.3); border-top-color: #fff; }
+
+    /* features burst */
+    .vcard { position: absolute; left: 50%; top: 640px; width: 640px; height: 200px; margin-left: -320px; border-radius: 28px; background: #fff; box-shadow: 0 30px 80px rgba(20, 30, 80, 0.12); padding: 30px 36px; }
+    .vk { font-size: 18px; font-weight: 650; color: var(--muted); }
+    .vbig { margin-top: 6px; font-size: 56px; font-weight: 750; letter-spacing: -0.04em; }
+    .vrow { display: flex; align-items: center; justify-content: space-between; }
+    .code { padding: 14px 22px; border: 3px dashed #b9c4ff; border-radius: 16px; font-size: 34px; font-weight: 750; letter-spacing: 0.06em; color: var(--blue); }
+    .meter { height: 14px; border-radius: 9px; background: #eef0f6; overflow: hidden; margin-top: 12px; }
+    .meter i { display: block; height: 100%; border-radius: 9px; background: var(--blue); }
+    .stars { font-size: 50px; color: #f59e0b; letter-spacing: 0.05em; }
+    .counter { position: absolute; left: 50%; top: 250px; transform: translateX(-50%); font-size: 22px; font-weight: 700; letter-spacing: 0.2em; color: var(--blue); }
+    .fchip { position: absolute; padding: 18px 28px; border-radius: 999px; background: #fff; font-size: 28px; font-weight: 650; box-shadow: 0 20px 50px rgba(20, 30, 80, 0.12); white-space: nowrap; display: flex; align-items: center; gap: 12px; }
+    .fchip i { width: 14px; height: 14px; border-radius: 50%; background: var(--blue); }
+
+    /* live */
+    .note { position: absolute; display: flex; align-items: center; gap: 16px; padding: 16px 22px 16px 16px; border-radius: 20px; background: #fff; box-shadow: 0 24px 60px rgba(20, 30, 80, 0.16); font-size: 20px; font-weight: 650; white-space: nowrap; }
+    .note .ic { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; color: #fff; font-size: 15px; font-weight: 800; }
+    .note small { display: block; font-size: 15px; color: var(--muted); font-weight: 600; }
+    .note .amt { margin-left: 18px; color: #059669; font-size: 22px; font-weight: 750; }
+    .kpi { position: absolute; padding: 26px 32px; border-radius: 26px; background: #fff; box-shadow: 0 30px 80px rgba(20, 30, 80, 0.12); }
+    .kpi .l { font-size: 18px; font-weight: 650; color: var(--muted); }
+    .kpi .v { font-size: 64px; font-weight: 750; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
+    .kpi .d { font-size: 18px; font-weight: 700; color: #059669; }
+
+    /* payout */
+    .pcard { position: absolute; width: 680px; padding: 44px; border-radius: 30px; background: #fff; box-shadow: 0 50px 120px rgba(20, 30, 80, 0.16); }
+    .bal { font-size: 84px; font-weight: 750; letter-spacing: -0.05em; font-variant-numeric: tabular-nums; }
+    .ccy { display: flex; gap: 10px; margin-top: 12px; }
+    .ccy span { padding: 8px 16px; border-radius: 999px; background: #eef0f6; font-weight: 700; font-size: 17px; color: #39404f; }
+    .ccy span.on { background: var(--blue); color: #fff; }
+    .pbtn { margin-top: 30px; height: 76px; border-radius: 18px; background: var(--blue); color: #fff; display: grid; place-items: center; font-size: 26px; font-weight: 700; position: relative; }
+    .stp { display: flex; align-items: center; gap: 16px; margin-top: 18px; font-size: 24px; font-weight: 650; }
+    .stp .c { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 18px; font-weight: 800; }
+    .stp small { margin-left: auto; font-size: 18px; color: var(--muted); font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <div id="bg"></div>
+    <div class="blob" id="blobA"></div>
+    <div class="blob" id="blobB"></div>
+    <svg id="arcs" width="1920" height="1080" viewBox="0 0 1920 1080" fill="none">
+      <circle id="arc1" cx="960" cy="540" r="620" stroke="#c7d0ff" stroke-width="2" />
+      <circle id="arc2" cx="960" cy="540" r="860" stroke="#d6dcff" stroke-width="2" />
+    </svg>
+
+    <!-- 1 chaos -->
+    <div class="layer" id="s-chaos"></div>
+
+    <!-- 2 question -->
+    <div class="layer" id="s-question">
+      <div class="center h-xl" id="q">Still no sales?</div>
+    </div>
+
+    <!-- 3 meet -->
+    <div class="layer" id="s-meet">
+      <div class="center h-xl" id="meetLine"></div>
+      <div class="abs" id="logoRow" style="left:0;right:0;top:600px;display:flex;justify-content:center;align-items:center;gap:30px">
+        <div class="mark" id="meetMark" style="width:120px;height:120px;border-radius:34px;font-size:68px">T</div>
+        <div id="meetWord" style="font-size:96px;font-weight:700;letter-spacing:-0.045em">Tescommerce</div>
+      </div>
+    </div>
+
+    <!-- 4 catalog -->
+    <div class="layer" id="s-catalog" style="perspective:2400px">
+      <div class="abs h-l" id="catCap" style="left:0;right:0;top:80px;text-align:center"></div>
+      <div class="win" id="catWin" style="left:260px;top:250px;width:1400px;height:900px;transform-origin:50% 30%">
+        <div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><div class="url">admin.tescommerce.com/products</div></div>
+        <div class="admin">
+          <div class="side">
+            <div class="brandrow"><span class="mark" style="width:34px;height:34px;border-radius:10px;font-size:19px;box-shadow:none">L</span>Lumen Studio</div>
+            <div class="nav">Dashboard</div><div class="nav">Orders</div><div class="nav act">Products</div><div class="nav">Customers</div><div class="nav">Discounts</div><div class="nav">Analytics</div>
+          </div>
+          <div class="main">
+            <h4>Products</h4>
+            <div class="pgrid" id="pgrid"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5 storefront -->
+    <div class="layer" id="s-store">
+      <div class="abs h-l" id="stCap" style="left:120px;top:84px"></div>
+      <div class="win" id="stWin" style="left:120px;top:300px;width:1200px;height:740px">
+        <div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i>
+          <div class="url"><span id="stUrl">lumen-studio.tescommerce.com</span>
+            <span class="pill" id="domOk" style="margin-left:auto;padding:4px 12px;background:#d1fae5;color:#047857;font-size:14px">✓ Custom domain connected</span></div>
+        </div>
+      </div>
+      <svg class="abs" id="ribbon" style="left:1180px;top:80px" width="760" height="1000" viewBox="0 0 760 1000" fill="none">
+        <defs>
+          <linearGradient id="rg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#1f3fe8" /><stop offset="0.55" stop-color="#5b78ff" /><stop offset="1" stop-color="#1a2fb8" />
+          </linearGradient>
+        </defs>
+        <path id="rib1" d="M 40 160 C 260 40, 520 120, 600 300 S 520 640, 300 700 S 120 900, 420 980" stroke="url(#rg)" stroke-width="86" stroke-linecap="round" />
+        <path id="rib2" d="M 720 80 C 600 260, 760 420, 640 560 S 380 760, 700 940" stroke="#c9d4ff" stroke-width="30" stroke-linecap="round" />
+      </svg>
+      <div class="phone" id="stPhone" style="left:1470px;top:250px"><div class="scr" id="phoneScr"></div></div>
+    </div>
+
+    <!-- 6 checkout -->
+    <div class="layer" id="s-checkout" style="perspective:2200px">
+      <div class="abs h-l" id="coCap" style="left:140px;top:380px"></div>
+      <div class="sheet" id="sheet" style="left:1060px;top:170px">
+        <div class="top"><div class="thumb th2"></div><div><div class="n">Film Photography Course</div><div class="p">$49.00</div></div></div>
+        <div class="apay" id="apay"><span id="apayTxt">Apple Pay</span></div>
+        <div class="gpay">Google Pay</div>
+        <div class="cardrow"><span style="font-weight:800;color:#1a1f71;font-style:italic">VISA</span>•••• 4242</div>
+        <div class="okover" id="okover">
+          <div class="bigcheck" id="bigcheck">✓</div>
+          <div style="margin-top:26px;font-size:40px;font-weight:750;letter-spacing:-0.03em">Paid $49.00</div>
+          <div style="margin-top:6px;font-size:20px;color:var(--muted)">Download link sent to buyer</div>
+        </div>
+      </div>
+      <div id="badges"></div>
+    </div>
+
+    <!-- 7 features -->
+    <div class="layer" id="s-features">
+      <div class="counter" id="fCount">01 / 06</div>
+      <div id="fWords"></div>
+      <div id="fCards"></div>
+      <div class="center h-xl" id="fAll" style="top:300px"><span class="gtext">All built in.</span></div>
+      <div id="fChips"></div>
+    </div>
+
+    <!-- 8 live -->
+    <div class="layer" id="s-live">
+      <div class="abs h-l" id="lvCap" style="left:120px;top:200px"></div>
+      <div class="kpi" id="lvKpi" style="left:120px;top:560px;width:520px">
+        <div class="l">Revenue · last 30 days</div>
+        <div class="v" id="lvRev">$0</div>
+        <div class="d">▲ 38% vs last month</div>
+      </div>
+      <svg class="abs" id="globe" style="left:880px;top:90px" width="900" height="900" viewBox="0 0 900 900"></svg>
+      <div id="lvNotes"></div>
+    </div>
+
+    <!-- 9 payout -->
+    <div class="layer" id="s-payout" style="perspective:2200px">
+      <div class="abs h-l" id="poCap" style="left:140px;top:360px"></div>
+      <div class="pcard" id="pcard" style="left:1060px;top:190px">
+        <div style="font-size:20px;font-weight:650;color:var(--muted)">Available balance</div>
+        <div class="bal" id="bal">$4,215.00</div>
+        <div class="ccy"><span class="on">USD</span><span>EUR</span></div>
+        <div class="pbtn" id="pbtn"><span id="pbtnTxt">Request payout</span></div>
+        <div id="steps"></div>
+      </div>
+    </div>
+
+    <!-- 10 end -->
+    <div class="layer" id="s-end">
+      <div class="abs" style="left:0;right:0;top:290px;display:flex;flex-direction:column;align-items:center">
+        <div class="mark" id="endMark" style="width:150px;height:150px;border-radius:44px;font-size:86px">T</div>
+        <div id="endWord" style="margin-top:28px;font-size:124px;font-weight:700;letter-spacing:-0.05em;white-space:nowrap"></div>
+        <div id="endTag" style="margin-top:10px;font-size:44px;font-weight:600;letter-spacing:-0.02em"><span class="gtext">Open a store and get paid.</span></div>
+        <div id="endCta" class="pill" style="margin-top:44px;padding:20px 36px;background:var(--blue);color:#fff;font-size:28px;box-shadow:0 20px 50px rgba(37,70,240,0.35)">Start free at tescommerce.com</div>
+      </div>
+    </div>
+
+    <div class="hand" id="hand"><svg width="40" height="40" viewBox="0 0 24 24"><path d="M4 2l15 11.5-6.6 1 3.8 7.4-2.9 1.4-3.8-7.5L4 20z" fill="#0b0d14" stroke="#fff" stroke-width="1.4" stroke-linejoin="round" /></svg></div>
+    <div class="ring" id="ring"></div>
+  </div>
+
+  <script>
+    // ---------- timing ----------
+    const SCRIPT = [
+      { id: "chaos", min: 3.0 }, { id: "question", min: 1.6 }, { id: "meet", min: 2.8 }, { id: "catalog", min: 3.2 },
+      { id: "storefront", min: 3.6 }, { id: "checkout", min: 3.2 }, { id: "features", min: 7.5 }, { id: "live", min: 3.4 },
+      { id: "payout", min: 3.4 }, { id: "end", min: 4.2 }
+    ];
+    const VO_LEAD = 0.12;
+    const VO_TAIL = 0.42;
+    const plan = { scenes: [], duration: 0 };
+    {
+      let t = 0;
+      for (const s of SCRIPT) {
+        const vo = window.__VO?.segments.find((v) => v.id === s.id);
+        const dur = Math.max(s.min, vo ? vo.dur + VO_LEAD + VO_TAIL : 0);
+        plan.scenes.push({ id: s.id, start: t, dur, vo: vo?.file ?? null, voOffset: VO_LEAD });
+        t += dur;
+      }
+      plan.scenes[plan.scenes.length - 1].dur += 0.8;
+      plan.duration = t + 0.8;
+    }
+    window.__plan = plan;
+
+    // ---------- helpers ----------
+    const $ = (id) => document.getElementById(id);
+    const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+    const seg = (t, a, b) => clamp((t - a) / (b - a));
+    const lerp = (a, b, p) => a + (b - a) * p;
+    const E = {
+      out: (x) => 1 - Math.pow(1 - x, 3),
+      expo: (x) => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * x)),
+      inOut: (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2),
+      in: (x) => x * x * x,
+      back: (x) => { const c1 = 1.6, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); }
+    };
+    const set = (el, o) => { for (const k in o) el.style[k] = o[k]; };
+    const fx = (el, { x = 0, y = 0, s = 1, r = 0, o = 1, b = 0, extra = "" }) =>
+      set(el, { transform: `${extra} translate(${x}px, ${y}px) scale(${s}) rotate(${r}deg)`, opacity: o, filter: b > 0.05 ? `blur(${b}px)` : "none" });
+    // eased "appear" from below with blur
+    const rise = (el, t, at, dist = 50, dur = 0.5, base = "") => {
+      const p = E.expo(seg(t, at, at + dur));
+      fx(el, { y: (1 - p) * dist, o: p, b: (1 - p) * 12, extra: base });
+      return p;
+    };
+    const usd = (v) => "$" + Math.round(v).toLocaleString("en-US");
+    const tap = (t, at, x, y) => {
+      const hand = $("hand"), ring = $("ring");
+      const pin = seg(t, at - 0.55, at - 0.05), pout = seg(t, at + 0.35, at + 0.6);
+      set(hand, { left: lerp(x + 260, x, E.inOut(pin)) + "px", top: lerp(y + 220, y, E.inOut(pin)) + "px", opacity: pin > 0 && pout < 1 ? (1 - pout) * clamp(pin * 3) : 0, transform: `scale(${t > at && t < at + 0.15 ? 0.88 : 1})` });
+      const pr = seg(t, at, at + 0.5);
+      set(ring, { left: x + 6 + "px", top: y + 6 + "px", opacity: pr > 0 && pr < 1 ? 1 - pr : 0, transform: `scale(${0.3 + pr * 1.6})` });
+    };
+
+    // ---------- build dynamic DOM ----------
+    const chaosData = [
+      ["Payment declined", 330, 190, -6, "b", ""],
+      ["Need a developer?", 1500, 170, 4, "w", ""],
+      ["Plugin #14 broke checkout", 980, 330, -2, "b", ""],
+      ["Tax settings??", 300, 470, 5, "w", ""],
+      ["Card not supported in your country", 1360, 520, -4, "b", ""],
+      ["Shipping rates?", 640, 650, 3, "w", ""],
+      ["Theme won't load", 260, 820, -3, "b", "s"],
+      ["Another monthly app fee", 1060, 790, 2, "w", ""],
+      ["Why is my store so slow?", 1580, 900, -5, "b", "s"],
+      ["Where did that order go?", 760, 960, 4, "w", "s"],
+      ["Refund?", 1700, 360, 8, "w", "s"],
+      ["Can you check this?", 560, 90, -4, "w", "s"]
+    ];
+    $("s-chaos").innerHTML = chaosData.map(([t, , , , c, s], i) => `<div class="bub ${c} ${s}" id="bub${i}">${t}</div>`).join("") +
+      [0, 1, 2, 3].map((i) => `<div class="abs" id="cdot${i}" style="width:22px;height:22px;border-radius:50%;background:#3b82f6"></div>`).join("");
+
+    $("meetLine").innerHTML = ["Meet", "your", "new", "store."].map((w, i) => `<span class="word" id="mw${i}">${w}</span>`).join("");
+    $("catCap").innerHTML = '<span class="word" id="cc0">One</span><span class="word" id="cc1">catalog.</span><span class="word gtext" id="cc2">Digital</span><span class="word gtext" id="cc3">&amp;</span><span class="word gtext" id="cc4">physical.</span>';
+    $("stCap").innerHTML = '<div id="sc0">Your brand.</div><div id="sc1"><span class="gtext">Every screen.</span></div>';
+    $("coCap").innerHTML = '<div id="co0">Checkout</div><div id="co1"><span class="gtext">in one tap.</span></div>';
+    $("lvCap").innerHTML = '<div id="lv0">Orders, live.</div><div id="lv1"><span class="gtext">Worldwide.</span></div>';
+    $("poCap").innerHTML = '<div id="po0">Get paid.</div><div id="po1"><span class="gtext">Anywhere.</span></div>';
+    $("endWord").innerHTML = [..."Tescommerce"].map((c, i) => `<span id="ew${i}" style="display:inline-block">${c}</span>`).join("");
+
+    const products = [
+      ["th1", "Golden Hour Presets", "$19", "d", "Digital"], ["th2", "Film Photography Course", "$49", "d", "Digital"],
+      ["th3", "Lumen Tee", "$32", "ph", "Physical"], ["th4", "Photo Zine Vol. 2", "$24", "ph", "Physical"],
+      ["th5", "Lightroom Masterclass", "$79", "d", "Digital"], ["th6", "Sunset Print A3", "$45", "ph", "Physical"]
+    ];
+    $("pgrid").innerHTML = products.map(([th, n, p, tc, tl], i) =>
+      `<div class="pc" id="pc${i}"><div class="thumb ${th}"></div><div class="n">${n}</div><div class="row"><span class="p">${p}</span><span class="tag ${tc}">${tl}</span></div></div>`).join("");
+
+    const shopHTML = (theme, mobile) => `<div class="shop ${theme}">
+      <div class="shead">LUMEN${mobile ? "" : "<nav><span>Shop</span><span>Courses</span><span>Prints</span><span>About</span></nav>"}<span class="cart">Cart · 0</span></div>
+      <div class="hero"><div class="k">NEW COURSE</div><div class="t">Shoot film like a pro</div><span class="b">Enroll now · $49</span></div>
+      <div class="srow">${products.slice(0, 4).map(([th, n, p]) => `<div class="si"><div class="thumb ${th}"></div><div class="n">${n}</div><div class="p">${p}</div></div>`).join("")}</div></div>`;
+    $("stWin").insertAdjacentHTML("beforeend", ["t1", "t2", "t3"].map((t, i) => `<div id="shop${i}" class="abs" style="inset:0">${shopHTML(t, false)}</div>`).join(""));
+    $("phoneScr").innerHTML = ["t1", "t2", "t3"].map((t, i) => `<div id="mshop${i}" class="abs" style="inset:0">${shopHTML(t, true)}</div>`).join("");
+
+    const badges = [["Visa", 900, 160], ["Mastercard", 1780, 300], ["Apple Pay", 880, 830], ["Google Pay", 1760, 900], ["Stripe", 1800, 620]];
+    $("badges").innerHTML = badges.map(([t], i) => `<div class="pill abs" id="bd${i}" style="padding:14px 24px;background:#fff;font-size:22px;box-shadow:0 18px 40px rgba(20,30,80,.12)">${t}</div>`).join("");
+
+    const features = [
+      ["Discount codes", `<div class="vrow"><div><div class="vk">Code applied at checkout</div><div class="vbig blue">−20%</div></div><div class="code">SUMMER20</div></div>`],
+      ["Abandoned carts", `<div class="vrow"><div><div class="vk">Reminder email · 1h after</div><div class="vbig" style="color:#059669">+$84.00</div></div><div class="pill" style="padding:12px 20px;background:#d1fae5;color:#047857;font-size:22px">Cart recovered</div></div>`],
+      ["Email campaigns", `<div class="vk">“Spring drop” · sent to 2,340</div><div style="display:flex;gap:30px;margin-top:14px"><div style="flex:1"><div class="vrow" style="font-size:22px;font-weight:650"><span>Open rate</span><span class="blue">48%</span></div><div class="meter"><i style="width:48%"></i></div></div><div style="flex:1"><div class="vrow" style="font-size:22px;font-weight:650"><span>Clicks</span><span class="blue">12%</span></div><div class="meter"><i style="width:12%"></i></div></div></div>`],
+      ["Subscriptions", `<div class="vrow"><div><div class="vk">Presets Club · 214 members</div><div class="vbig">$9<span style="font-size:30px;color:var(--muted)"> / month</span></div></div><div class="pill" style="padding:12px 20px;background:#e9edff;color:var(--blue);font-size:22px">↻ Auto-renew</div></div>`],
+      ["Reviews", `<div class="vrow"><div><div class="stars">★★★★★</div><div class="vk" style="margin-top:6px">“Best presets I've bought.” — Maya</div></div><div class="vbig">4.9</div></div>`],
+      ["Inventory", `<div class="vrow"><div><div class="vk">Lumen Tee · size M</div><div class="vbig" style="color:#ea580c">3 left</div></div><div class="pill" style="padding:12px 20px;background:#ffedd5;color:#c2410c;font-size:22px">Low stock alert</div></div>`]
+    ];
+    $("fWords").innerHTML = features.map(([w], i) => `<div class="center h-xl" id="fw${i}" style="top:440px">${w}</div>`).join("");
+    $("fCards").innerHTML = features.map(([, html], i) => `<div class="vcard" id="fc${i}">${html}</div>`).join("");
+    const allChips = [
+      ["Custom domains", 300, 560], ["Digital delivery", 760, 540], ["Customer segments", 1250, 560], ["Live View", 1650, 540],
+      ["Returns", 380, 700], ["Shipping zones", 800, 700], ["Analytics", 1180, 700], ["Multi-currency", 1580, 700],
+      ["Discounts", 480, 840], ["Email marketing", 900, 850], ["Subscriptions", 1330, 840]
+    ];
+    $("fChips").innerHTML = allChips.map(([t], i) => `<div class="fchip" id="ch${i}"><i></i>${t}</div>`).join("");
+
+    const cities = [
+      ["DE", "Berlin, Germany", "+$49", "#2546f0", 250, 300], ["BR", "São Paulo, Brazil", "+$19", "#059669", 330, 640],
+      ["JP", "Tokyo, Japan", "+$32", "#e11d48", 640, 280], ["US", "New York, USA", "+$79", "#7c3aed", 110, 430],
+      ["NG", "Lagos, Nigeria", "+$24", "#ea580c", 470, 520]
+    ];
+    $("lvNotes").innerHTML = cities.map(([cc, city, amt, col], i) =>
+      `<div class="note" id="nt${i}"><span class="ic" style="background:${col}">${cc}</span><div>New order<small>${city}</small></div><span class="amt">${amt}</span></div>` +
+      `<div class="abs" id="pg${i}" style="width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;background:${col};box-shadow:0 0 0 0 ${col}"></div>`).join("");
+
+    const stepsData = [["Payout requested", ""], ["Approved", ""], ["Sent via Wise", "3–7 business days"]];
+    $("steps").innerHTML = stepsData.map(([t, s], i) => `<div class="stp" id="sp${i}"><span class="c" id="spc${i}">✓</span>${t}${s ? `<small>${s}</small>` : ""}</div>`).join("");
+
+    // ---------- scenes ----------
+    const scenes = {
+      chaos(t, d) {
+        chaosData.forEach(([, x, y, r], i) => {
+          const el = $("bub" + i);
+          const at = 0.05 + i * 0.09;
+          const p = E.back(seg(t, at, at + 0.55));
+          const dx = x - 960, dy = y - 540, len = Math.hypot(dx, dy) || 1;
+          const sx = x + (dx / len) * 900, sy = y + (dy / len) * 700;
+          const drift = Math.sin(t * 1.3 + i * 1.7) * 10;
+          const q = E.in(seg(t, d - 0.45, d + 0.1));
+          const cx = lerp(lerp(sx, x, p), 960, q * 0.85), cy = lerp(lerp(sy, y, p), 540, q * 0.85);
+          el.style.left = cx + "px";
+          el.style.top = cy + drift + "px";
+          fx(el, { extra: "translate(-50%, -50%)", r: r * (1 - p * 0.3) + Math.sin(t + i) * 2, s: (0.6 + 0.4 * clamp(p)) * (1 - q * 0.6), o: clamp(p * 2) * (1 - q), b: q * 16 });
+        });
+        [0, 1, 2, 3].forEach((i) => {
+          const el = $("cdot" + i);
+          set(el, { left: 960 + Math.cos(t * 1.5 + i * 1.6) * (300 + i * 140) + "px", top: 540 + Math.sin(t * 1.1 + i * 2.1) * (180 + i * 50) + "px", opacity: clamp(t * 2) * 0.9 });
+        });
+      },
+      question(t, d) {
+        const p = E.expo(seg(t, 0, 0.9));
+        set($("q"), { letterSpacing: lerp(0.45, -0.045, p) + "em", opacity: p, transform: `translate(-50%, -50%) scale(${1 + t * 0.025})`, filter: p < 0.99 ? `blur(${(1 - p) * 10}px)` : "none" });
+      },
+      meet(t, d) {
+        const lift = E.inOut(seg(t, d * 0.42, d * 0.42 + 0.6));
+        set($("meetLine"), { transform: `translate(-50%, -50%) translateY(${-150 * lift}px) scale(${1 - lift * 0.25})` });
+        for (let i = 0; i < 4; i += 1) {
+          const el = $("mw" + i);
+          const at = i * 0.16;
+          const p = E.expo(seg(t, at, at + 0.45));
+          const sweep = t / 0.16 - i;
+          const hl = i === 3 ? seg(t, 0.55, 0.75) : clamp(1 - Math.abs(sweep - 0.8) / 1.2);
+          el.style.color = `rgb(${lerp(11, 37, hl)}, ${lerp(13, 70, hl)}, ${lerp(20, 240, hl)})`;
+          fx(el, { y: (1 - p) * 60, o: p, b: (1 - p) * 12 });
+        }
+        const pm = E.back(seg(t, d * 0.45, d * 0.45 + 0.5));
+        fx($("meetMark"), { s: 0.4 + pm * 0.6, r: (1 - pm) * -20, o: clamp(pm * 2) });
+        const pw = E.expo(seg(t, d * 0.5, d * 0.5 + 0.6));
+        fx($("meetWord"), { x: (1 - pw) * -40, o: pw, b: (1 - pw) * 10 });
+      },
+      catalog(t, d) {
+        const cam = E.out(seg(t, 0, d + 0.4));
+        set($("catWin"), { transform: `translateY(${lerp(140, 30, cam)}px) rotateX(${lerp(42, 16, cam)}deg) rotateZ(${lerp(-12, -3, cam)}deg) scale(${lerp(0.82, 0.92, cam)})` });
+        for (let i = 0; i < 5; i += 1) rise($("cc" + i), t, 0.08 + i * 0.11, 50, 0.5);
+        products.forEach((_, i) => {
+          const at = 0.35 + i * 0.12;
+          const p = E.back(seg(t, at, at + 0.5));
+          fx($("pc" + i), { y: (1 - p) * -90, s: 0.85 + 0.15 * p, o: clamp(p * 1.5) });
+        });
+      },
+      storefront(t, d) {
+        rise($("sc0"), t, 0.05, 50, 0.5);
+        rise($("sc1"), t, 0.2, 50, 0.5);
+        const cam = E.out(seg(t, 0, d));
+        set($("stWin"), { transform: `scale(${lerp(1.06, 1, cam)}) translateX(${lerp(30, 0, cam)}px)`, transformOrigin: "40% 60%" });
+        const a = seg(t, d * 0.3, d * 0.3 + 0.35), b = seg(t, d * 0.58, d * 0.58 + 0.35);
+        [[$("shop0"), $("mshop0"), 1], [$("shop1"), $("mshop1"), a], [$("shop2"), $("mshop2"), b]].forEach(([s, m, o]) => { s.style.opacity = o; m.style.opacity = o; });
+        const dm = seg(t, d * 0.45, d * 0.45 + 0.3);
+        $("stUrl").textContent = dm > 0.5 ? "lumenstudio.com" : "lumen-studio.tescommerce.com";
+        fx($("domOk"), { s: 0.6 + 0.4 * E.back(dm), o: dm });
+        const pp = E.expo(seg(t, 0.25, 1.05));
+        fx($("stPhone"), { y: (1 - pp) * 260 + Math.sin(t * 1.4) * 8, r: lerp(10, -4, pp), o: clamp(pp * 2) });
+        const rp = E.inOut(seg(t, 0.1, 1.2));
+        for (const id of ["rib1", "rib2"]) {
+          const el = $(id), L = el.getTotalLength();
+          set(el, { strokeDasharray: L, strokeDashoffset: L * (1 - rp) });
+        }
+        set($("ribbon"), { transform: `translateY(${Math.sin(t * 0.9) * 10}px) rotate(${Math.sin(t * 0.6) * 2}deg)` });
+      },
+      checkout(t, d) {
+        rise($("co0"), t, 0.05, 50, 0.5);
+        rise($("co1"), t, 0.2, 50, 0.5);
+        const p = E.expo(seg(t, 0, 0.8));
+        set($("sheet"), { transform: `rotateY(${lerp(-28, -10, p) + Math.sin(t) * 1.5}deg) rotateX(${lerp(8, 4, p)}deg) translateY(${(1 - p) * 80}px)`, opacity: p });
+        const tapAt = d * 0.38;
+        const r = $("apay").getBoundingClientRect();
+        tap(t, tapAt, r.left + r.width * 0.55, r.top + r.height * 0.55);
+        const loading = t > tapAt + 0.05 && t < tapAt + 0.6;
+        $("apayTxt").innerHTML = loading ? `<span class="spin" style="display:inline-block;transform:rotate(${t * 720}deg)"></span>` : "Apple Pay";
+        const ok = seg(t, tapAt + 0.6, tapAt + 0.9);
+        $("okover").style.opacity = ok;
+        fx($("bigcheck"), { s: E.back(seg(t, tapAt + 0.65, tapAt + 1.1)) });
+        badges.forEach(([, x, y], i) => {
+          const at = 0.2 + i * 0.1;
+          const q = E.back(seg(t, at, at + 0.5));
+          const el = $("bd" + i);
+          set(el, { left: x + Math.sin(t * 1.1 + i) * 14 + "px", top: y + Math.cos(t * 0.9 + i * 2) * 12 + "px" });
+          fx(el, { s: 0.5 + 0.5 * q, o: clamp(q * 1.5) });
+        });
+      },
+      features(t, d) {
+        const n = features.length;
+        const span = d - 1.7;
+        const each = span / n;
+        const cur = Math.min(n - 1, Math.floor(t / each));
+        $("fCount").textContent = `${String(cur + 1).padStart(2, "0")} / ${String(n).padStart(2, "0")}`;
+        $("fCount").style.opacity = 1 - seg(t, span - 0.1, span + 0.2);
+        features.forEach((_, i) => {
+          const a = i * each, b = a + each;
+          const pin = E.expo(seg(t, a, a + 0.28));
+          const pout = E.in(seg(t, b - 0.12, b + 0.12));
+          const vis = t >= a - 0.01 && t < b + 0.12;
+          const w = $("fw" + i), c = $("fc" + i);
+          if (!vis) { w.style.opacity = 0; c.style.opacity = 0; return; }
+          fx(w, { extra: "translate(-50%, -50%)", y: (1 - pin) * 90 - pout * 90, o: pin * (1 - pout), b: (1 - pin) * 14 + pout * 14, s: 1 + t * 0 });
+          fx(c, { y: (1 - pin) * 120 - pout * 60, o: pin * (1 - pout), b: (1 - pin) * 10 + pout * 10, s: 0.92 + 0.08 * pin });
+          c.querySelectorAll(".meter i").forEach((m, k) => (m.style.transform = `scaleX(${E.out(seg(t, a + 0.15 + k * 0.08, a + 0.6))})`, m.style.transformOrigin = "left"));
+        });
+        const pa = E.expo(seg(t, span, span + 0.5));
+        set($("fAll"), { opacity: pa, transform: `translate(-50%, -50%) translateY(${(1 - pa) * 70}px)`, filter: pa < 0.99 ? `blur(${(1 - pa) * 12}px)` : "none" });
+        allChips.forEach(([, x, y], i) => {
+          const at = span + 0.2 + i * 0.05;
+          const q = E.back(seg(t, at, at + 0.4));
+          const el = $("ch" + i);
+          set(el, { left: x + "px", top: y + Math.sin(t * 2 + i) * 6 + "px" });
+          fx(el, { extra: "translate(-50%, -50%)", s: 0.5 + 0.5 * q, o: clamp(q * 1.6) });
+        });
+      },
+      live(t, d) {
+        rise($("lv0"), t, 0.05, 50, 0.5);
+        rise($("lv1"), t, 0.2, 50, 0.5);
+        rise($("lvKpi"), t, 0.35, 60, 0.6);
+        $("lvRev").textContent = usd(12480 * E.out(seg(t, 0.4, d - 0.4)));
+        // dotted globe
+        const g = E.expo(seg(t, 0, 0.9));
+        const R = 400, cx = 450, cy = 450, rot = t * 0.35;
+        let dots = "";
+        for (let lat = -80; lat <= 80; lat += 10) {
+          const phi = (lat * Math.PI) / 180;
+          const step = Math.max(8, 10 / Math.cos(phi));
+          for (let lon = -180; lon < 180; lon += step) {
+            const lam = (lon * Math.PI) / 180 + rot;
+            const z = Math.cos(phi) * Math.cos(lam);
+            if (z < -0.05) continue;
+            const x = cx + R * Math.cos(phi) * Math.sin(lam), y = cy - R * Math.sin(phi);
+            dots += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(2.2 + z * 2.6).toFixed(2)}" fill="rgba(37,70,240,${(0.15 + z * 0.55).toFixed(2)})"/>`;
+          }
+        }
+        const globe = $("globe");
+        globe.innerHTML = `<circle cx="${cx}" cy="${cy}" r="${R + 6}" fill="rgba(255,255,255,0.55)" stroke="#c7d0ff" stroke-width="2"/>${dots}`;
+        set(globe, { transform: `scale(${0.85 + 0.15 * g})`, opacity: g });
+        cities.forEach(([, , , col, px, py], i) => {
+          const at = 0.5 + i * ((d - 1.2) / cities.length);
+          const q = E.back(seg(t, at, at + 0.45));
+          const gx = 880 + px * (0.85 + 0.15 * g) + 450 * (1 - (0.85 + 0.15 * g)), gy = 90 + py * (0.85 + 0.15 * g) + 450 * (1 - (0.85 + 0.15 * g));
+          const pg = $("pg" + i);
+          const pulse = (t - at) % 1.2;
+          set(pg, { left: gx + "px", top: gy + "px", opacity: clamp(q * 2), boxShadow: `0 0 0 ${clamp(pulse / 1.2) * 34}px ${col}${Math.round((1 - clamp(pulse / 1.2)) * 80).toString(16).padStart(2, "0")}` });
+          const note = $("nt" + i);
+          set(note, { left: gx + 26 + "px", top: gy - 40 + "px" });
+          fx(note, { s: 0.6 + 0.4 * q, o: clamp(q * 1.5), x: (1 - q) * -20 });
+        });
+      },
+      payout(t, d) {
+        rise($("po0"), t, 0.05, 50, 0.5);
+        rise($("po1"), t, 0.2, 50, 0.5);
+        const p = E.expo(seg(t, 0, 0.8));
+        set($("pcard"), { transform: `rotateY(${lerp(-26, -9, p) + Math.sin(t) * 1.5}deg) translateY(${(1 - p) * 80}px)`, opacity: p });
+        const tapAt = d * 0.3;
+        const r = $("pbtn").getBoundingClientRect();
+        tap(t, tapAt, r.left + r.width * 0.55, r.top + r.height * 0.55);
+        const done = t > tapAt + 0.1;
+        $("pbtnTxt").textContent = done ? "✓ Payout requested" : "Request payout";
+        $("pbtn").style.background = done ? "#059669" : "";
+        stepsData.forEach((_, i) => {
+          const at = tapAt + 0.15 + i * 0.4;
+          const q = seg(t, at, at + 0.25);
+          $("spc" + i).style.background = q > 0.5 ? "#10b981" : "#dfe3ec";
+          fx($("spc" + i), { s: q > 0 && q < 1 ? 1 + Math.sin(q * Math.PI) * 0.3 : 1 });
+          $("sp" + i).style.color = q > 0.5 ? "var(--ink)" : "#9aa2b4";
+        });
+      },
+      end(t, d) {
+        const pm = E.back(seg(t, 0.05, 0.6));
+        fx($("endMark"), { s: 0.3 + 0.7 * pm, r: (1 - pm) * -25, o: clamp(pm * 2) });
+        for (let i = 0; i < 11; i += 1) {
+          const at = 0.3 + i * 0.035;
+          const p = E.expo(seg(t, at, at + 0.45));
+          fx($("ew" + i), { y: (1 - p) * 70, o: p, b: (1 - p) * 10 });
+        }
+        rise($("endTag"), t, 0.85, 40, 0.6);
+        const pc = E.back(seg(t, 1.25, 1.75));
+        fx($("endCta"), { s: 0.7 + 0.3 * pc, o: clamp(pc * 2) });
+      }
+    };
+
+    // ---------- frame ----------
+    const ENTER = 0.45, EXIT = 0.32;
+    function renderAt(time) {
+      // background motion
+      set($("blobA"), { left: 1100 + Math.sin(time * 0.3) * 120 + "px", top: -420 + Math.cos(time * 0.25) * 80 + "px" });
+      set($("blobB"), { left: -380 + Math.cos(time * 0.27) * 100 + "px", top: 420 + Math.sin(time * 0.33) * 90 + "px" });
+      $("arc1").setAttribute("r", 620 + Math.sin(time * 0.5) * 30);
+      $("arc2").setAttribute("r", 860 + Math.cos(time * 0.4) * 40);
+      set($("hand"), { opacity: 0 });
+      set($("ring"), { opacity: 0 });
+
+      for (const s of plan.scenes) {
+        const layer = $("s-" + (s.id === "storefront" ? "store" : s.id));
+        const t = time - s.start;
+        const last = s === plan.scenes[plan.scenes.length - 1];
+        if (t < -0.001 || (!last && t > s.dur)) { layer.style.visibility = "hidden"; continue; }
+        layer.style.visibility = "visible";
+        const pin = s.start === 0 ? 1 : E.expo(seg(t, 0, ENTER));
+        const pout = last ? 0 : E.in(seg(t, s.dur - EXIT, s.dur));
+        fx(layer, { s: lerp(0.94, 1, pin) * (1 + pout * 0.14), o: pin * (1 - pout), b: (1 - pin) * 16 + pout * 18 });
+        scenes[s.id](t, s.dur);
+      }
+    }
+    window.renderAt = renderAt;
+    document.fonts.ready.then(() => {
+      renderAt(0);
+      window.__ready = true;
+    });
+  </script>
+</body>
+</html>

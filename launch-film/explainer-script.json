@@ -1,0 +1,14 @@
+{
+  "segments": [
+    { "id": "chaos", "min": 3.0, "text": "Ten plugins. Declined payments. A developer on speed dial." },
+    { "id": "question", "min": 1.6, "text": "And still no sales?" },
+    { "id": "meet", "min": 2.8, "text": "Meet Tescommerce. Your store, live in minutes." },
+    { "id": "catalog", "min": 3.2, "text": "Sell courses, downloads and merch from one catalog." },
+    { "id": "storefront", "min": 3.6, "text": "Design a storefront on your own domain, that looks great on every screen." },
+    { "id": "checkout", "min": 3.2, "text": "Take cards, Apple Pay and Google Pay from buyers anywhere." },
+    { "id": "features", "min": 7.5, "text": "Run discounts. Win back abandoned carts. Send email campaigns. Sell subscriptions, collect reviews, and track inventory. All built in." },
+    { "id": "live", "min": 3.4, "text": "Watch orders roll in, live, from around the world." },
+    { "id": "payout", "min": 3.4, "text": "Then get paid, even where Shopify Payments can't reach." },
+    { "id": "end", "min": 4.2, "text": "Tescommerce. Open a store, and get paid." }
+  ]
+}

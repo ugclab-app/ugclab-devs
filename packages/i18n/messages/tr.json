@@ -1,0 +1,193 @@
+{
+  "common": {
+    "brand": "Tescommerce",
+    "getStarted": "Ücretsiz başla",
+    "signIn": "Giriş yap",
+    "save": "Kaydet",
+    "cancel": "İptal",
+    "loading": "Yükleniyor…"
+  },
+  "platform": {
+    "heroTitle": "Mağaza aç ve ödemeni al",
+    "heroSubtitle": "Shopify Payments her ülkede yok. Tescommerce ile yine de mağaza açar, sipariş alır ve ödemeni çekersin.",
+    "featuresTitle": "Online satış için her şey",
+    "pricingTitle": "Basit ve şeffaf fiyatlar"
+  },
+  "admin": {
+    "dashboard": "Panel",
+    "products": "Ürünler",
+    "orders": "Siparişler",
+    "settings": "Ayarlar",
+    "newProduct": "Yeni ürün",
+    "noProducts": "Henüz ürün yok. Satışa başlamak için ilk ürününü ekle.",
+    "help": "Yardım",
+    "support": "Destek",
+    "language": "Panel dili",
+    "signOut": "Çıkış yap",
+    "storeLive": "Mağaza yayında",
+    "viewStore": "Mağazamı gör",
+    "nav": {
+      "dashboard": "Panel",
+      "storefront": "Vitrin",
+      "analytics": "Analitik",
+      "products": "Ürünler",
+      "productsAddNew": "Yeni ürün ekle",
+      "productsAll": "Tüm ürünler",
+      "productsDigital": "Dijital ürünler",
+      "productsPhysical": "Fiziksel ürünler",
+      "productsServices": "Hizmetler",
+      "productsLowStock": "Stoğu azalan",
+      "collections": "Koleksiyonlar",
+      "orders": "Siparişler",
+      "ordersAll": "Tüm siparişler",
+      "ordersPending": "Bekleyen",
+      "ordersPaid": "Ödenen",
+      "ordersFulfilled": "Teslim edilen",
+      "customers": "Müşteriler",
+      "customersAll": "Tüm müşteriler",
+      "customersSegments": "Segmentler",
+      "payments": "Ödemeler",
+      "marketing": "E-posta pazarlama",
+      "growth": "Büyüme",
+      "abandonedCarts": "Terk edilen sepetler",
+      "shipping": "Kargo",
+      "inventory": "Stok",
+      "discounts": "İndirimler",
+      "discountsCodes": "İndirim kodları",
+      "discountsAuto": "Otomatik indirimler",
+      "pages": "Sayfalar",
+      "reviews": "Yorumlar",
+      "draftOrders": "Taslak siparişler",
+      "reports": "Raporlar",
+      "activityLog": "İşlem geçmişi",
+      "settings": "Ayarlar",
+      "help": "Yardım"
+    }
+  },
+  "storefront": {
+    "addToCart": "Sepete ekle",
+    "checkout": "Ödeme",
+    "cart": "Sepet",
+    "emptyCart": "Sepetin boş",
+    "digital": "Dijital indirme",
+    "physical": "Kargo",
+    "service": "Hizmet",
+    "subtotal": "Ara toplam",
+    "total": "Toplam",
+    "tax": "Vergi",
+    "shipping": "Kargo",
+    "discount": "İndirim",
+    "placeOrder": "Siparişi ver",
+    "payWithGopay": "GoPay ile öde",
+    "payWithCard": "Kartla öde",
+    "email": "E-posta",
+    "phone": "Telefon",
+    "name": "Ad",
+    "continueShopping": "Alışverişe devam et",
+    "orderConfirmed": "Sipariş onaylandı",
+    "thankYou": "Alışverişin için teşekkürler!",
+    "nav": {
+      "collections": "Koleksiyonlar",
+      "allCollections": "Tüm koleksiyonlar",
+      "blog": "Blog",
+      "wishlist": "Favoriler",
+      "account": "Hesap",
+      "shop": "Mağaza",
+      "newArrivals": "Yeni gelenler",
+      "sale": "İndirim",
+      "contact": "İletişim"
+    },
+    "search": {
+      "placeholder": "SKU, etiket ara…"
+    },
+    "hero": {
+      "welcomeTo": "Hoş geldin:",
+      "browseCollections": "Koleksiyonlara göz at",
+      "shopAll": "Tümünü gör",
+      "shopCollection": "{{name}} koleksiyonu",
+      "defaultSubtitle": "Seçili ürünler — anında teslimat veya dünya çapında kargo.",
+      "digitalDownloads": "Dijital indirmeler →"
+    },
+    "catalog": {
+      "allProducts": "Tüm ürünler",
+      "resultsFor": "“{{q}}” için sonuçlar",
+      "items": "{{count}} ürün",
+      "itemsOne": "1 ürün",
+      "noResults": "Filtrelere uyan ürün yok.",
+      "newArrivals": "Yeni gelenler",
+      "sale": "İndirim",
+      "bestsellers": "Çok satanlar"
+    },
+    "product": {
+      "adding": "Ekleniyor…",
+      "added": "Sepete eklendi",
+      "chooseOptions": "Seçenekleri seç",
+      "shop": "Mağaza"
+    },
+    "footer": {
+      "thanks": "Bizden alışveriş yaptığın için teşekkürler.",
+      "collections": "Koleksiyonlar",
+      "info": "Bilgi",
+      "privacy": "Gizlilik",
+      "refunds": "İadeler",
+      "poweredBy": "Tescommerce altyapısıyla."
+    },
+    "loading": {
+      "store": "Mağaza yükleniyor…",
+      "product": "Ürün yükleniyor…"
+    },
+    "currency": {
+      "pricesShown": "Fiyatlar {{display}} olarak gösterilir. Ödemede {{base}} tahsil edilir."
+    },
+    "promo": {
+      "percentOff": "Siparişinde %{{value}} indirim{{min}}",
+      "percentOffMin": " — {{amount}} {{currency}} üzeri siparişlerde",
+      "freeShipping": "Ücretsiz kargo{{min}}",
+      "freeShippingMin": " — {{amount}} {{currency}} üzeri siparişlerde"
+    },
+    "storeClosed": "Mağaza yakında açılıyor — aşağıda hikâyemize göz at.",
+    "wishlist": {
+      "title": "Favoriler",
+      "add": "Favorilere ekle",
+      "saved": "♥ Kaydedildi"
+    },
+    "collections": {
+      "title": "Koleksiyonlar"
+    }
+  },
+  "signup": {
+    "headline": "Küresel mağazan",
+    "headlineAccent": "burada başlar.",
+    "sidebar": "Dijital ürün ve merch satan binlerce yaratıcıya katıl.",
+    "title": "Mağazanı oluştur",
+    "subtitle": "Ücretsiz başla. Kredi kartı gerekmez.",
+    "name": "Adın",
+    "email": "E-posta",
+    "password": "Şifre",
+    "storeName": "Mağaza adı",
+    "country": "Ülke",
+    "submit": "Mağaza oluştur",
+    "submitting": "Oluşturuluyor…",
+    "haveAccount": "Zaten hesabın var mı?",
+    "signIn": "Giriş yap",
+    "slowHint": "Hâlâ çalışıyor… Sunucu uyku modundaysa ilk istek bir dakika sürebilir.",
+    "errorTimeout": "Sunucu zaman aşımına uğradı. Bir dakika sonra tekrar dene veya destekle iletişime geç.",
+    "errorFailed": "Kayıt başarısız",
+    "errorAbort": "İstek zaman aşımına uğradı. Sunucu yeni açılıyor olabilir — tekrar dene.",
+    "errorNetwork": "Ağ hatası. Bağlantını kontrol edip tekrar dene.",
+    "countries": {
+      "US": "Amerika Birleşik Devletleri",
+      "KG": "Kırgızistan",
+      "KZ": "Kazakistan",
+      "RU": "Rusya",
+      "GB": "Birleşik Krallık",
+      "DE": "Almanya",
+      "FR": "Fransa",
+      "CA": "Kanada",
+      "AU": "Avustralya",
+      "AE": "BAE",
+      "TR": "Türkiye",
+      "IN": "Hindistan"
+    }
+  }
+}

@@ -15,6 +15,8 @@ export function OrderEditPanel({
     shippingAddress1?: string | null;
     shippingAddress2?: string | null;
     shippingCity?: string | null;
+    shippingRegion?: string | null;
+    shippingPhone?: string | null;
     shippingPostal?: string | null;
     shippingCountry?: string | null;
   };
@@ -57,6 +59,8 @@ export function OrderEditPanel({
               shippingAddress1: fd.get("shippingAddress1"),
               shippingAddress2: fd.get("shippingAddress2"),
               shippingCity: fd.get("shippingCity"),
+              shippingRegion: fd.get("shippingRegion"),
+              shippingPhone: fd.get("shippingPhone"),
               shippingPostal: fd.get("shippingPostal"),
               shippingCountry: fd.get("shippingCountry"),
             });
@@ -78,7 +82,11 @@ export function OrderEditPanel({
         <input name="shippingAddress2" defaultValue={shipping.shippingAddress2 ?? ""} placeholder="Apt" className="ugclab-input w-full" />
         <div className="grid grid-cols-2 gap-2">
           <input name="shippingCity" defaultValue={shipping.shippingCity ?? ""} placeholder="City" className="ugclab-input w-full" />
+          <input name="shippingRegion" defaultValue={shipping.shippingRegion ?? ""} placeholder="State / region" className="ugclab-input w-full" />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
           <input name="shippingPostal" defaultValue={shipping.shippingPostal ?? ""} placeholder="Postal" className="ugclab-input w-full" />
+          <input name="shippingPhone" defaultValue={shipping.shippingPhone ?? ""} placeholder="Phone" className="ugclab-input w-full" />
         </div>
         <input name="shippingCountry" defaultValue={shipping.shippingCountry ?? "US"} placeholder="Country (US)" className="ugclab-input w-full" />
         <button type="submit" disabled={pending} className="ugclab-btn-primary text-sm">

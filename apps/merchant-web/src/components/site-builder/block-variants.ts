@@ -704,6 +704,22 @@ const VARIANTS: Partial<Record<HomeSection, BlockDesignVariant[]>> = {
   ],
   discount_popup: [
     {
+      id: "popup-gift",
+      label: "Gift signup",
+      description: "Photo and email",
+      thumb: "text-image-left",
+      patch: {
+        title: "Claim your exclusive gift",
+        subtitle: "",
+        body: "By signing up, you agree to receive email marketing. You can unsubscribe at any time.",
+        collectEmail: true,
+        ctaLabel: "Sign up",
+        discountCode: "",
+        bgColor: "#ffffff",
+        textColor: "#18181b",
+      },
+    },
+    {
       id: "popup-welcome",
       label: "Welcome offer",
       description: "10% off first order",

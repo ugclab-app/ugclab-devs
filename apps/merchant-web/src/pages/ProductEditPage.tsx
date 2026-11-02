@@ -41,16 +41,26 @@ export default function ProductEditPage() {
     seoDescription?: string;
     sizeChart?: string;
     countryPrices?: string;
+    currencyPrices?: string;
     collectionIds?: string[];
     publishAt?: string | null;
     costAmountCents?: number | null;
     translations?: ProductTranslations | null;
-    digitalAsset?: { fileName: string; sizeBytes: number; downloadLimit: number } | null;
+    digitalAsset?: {
+      fileName: string;
+      sizeBytes: number;
+      downloadLimit: number;
+      licenseKeysPool?: string | null;
+      lessons?: { title: string; body: string; videoUrl: string | null }[] | null;
+    } | null;
+    payWhatYouWant?: boolean;
+    minPriceAmount?: number | null;
     variants?: {
       title: string;
       sku: string | null;
       priceAmount: number;
       inventory: number | null;
+      supplierVariantId?: string | null;
     }[];
     images?: { id: string; url: string; fileName: string; alt: string | null }[];
     preorderEnabled?: boolean;
@@ -60,6 +70,7 @@ export default function ProductEditPage() {
     subscriptionEnabled?: boolean;
     subscriptionInterval?: string | null;
     sellAsGiftCard?: boolean;
+    quantityOffers?: { qty: number; label?: string; priceCents: number }[] | null;
   };
 
   const enabledLocales = tenant?.settings?.enabledLocales ?? ["en"];
@@ -99,6 +110,7 @@ export default function ProductEditPage() {
           seoDescription: p.seoDescription ?? "",
           sizeChart: p.sizeChart ?? "",
           countryPrices: p.countryPrices ?? "",
+          currencyPrices: p.currencyPrices ?? "",
           collectionIds: p.collectionIds ?? [],
           publishAt: p.publishAt
             ? new Date(p.publishAt).toISOString().slice(0, 16)
@@ -110,13 +122,28 @@ export default function ProductEditPage() {
           digitalFileName: p.digitalAsset?.fileName,
           digitalFileSize: p.digitalAsset?.sizeBytes,
           downloadLimit: p.digitalAsset?.downloadLimit ?? 5,
+          licenseKeysPool: p.digitalAsset?.licenseKeysPool ?? "",
+          lessons: Array.isArray(p.digitalAsset?.lessons)
+            ? p.digitalAsset.lessons.map((l) => ({
+                title: l.title ?? "",
+                body: l.body ?? "",
+                videoUrl: l.videoUrl ?? null,
+              }))
+            : [],
+          payWhatYouWant: p.payWhatYouWant ?? false,
+          minPrice:
+            p.minPriceAmount != null ? (p.minPriceAmount / 100).toFixed(2) : "",
           variants: (p.variants ?? []).map((v) => ({
             title: v.title,
             sku: v.sku ?? "",
             price: (v.priceAmount / 100).toFixed(2),
             inventory: String(v.inventory ?? ""),
+            supplierVariantId: v.supplierVariantId ?? "",
           })),
           translations: (p.translations as ProductTranslations) ?? {},
+          quantityOffers: Array.isArray(p.quantityOffers)
+            ? (p.quantityOffers as { qty: number; label?: string; priceCents: number }[])
+            : [],
         }}
         onSubmit={async (fd) => {
           await api.updateProduct(p.id, fd);

@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "fs/promises";
+import { mkdir, unlink, writeFile } from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -190,4 +190,57 @@ export async function saveStoreMedia(
     mimeType: mime,
     url: uploadPublicUrl(storageKey),
   };
+}
+
+const KYC_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+function kycExt(mime: string) {
+  if (mime === "image/png") return "png";
+  if (mime === "image/webp") return "webp";
+  return "jpg";
+}
+
+/** Absolute path inside the upload root, or null if the key escapes it. */
+export function resolveUploadKey(storageKey: string): string | null {
+  const normalized = storageKey.replace(/\\/g, "/");
+  if (!normalized || normalized.includes("..") || normalized.startsWith("/")) return null;
+  const root = path.resolve(getUploadRoot());
+  const abs = path.resolve(root, normalized);
+  if (abs !== root && !abs.startsWith(root + path.sep)) return null;
+  return abs;
+}
+
+export function isKycStorageKey(storageKey: string) {
+  return storageKey.replace(/\\/g, "/").startsWith("kyc/");
+}
+
+/** Passport / selfie images. Never published through /api/files. */
+export async function saveKycDocument(
+  tenantId: string,
+  submissionId: string,
+  side: "passport" | "selfie",
+  file: { name: string; type: string; size: number; buffer: Buffer }
+) {
+  if (!/^[a-z0-9]+$/i.test(tenantId) || !/^[a-z0-9]+$/i.test(submissionId)) {
+    throw new Error("Invalid id");
+  }
+  if (file.size <= 0) throw new Error("Empty file");
+  if (file.size > MAX_IMAGE_BYTES) throw new Error("Image must be 8 MB or smaller");
+  const mime = file.type || "image/jpeg";
+  if (!KYC_IMAGE_TYPES.has(mime)) {
+    throw new Error("Photo must be JPEG, PNG, or WebP");
+  }
+
+  const dir = path.join(getUploadRoot(), "kyc", tenantId);
+  await mkdir(dir, { recursive: true });
+  const fileName = `${submissionId}-${side}.${kycExt(mime)}`;
+  await writeFile(path.join(dir, fileName), file.buffer);
+  return { storageKey: `kyc/${tenantId}/${fileName}`, mimeType: mime };
+}
+
+export async function deleteUploadKey(storageKey: string | null | undefined) {
+  if (!storageKey) return;
+  const abs = resolveUploadKey(storageKey);
+  if (!abs) return;
+  await unlink(abs).catch(() => undefined);
 }

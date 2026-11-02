@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type { HomeBlock, StoreTheme } from "@ugclab/tenant/store-theme";
 import { useStorefrontMessages } from "@/hooks/use-storefront-messages";
@@ -29,16 +30,27 @@ export function StoreHero({
 }) {
   const sf = useStorefrontMessages();
   const nav = { locale, tenant: tenantSlug };
-  const title = block?.title?.trim() || theme.heroTitle?.trim() || storeName;
+  const slides = (block?.slides ?? []).filter((slide) => slide.imageUrl || slide.title);
+  const [slideIndex, setSlideIndex] = useState(0);
+  useEffect(() => {
+    if (slides.length < 2) return;
+    const id = window.setInterval(() => {
+      setSlideIndex((current) => (current + 1) % slides.length);
+    }, 5000);
+    return () => window.clearInterval(id);
+  }, [slides.length]);
+  const slide = slides[slideIndex];
+  const title = slide?.title?.trim() || block?.title?.trim() || theme.heroTitle?.trim() || storeName;
   const subtitle =
+    slide?.subtitle?.trim() ||
     block?.subtitle?.trim() ||
     theme.heroSubtitle?.trim() ||
     description ||
     sf.hero.defaultSubtitle;
 
-  const ctaLabel = block?.ctaLabel?.trim();
-  const ctaPath = block?.ctaPath?.trim();
-  const bannerUrl = (block?.imageUrl || theme.heroBannerUrl || "").trim() || undefined;
+  const ctaLabel = slide?.ctaLabel?.trim() || block?.ctaLabel?.trim();
+  const ctaPath = slide?.ctaPath?.trim() || block?.ctaPath?.trim();
+  const bannerUrl = (slide?.imageUrl || block?.imageUrl || theme.heroBannerUrl || "").trim() || undefined;
   const hasImage = Boolean(bannerUrl);
 
   const rawBg = block?.bgColor?.trim();
@@ -120,6 +132,19 @@ export function StoreHero({
               >
                 {c.title}
               </Link>
+            ))}
+          </div>
+        ) : null}
+        {slides.length > 1 ? (
+          <div className="relative z-10 mt-6 flex justify-center gap-2">
+            {slides.map((item, index) => (
+              <button
+                key={`${item.imageUrl ?? ""}-${index}`}
+                type="button"
+                aria-label={`Slide ${index + 1}`}
+                onClick={() => setSlideIndex(index)}
+                className={`h-2.5 w-2.5 rounded-full ${index === slideIndex ? "bg-white" : "bg-white/40"}`}
+              />
             ))}
           </div>
         ) : null}

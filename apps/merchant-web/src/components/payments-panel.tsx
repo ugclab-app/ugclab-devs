@@ -9,6 +9,7 @@ import { SettingsPanelShell } from "@/components/settings-section";
 import { StripePayoutsPanel } from "@/components/stripe-payouts-panel";
 import { MerchantMorPayoutsPanel } from "@/components/merchant-mor-payouts-panel";
 import { PaymentPayoutSettings } from "@/components/payment-payout-settings";
+import { PassportKycPanel } from "@/components/kyc-panel";
 
 function BuyerProtectionToggle() {
   const qc = useQueryClient();
@@ -352,6 +353,8 @@ export function PaymentsPanel() {
         </a>
       </div>
     </SettingsPanelShell>
+
+    <PassportKycPanel />
 
     <SettingsPanelShell
       title={ta("paymentsPage.gopayTitle")}

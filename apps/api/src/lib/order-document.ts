@@ -2,6 +2,8 @@ import { formatMoney } from "@ugclab/i18n";
 
 export type OrderDoc = {
   orderNumber: string;
+  /** Sequential accounting number; falls back to the order number when numbering is off. */
+  invoiceNumber?: string | null;
   status: string;
   currency: string;
   createdAt: Date;
@@ -113,6 +115,12 @@ export function renderOrderHtml(
 ) {
   const title = kind === "invoice" ? "Invoice" : "Packing slip";
   const cur = order.currency;
+  const docNumber =
+    kind === "invoice" && order.invoiceNumber ? order.invoiceNumber : `#${order.orderNumber}`;
+  const orderRef =
+    kind === "invoice" && order.invoiceNumber
+      ? `<p style="margin:6px 0 0;color:#52525b">Order #${esc(order.orderNumber)}</p>`
+      : "";
   const rows = order.items
     .map(
       (i) => `
@@ -222,7 +230,7 @@ export function renderOrderHtml(
       : "";
 
   return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"/><title>${esc(title)} #${esc(order.orderNumber)}</title>
+<html><head><meta charset="utf-8"/><title>${esc(title)} ${esc(docNumber)}</title>
 <style>
   body{font-family:system-ui,-apple-system,sans-serif;max-width:720px;margin:40px auto;padding:0 16px;color:#18181b;line-height:1.45}
   @media print{body{margin:16px;padding:0} .no-print{display:none}}
@@ -244,7 +252,8 @@ export function renderOrderHtml(
     }
   </div>
   <div style="text-align:right;font-size:14px">
-    <p style="margin:0;font-size:18px"><strong>#${esc(order.orderNumber)}</strong></p>
+    <p style="margin:0;font-size:18px"><strong>${esc(docNumber)}</strong></p>
+    ${orderRef}
     <p style="margin:6px 0 0;color:#52525b">${esc(order.createdAt.toLocaleString("en-US"))}</p>
     <p style="margin:6px 0 0">${esc(cur.toUpperCase())}</p>
   </div>
@@ -294,6 +303,7 @@ function unpaidHint(status: string): string {
 /** Map a Prisma order + settings into OrderDoc. */
 export function orderToDoc(order: {
   orderNumber: string;
+  invoiceNumber?: string | null;
   status: string;
   currency: string;
   createdAt: Date;
@@ -340,6 +350,7 @@ export function orderToDoc(order: {
     order.stripePaymentId || order.finikPaymentId || order.gopayPaymentId || null;
   return {
     orderNumber: order.orderNumber,
+    invoiceNumber: order.invoiceNumber ?? null,
     status: order.status,
     currency: order.currency,
     createdAt: order.createdAt,

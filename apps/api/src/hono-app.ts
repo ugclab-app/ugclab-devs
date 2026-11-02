@@ -25,8 +25,11 @@ import { stripeRoutes, merchantStripe } from "./routes/stripe.js";
 import { gopayRoutes } from "./routes/gopay.js";
 import { finikRoutes } from "./routes/finik.js";
 import { telegram } from "./routes/telegram.js";
+import { resendWebhook } from "./routes/resend-webhook.js";
 import { merchantApiV1 } from "./routes/merchant-api-v1.js";
 import { merchantDisputes } from "./routes/merchant-disputes.js";
+import { merchantKyc } from "./routes/merchant-kyc.js";
+import { merchantSuppliers } from "./routes/merchant-suppliers.js";
 import { marketplace } from "./routes/merchant-marketplace.js";
 import { MERCHANT_WEB_URL, PLATFORM_ADMIN_URL, PLATFORM_URL } from "./env.js";
 import { merchantMaintenanceGuard } from "./middleware/maintenance.js";
@@ -109,6 +112,7 @@ export function createApiApp() {
   app.route("/api/gopay", gopayRoutes);
   app.route("/api/finik", finikRoutes);
   app.route("/api/telegram", telegram);
+  app.route("/api/resend", resendWebhook);
   app.route("/api/auth", authRoutes);
   app.use("/api/merchant/*", merchantMaintenanceGuard);
   app.route("/api/merchant", merchant);
@@ -125,6 +129,8 @@ export function createApiApp() {
   app.route("/api/merchant", p18);
   app.route("/api/merchant", marketing);
   app.route("/api/merchant", merchantDisputes);
+  app.route("/api/merchant", merchantKyc);
+  app.route("/api/merchant", merchantSuppliers);
   app.route("/api/merchant", marketplace);
   app.route("/api/merchant/stripe", merchantStripe);
   app.route("/api/platform", platform);

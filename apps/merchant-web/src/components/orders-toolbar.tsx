@@ -20,7 +20,7 @@ type SortOption = { value: string; label: string };
 
 export function OrdersToolbar({
   sortOptions,
-  placeholder = "Search order # or email…",
+  placeholder = "Search order #, invoice # or email…",
 }: {
   sortOptions: SortOption[];
   placeholder?: string;

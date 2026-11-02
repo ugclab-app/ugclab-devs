@@ -1,0 +1,21 @@
+-- Pay what you want
+ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "payWhatYouWant" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "minPriceAmount" INTEGER;
+
+-- Courses / gated content
+ALTER TABLE "DigitalAsset" ADD COLUMN IF NOT EXISTS "lessons" JSONB;
+
+-- Store credit
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "storeCreditCents" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "storeCreditAmount" INTEGER NOT NULL DEFAULT 0;
+
+-- Tips + custom checkout fields
+ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "tipAmount" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "customFields" JSONB;
+
+-- Store settings
+ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "blockedCountries" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
+ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "tipsEnabled" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "tipPresets" INTEGER[] NOT NULL DEFAULT ARRAY[5, 10, 15]::INTEGER[];
+ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "checkoutFields" JSONB;
+ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "bnplEnabled" BOOLEAN NOT NULL DEFAULT false;

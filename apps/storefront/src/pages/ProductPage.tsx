@@ -13,12 +13,15 @@ import { ProductPurchase } from "@/components/product-purchase";
 import { ProductReviews } from "@/components/product-reviews";
 import { ProductQuestions } from "@/components/product-questions";
 import { RecentlyViewedSection } from "@/components/recently-viewed-section";
+import { ProductRecommendations } from "@/components/product-recommendations";
 import { WishlistButton } from "@/components/wishlist-button";
-import { SizeChart } from "@/components/size-chart";
 import { BoughtTogether } from "@/components/bought-together";
 import { ProductJsonLd } from "@/components/store-json-ld";
 import { StoreTrustStrip } from "@/components/store-trust-strip";
+import { QuantityOffers } from "@/components/quantity-offers";
 import { StoreBlockRenderer } from "@/components/store-block-renderer";
+import { IconAccordionSection, PickupSection } from "@/components/sales-blocks";
+import type { HomeBlock } from "@ugclab/tenant/store-theme";
 import { buildStoreTitle, useDocumentSeo } from "@/hooks/use-document-seo";
 
 export function ProductPage() {
@@ -79,6 +82,10 @@ export function ProductPage() {
         tryBeforeYouBuyDays?: number | null;
         subscriptionEnabled?: boolean;
         subscriptionInterval?: string | null;
+        quantityOffers?: unknown;
+        payWhatYouWant?: boolean;
+        minPriceAmount?: number | null;
+        lessonCount?: number;
         metafields?: {
           namespace: string;
           key: string;
@@ -174,6 +181,15 @@ export function ProductPage() {
               ) : null}
             </div>
           )}
+          {(product.lessonCount ?? 0) > 0 ? (
+            <div className="mt-3">
+              <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-800">
+                Course · {product.lessonCount}{" "}
+                {product.lessonCount === 1 ? "lesson" : "lessons"} · available in your
+                Library after purchase
+              </span>
+            </div>
+          ) : null}
           {product.description ? (
             <div
               className="product-description prose prose-zinc mt-6 max-w-none text-zinc-600 leading-relaxed"
@@ -208,8 +224,24 @@ export function ProductPage() {
             type={product.type}
             subscriptionEnabled={product.subscriptionEnabled}
             subscriptionInterval={product.subscriptionInterval}
+            reviewSummary={reviewSummary(data.reviews)}
+            payWhatYouWant={product.payWhatYouWant === true}
+            minPriceAmount={product.minPriceAmount ?? null}
           />
-          {product.sizeChart ? <SizeChart text={product.sizeChart} /> : null}
+          <QuantityOfferBlock
+            productId={product.id}
+            offers={product.quantityOffers}
+            variants={product.variants}
+            currency={data.currency}
+            locale={locale}
+          />
+          <ProductFacts
+            sizeChart={product.sizeChart}
+            shipping={ctx.settings?.shippingPolicy}
+            blocks={(ctx.theme.productPageBlocks ?? []).filter(
+              (b) => b.type === "icon_accordion" || b.type === "pickup"
+            )}
+          />
           <BoughtTogether productId={product.id} />
         </div>
       </div>
@@ -217,7 +249,11 @@ export function ProductPage() {
         <div className="mt-12">
           <StoreBlockRenderer
             blocks={ctx.theme.productPageBlocks!.filter(
-              (b) => b.type !== "sticky_cta" && b.type !== "discount_popup"
+              (b) =>
+                b.type !== "sticky_cta" &&
+                b.type !== "discount_popup" &&
+                b.type !== "icon_accordion" &&
+                b.type !== "pickup"
             )}
             theme={ctx.theme}
             pageContext="product"
@@ -236,10 +272,86 @@ export function ProductPage() {
           createdAt: string;
         }[]}
       />
+      <ProductRecommendations slug={slug!} />
       <div className="mt-10">
         <StoreTrustStrip />
       </div>
       <RecentlyViewedSection excludeId={product.id} />
     </>
+  );
+}
+
+function QuantityOfferBlock({
+  productId,
+  offers,
+  variants,
+  currency,
+  locale,
+}: {
+  productId: string;
+  offers: unknown;
+  variants: { id: string; title: string }[];
+  currency: string;
+  locale: string;
+}) {
+  const rows = Array.isArray(offers)
+    ? offers.flatMap((row) => {
+        if (!row || typeof row !== "object") return [];
+        const item = row as { qty?: number; label?: string; priceCents?: number };
+        if (!item.qty || !item.priceCents) return [];
+        return [{ qty: item.qty, label: item.label || `${item.qty}`, priceCents: item.priceCents }];
+      })
+    : [];
+  if (!rows.length) return null;
+  return (
+    <div className="mt-6">
+      <QuantityOffers
+        productId={productId}
+        offers={rows}
+        variants={variants}
+        currency={currency}
+        locale={locale}
+      />
+    </div>
+  );
+}
+
+function reviewSummary(reviews: unknown): { average: number; count: number } | null {
+  if (!Array.isArray(reviews) || reviews.length === 0) return null;
+  const ratings = reviews
+    .map((row) =>
+      row && typeof row === "object" ? Number((row as { rating?: number }).rating) : NaN
+    )
+    .filter((n) => Number.isFinite(n) && n > 0);
+  if (ratings.length === 0) return null;
+  const average = ratings.reduce((sum, n) => sum + n, 0) / ratings.length;
+  return { average, count: ratings.length };
+}
+
+function ProductFacts({
+  sizeChart,
+  shipping,
+  blocks,
+}: {
+  sizeChart?: string | null;
+  shipping?: string | null;
+  blocks: HomeBlock[];
+}) {
+  const facts: { question: string; answer: string }[] = [];
+  if (sizeChart?.trim()) facts.push({ question: "Find your fit", answer: sizeChart.trim() });
+  if (shipping?.trim()) facts.push({ question: "Shipping & returns", answer: shipping.trim() });
+  return (
+    <div className="mt-6 space-y-4">
+      {facts.length > 0 ? (
+        <IconAccordionSection block={{ id: "product-facts", type: "icon_accordion", faqItems: facts }} />
+      ) : null}
+      {blocks.map((block) =>
+        block.type === "pickup" ? (
+          <PickupSection key={block.id} block={block} />
+        ) : (
+          <IconAccordionSection key={block.id} block={block} />
+        )
+      )}
+    </div>
   );
 }

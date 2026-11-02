@@ -13,6 +13,48 @@ body {
   font-family: var(--font-sans);
 }
 
+html[data-theme="dark"] body {
+  background: #0b1220;
+  color: #e2e8f0;
+}
+
+html[data-theme="dark"] .platform-card,
+html[data-theme="dark"] .platform-stat {
+  background: #111827;
+  border-color: #1f2937;
+  color: #e2e8f0;
+}
+
+html[data-theme="dark"] main {
+  background: #0b1220 !important;
+}
+
+html[data-theme="dark"] main > div:first-child {
+  background: #0f172a;
+  border-color: #1e293b;
+  color: #e2e8f0;
+}
+
+html[data-theme="dark"] .ugclab-input,
+html[data-theme="dark"] input,
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] select {
+  background: #0f172a;
+  color: #e2e8f0;
+  border-color: #334155;
+}
+
+html[data-theme="dark"] .text-slate-900,
+html[data-theme="dark"] .text-slate-800,
+html[data-theme="dark"] .text-slate-700 {
+  color: #e2e8f0;
+}
+
+html[data-theme="dark"] .text-slate-500,
+html[data-theme="dark"] .text-slate-600 {
+  color: #94a3b8;
+}
+
 .platform-card {
   @apply rounded-xl border border-slate-200/80 bg-white shadow-sm;
 }

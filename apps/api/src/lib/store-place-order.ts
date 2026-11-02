@@ -8,15 +8,16 @@ import { hash } from "bcryptjs";
 import type { Context } from "hono";
 import { getCookie, setCookie } from "hono/cookie";
 import {
-  calcTax,
   newAccessToken,
   resolveShipping,
   validateDiscountCode,
 } from "./checkout.js";
+import { composeTotals } from "./order-math.js";
 import { validateGiftCard } from "./gift-card.js";
 import { parseStoreTheme } from "./store-theme.js";
 import { applyAutoPromotions } from "./promotions.js";
-import { priceForCountry } from "./country-price.js";
+import { fixedPriceForCurrency, priceForCountry } from "./country-price.js";
+import { ensureFxRates } from "./fx-rates.js";
 import { fulfillPaidOrder } from "./fulfill-order.js";
 import {
   calcPlatformFeeAmount,
@@ -25,6 +26,7 @@ import {
 import type Stripe from "stripe";
 import { isMorPaymentModel } from "./payment-model.js";
 import { getStripe, isStripeConfigured } from "./stripe.js";
+import { STRIPE_SHIPPING_COUNTRIES } from "./stripe-shipping-countries.js";
 import { shouldUseGoPayCheckout } from "./gopay/config.js";
 import {
   createGoPayCheckout,
@@ -37,6 +39,7 @@ import { convertAmount } from "@ugclab/i18n/store-currency";
 import { getStorefrontUrl } from "./storefront.js";
 import {
   cartKey,
+  chargedUnit,
   CUSTOMER_COOKIE,
   getCart,
   setCart,
@@ -65,6 +68,12 @@ export type PreparedOrder = {
   discountCodeId: string | null;
   giftCardId: string | null;
   giftCardAmount: number;
+  loyaltyPointsSpent: number;
+  loyaltyDiscountAmount: number;
+  storeCreditAmount: number;
+  tipAmount: number;
+  customFields: Record<string, string> | null;
+  bnplEnabled: boolean;
   giftWrapAmount: number;
   giftMessage: string | null;
   country: string;
@@ -73,7 +82,9 @@ export type PreparedOrder = {
   shippingAddress1: string | null;
   shippingAddress2: string | null;
   shippingCity: string | null;
+  shippingRegion: string | null;
   shippingPostal: string | null;
+  shippingPhone: string | null;
   customerId: string;
   orderNumber: string;
   accessToken: string;
@@ -135,7 +146,9 @@ async function prepareOrder(
   const shippingAddress1 = String(body.shippingAddress1 ?? "").trim();
   const shippingAddress2 = String(body.shippingAddress2 ?? "").trim();
   const shippingCity = String(body.shippingCity ?? "").trim();
+  const shippingRegion = String(body.shippingRegion ?? "").trim();
   const shippingPostal = String(body.shippingPostal ?? "").trim();
+  const shippingPhone = String(body.shippingPhone ?? body.phone ?? "").trim();
 
   if (!email) throw new Error("Email is required");
 
@@ -144,6 +157,21 @@ async function prepareOrder(
     include: { settings: true, subscriptionPlan: true },
   });
   if (!tenant) throw new Error("Store not found");
+
+  const { isCountryBlocked } = await import("./checkout-extras.js");
+  if (isCountryBlocked(tenant.settings?.blockedCountries, country)) {
+    throw new Error("Sorry, this store does not sell to your country");
+  }
+
+  await ensureFxRates();
+  const baseCurrency = tenant.settings?.currency ?? "USD";
+  const currency = resolveCheckoutCurrency({
+    shippingCountry: country,
+    baseCurrency,
+    markets: tenant.settings?.markets,
+  });
+  /** line index → fixed unit price in the checkout currency (product "Prices by currency") */
+  const fixedUnits = new Map<number, number>();
 
   const bundleId = String(body.bundleId ?? "").trim();
   let cart = getCart(c).filter((i) => i.tenantId === tenantId);
@@ -247,11 +275,22 @@ async function prepareOrder(
         ? p.variants.find((v) => v.id === item.variantId)
         : null;
       const b2bKey = `${p.id}:${variant?.id ?? ""}`;
+      const b2bUnit = b2bPriceMap.get(b2bKey) ?? b2bPriceMap.get(`${p.id}:`);
+      const fixedUnit =
+        !variant && currency !== baseCurrency
+          ? fixedPriceForCurrency(p.translations, currency)
+          : null;
+      // a fixed price enters the base-currency maths at its converted value and is
+      // restored exactly when the order is converted to the checkout currency below
       const catalog =
         variant?.priceAmount ??
-        priceForCountry(p.priceAmount, p.translations, country);
-      const unit =
-        b2bPriceMap.get(b2bKey) ?? b2bPriceMap.get(`${p.id}:`) ?? catalog;
+        (fixedUnit != null
+          ? convertAmount(fixedUnit, currency, baseCurrency)
+          : priceForCountry(p.priceAmount, p.translations, country));
+      const unit = chargedUnit(item, b2bUnit ?? catalog);
+      if (fixedUnit != null && b2bUnit == null && unit === catalog) {
+        fixedUnits.set(lineData.length, fixedUnit);
+      }
       const title = variant ? `${p.title} — ${variant.title}` : p.title;
       const stock = variant?.inventory ?? p.inventory;
       if (
@@ -286,12 +325,6 @@ async function prepareOrder(
   if (lineData.length === 0) throw new Error("No valid products in cart");
 
   const settings = tenant.settings;
-  const baseCurrency = settings?.currency ?? "USD";
-  let currency = resolveCheckoutCurrency({
-    shippingCountry: country,
-    baseCurrency,
-    markets: settings?.markets,
-  });
   const hasPolicies =
     settings?.privacyUrl ||
     settings?.refundUrl ||
@@ -374,13 +407,22 @@ async function prepareOrder(
     defaultTaxRateBps: settings?.taxRateBps ?? 0,
     markets: settings?.markets,
   });
-  let taxAmount = stripeTaxEnabled
-    ? 0
-    : calcTax(
-        afterDiscount + shippingAmount,
-        taxRateBps,
-        settings?.taxIncluded ?? false
-      );
+  const {
+    resolveTipCents,
+    parseCheckoutFields,
+    collectCustomFieldAnswers,
+  } = await import("./checkout-extras.js");
+  const tipAmount = resolveTipCents({
+    enabled: settings?.tipsEnabled === true,
+    presets: settings?.tipPresets ?? [],
+    subtotalCents: afterDiscount,
+    tipPercent: body.tipPercent,
+    tipCents: body.tipCents,
+  });
+  const customFields = collectCustomFieldAnswers(
+    parseCheckoutFields(settings?.checkoutFields),
+    body.customFields
+  );
   let giftWrapAmount = 0;
   let giftMessage: string | null = null;
   if (body.giftWrap === true) {
@@ -394,7 +436,18 @@ async function prepareOrder(
       }
     }
   }
-  let totalAmount = afterDiscount + shippingAmount + taxAmount + giftWrapAmount;
+  const totals = composeTotals({
+    subtotal,
+    discountAmount,
+    shippingAmount,
+    taxRateBps,
+    taxIncluded: settings?.taxIncluded ?? false,
+    stripeTaxEnabled,
+    giftWrapAmount,
+    tipAmount,
+  });
+  let taxAmount = totals.taxAmount;
+  let totalAmount = totals.totalBeforeCredits;
 
   let giftCardId: string | null = null;
   let giftCardAmount = 0;
@@ -408,22 +461,79 @@ async function prepareOrder(
     }
   }
 
+  let loyaltyPointsSpent = 0;
+  let loyaltyDiscountAmount = 0;
+  const wantLoyalty = body.useLoyaltyPoints === true || body.useLoyaltyPoints === "true";
+  if (wantLoyalty) {
+    const { loyaltyFromSettings, maxRedeemablePoints, pointsToDiscountCents } =
+      await import("./loyalty.js");
+    const loyalty = loyaltyFromSettings(settings);
+    if (loyalty.enabled) {
+      const emailForLoyalty = email;
+      const cust = await prisma.customer.findUnique({
+        where: { tenantId_email: { tenantId, email: emailForLoyalty } },
+        select: { loyaltyPoints: true },
+      });
+      const balance = cust?.loyaltyPoints ?? 0;
+      const maxPts = maxRedeemablePoints(
+        balance,
+        totalAmount,
+        loyalty.redeemCentsPerPoint
+      );
+      const requested = Math.min(
+        maxPts,
+        Math.max(0, parseInt(String(body.loyaltyPoints ?? maxPts), 10) || maxPts)
+      );
+      if (requested > 0) {
+        loyaltyPointsSpent = requested;
+        loyaltyDiscountAmount = pointsToDiscountCents(
+          requested,
+          loyalty.redeemCentsPerPoint
+        );
+        totalAmount = Math.max(0, totalAmount - loyaltyDiscountAmount);
+      }
+    }
+  }
+
+  let storeCreditAmount = 0;
+  const wantCredit = body.useStoreCredit === true || body.useStoreCredit === "true";
+  if (wantCredit && totalAmount > 0) {
+    const cust = await prisma.customer.findUnique({
+      where: { tenantId_email: { tenantId, email } },
+      select: { storeCreditCents: true },
+    });
+    const balance = cust?.storeCreditCents ?? 0;
+    if (balance > 0) {
+      storeCreditAmount = Math.min(balance, totalAmount);
+      totalAmount -= storeCreditAmount;
+    }
+  }
+
   const feeBps = resolvePlatformFeeBps(tenant);
   let platformFeeAmount = calcPlatformFeeAmount(totalAmount, feeBps);
+  let storeCreditAmountConverted = storeCreditAmount;
+  let tipAmountConverted = tipAmount;
 
   if (currency !== baseCurrency) {
     const cv = (n: number) => convertAmount(n, baseCurrency, currency);
-    for (const line of lineData) {
-      line.unitAmount = cv(line.unitAmount);
-      line.totalAmount = cv(line.totalAmount);
-    }
-    subtotal = cv(subtotal);
+    // fixed-price lines are charged exactly; the rounding difference moves subtotal and total
+    let fixedDelta = 0;
+    lineData.forEach((line, i) => {
+      const fixed = fixedUnits.get(i);
+      const converted = cv(line.totalAmount);
+      line.unitAmount = fixed ?? cv(line.unitAmount);
+      line.totalAmount = fixed != null ? fixed * line.quantity : converted;
+      fixedDelta += line.totalAmount - converted;
+    });
+    subtotal = cv(subtotal) + fixedDelta;
     discountAmount = cv(discountAmount);
     shippingAmount = cv(shippingAmount);
     taxAmount = stripeTaxEnabled ? 0 : cv(taxAmount);
     giftCardAmount = giftCardAmount ? cv(giftCardAmount) : 0;
     giftWrapAmount = giftWrapAmount ? cv(giftWrapAmount) : 0;
-    totalAmount = cv(totalAmount);
+    storeCreditAmountConverted = storeCreditAmount ? cv(storeCreditAmount) : 0;
+    tipAmountConverted = tipAmount ? cv(tipAmount) : 0;
+    totalAmount = Math.max(0, cv(totalAmount) + fixedDelta);
     platformFeeAmount = calcPlatformFeeAmount(totalAmount, feeBps);
   }
 
@@ -552,6 +662,9 @@ async function prepareOrder(
   const netTerms = company?.paymentTermsDays && company.paymentTermsDays > 0;
 
   const needsAddress = hasPhysical && fulfillmentMethod === "SHIP";
+  if (needsAddress && (!shippingAddress1 || !shippingCity || !shippingRegion || !shippingPostal || !shippingPhone)) {
+    throw new Error("Enter a full shipping address, state or region, postal code, and phone.");
+  }
 
   return {
     tenantId,
@@ -570,6 +683,12 @@ async function prepareOrder(
     discountCodeId,
     giftCardId,
     giftCardAmount,
+    loyaltyPointsSpent,
+    loyaltyDiscountAmount,
+    storeCreditAmount: storeCreditAmountConverted,
+    tipAmount: tipAmountConverted,
+    customFields,
+    bnplEnabled: settings?.bnplEnabled === true,
     giftWrapAmount,
     giftMessage,
     country,
@@ -578,7 +697,9 @@ async function prepareOrder(
     shippingAddress1: needsAddress ? shippingAddress1 || null : null,
     shippingAddress2: needsAddress ? shippingAddress2 || null : null,
     shippingCity: needsAddress ? shippingCity || null : null,
+    shippingRegion: needsAddress ? shippingRegion || null : null,
     shippingPostal: needsAddress ? shippingPostal || null : null,
+    shippingPhone: shippingPhone || null,
     customerId: customer.id,
     orderNumber,
     accessToken: newAccessToken(),
@@ -642,6 +763,19 @@ async function createPendingOrder(prepared: PreparedOrder) {
   if (prepared.giftMessage) {
     notes.push(`Gift card: ${prepared.giftMessage}`);
   }
+  if (prepared.tipAmount > 0) {
+    notes.push(`Tip ${(prepared.tipAmount / 100).toFixed(2)} ${prepared.currency}`);
+  }
+  if (prepared.storeCreditAmount > 0) {
+    notes.push(
+      `Store credit applied ${(prepared.storeCreditAmount / 100).toFixed(2)} ${prepared.currency}`
+    );
+  }
+  if (prepared.customFields) {
+    for (const [k, v] of Object.entries(prepared.customFields)) {
+      notes.push(`${k}: ${v}`.slice(0, 300));
+    }
+  }
 
   const order = await prisma.order.create({
     data: {
@@ -661,10 +795,17 @@ async function createPendingOrder(prepared: PreparedOrder) {
       shippingAddress1: prepared.shippingAddress1,
       shippingAddress2: prepared.shippingAddress2,
       shippingCity: prepared.shippingCity,
+      shippingRegion: prepared.shippingRegion,
       shippingPostal: prepared.shippingPostal,
+      shippingPhone: prepared.shippingPhone,
       discountCodeId: prepared.discountCodeId,
       giftCardId: prepared.giftCardId,
       giftCardAmount: prepared.giftCardAmount,
+      loyaltyPointsSpent: prepared.loyaltyPointsSpent,
+      loyaltyDiscountAmount: prepared.loyaltyDiscountAmount,
+      storeCreditAmount: prepared.storeCreditAmount,
+      tipAmount: prepared.tipAmount,
+      ...(prepared.customFields ? { customFields: prepared.customFields } : {}),
       affiliatePartnerId: prepared.affiliatePartnerId,
       utmSource: prepared.utmSource,
       utmMedium: prepared.utmMedium,
@@ -755,6 +896,18 @@ async function createStripeCheckout(
   if (prepared.stripeLinkEnabled) paymentMethodTypes.push("link");
   if (prepared.stripePaypalEnabled && !prepared.isSubscriptionCheckout) {
     paymentMethodTypes.push("paypal");
+  }
+  if (
+    prepared.bnplEnabled &&
+    !prepared.isSubscriptionCheckout &&
+    prepared.captureMethod === "automatic"
+  ) {
+    const { bnplMethodsForCurrency } = await import("./checkout-extras.js");
+    for (const m of bnplMethodsForCurrency(prepared.currency)) {
+      paymentMethodTypes.push(
+        m as Stripe.Checkout.SessionCreateParams.PaymentMethodType
+      );
+    }
   }
 
   const customer = await prisma.customer.findUnique({
@@ -854,18 +1007,7 @@ async function createStripeCheckout(
       ? {
           automatic_tax: { enabled: true },
           shipping_address_collection: {
-            allowed_countries: [
-              "US",
-              "CA",
-              "GB",
-              "DE",
-              "FR",
-              "ES",
-              "IT",
-              "NL",
-              "AU",
-              "PL",
-            ],
+            allowed_countries: [...STRIPE_SHIPPING_COUNTRIES],
           },
         }
       : {}),
@@ -938,6 +1080,21 @@ export async function placeStoreOrder(
 
   if (prepared.isSubscriptionCheckout) {
     // Regional gateways don't support recurring billing yet
+  }
+
+  // Fully covered by gift card / loyalty / store credit — no gateway needed.
+  if (prepared.totalAmount <= 0 && !prepared.isSubscriptionCheckout) {
+    const order = await createPendingOrder(prepared);
+    await fulfillPaidOrder(order.id, { platformFeeAmount: 0 });
+    const remaining = getCart(c).filter((i) => i.tenantId !== tenantId);
+    setCart(c, remaining);
+    await markAbandonedCartConverted(tenantId, getStoreSessionKey(c)).catch(() => {});
+    return {
+      mode: "demo" as const,
+      orderId: order.id,
+      accessToken: prepared.accessToken,
+      orderNumber: prepared.orderNumber,
+    };
   }
 
   const useFinik =
@@ -1056,7 +1213,7 @@ export function addCartItem(c: Context, item: CartItem) {
 
 export function removeCartItem(
   c: Context,
-  item: Pick<CartItem, "productId" | "variantId" | "tenantId">
+  item: Pick<CartItem, "productId" | "variantId" | "tenantId" | "unitAmountCents">
 ) {
   const key = cartKey({ ...item, quantity: 1 });
   const cart = getCart(c).filter((i) => cartKey(i) !== key);

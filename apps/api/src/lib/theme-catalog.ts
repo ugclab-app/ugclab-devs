@@ -82,7 +82,20 @@ export async function patchThemeCatalogMeta(
   }
 }
 
-export async function ensureThemeCatalog() {
+let catalogSeeded: Promise<void> | null = null;
+
+/** Seed the theme catalog once per process (idempotent; new seed rows only appear on deploy). */
+export function ensureThemeCatalog() {
+  if (!catalogSeeded) {
+    catalogSeeded = seedThemeCatalog().catch((e) => {
+      catalogSeeded = null;
+      throw e;
+    });
+  }
+  return catalogSeeded;
+}
+
+async function seedThemeCatalog() {
   const count = await prisma.storeThemeCatalog.count();
   if (count === 0) {
     await prisma.storeThemeCatalog.createMany({

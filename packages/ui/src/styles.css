@@ -23,9 +23,9 @@
 }
 
 .ugclab-input:focus {
-  border-color: #8b5cf6;
+  border-color: var(--ugclab-focus, #8b5cf6);
   outline: none;
-  box-shadow: 0 0 0 3px rgb(139 92 246 / 0.2);
+  box-shadow: 0 0 0 3px var(--ugclab-focus-ring, rgb(139 92 246 / 0.2));
 }
 
 /* Override browser default thick invalid border */
@@ -35,8 +35,8 @@
 }
 
 .ugclab-input:focus:invalid {
-  border-color: #8b5cf6;
-  box-shadow: 0 0 0 3px rgb(139 92 246 / 0.2);
+  border-color: var(--ugclab-focus, #8b5cf6);
+  box-shadow: 0 0 0 3px var(--ugclab-focus-ring, rgb(139 92 246 / 0.2));
 }
 
 .ugclab-btn {
@@ -60,12 +60,12 @@
 }
 
 .ugclab-btn-primary {
-  background-color: #7c3aed;
+  background-color: var(--ugclab-primary, #7c3aed);
   color: #ffffff;
 }
 
 .ugclab-btn-primary:hover:not(:disabled) {
-  background-color: #6d28d9;
+  background-color: var(--ugclab-primary-hover, #6d28d9);
 }
 
 .ugclab-btn-secondary {

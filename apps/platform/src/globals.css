@@ -6,11 +6,24 @@
 
 @theme {
   --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
-  --color-brand-50: #f5f3ff;
-  --color-brand-100: #ede9fe;
-  --color-brand-500: #8b5cf6;
-  --color-brand-600: #7c3aed;
-  --color-brand-700: #6d28d9;
+  --color-brand-50: #f0fdfa;
+  --color-brand-100: #ccfbf1;
+  --color-brand-200: #99f6e4;
+  --color-brand-300: #5eead4;
+  --color-brand-400: #2dd4bf;
+  --color-brand-500: #14b8a6;
+  --color-brand-600: #0d9488;
+  --color-brand-700: #0f766e;
+  --color-brand-800: #115e59;
+  --color-brand-900: #134e4a;
+}
+
+/* Shared @ugclab/ui buttons and inputs read these; other apps keep their fallback colors */
+:root {
+  --ugclab-primary: #0d9488;
+  --ugclab-primary-hover: #0f766e;
+  --ugclab-focus: #14b8a6;
+  --ugclab-focus-ring: rgb(20 184 166 / 0.2);
 }
 
 body {
@@ -18,12 +31,17 @@ body {
   font-family: var(--font-sans);
 }
 
+/* Plus Jakarta Sans has no Cyrillic glyphs */
+html[lang="ru"] body {
+  font-family: "Manrope", ui-sans-serif, system-ui, sans-serif;
+}
+
 .mesh-hero {
   background-color: #fafafa;
   background-image:
-    radial-gradient(at 0% 0%, rgba(124, 58, 237, 0.12) 0, transparent 50%),
-    radial-gradient(at 100% 0%, rgba(99, 102, 241, 0.1) 0, transparent 45%),
-    radial-gradient(at 50% 100%, rgba(167, 139, 250, 0.08) 0, transparent 55%);
+    radial-gradient(at 0% 0%, rgba(13, 148, 136, 0.12) 0, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(16, 185, 129, 0.1) 0, transparent 45%),
+    radial-gradient(at 50% 100%, rgba(94, 234, 212, 0.1) 0, transparent 55%);
 }
 
 .glass-nav {
@@ -31,9 +49,9 @@ body {
 }
 
 .text-gradient {
-  @apply bg-gradient-to-r from-violet-600 via-indigo-600 to-violet-700 bg-clip-text text-transparent;
+  @apply bg-gradient-to-r from-brand-600 via-emerald-600 to-brand-700 bg-clip-text text-transparent;
 }
 
 .card-hover {
-  @apply transition duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-violet-500/10;
+  @apply transition duration-200 hover:border-brand-200 hover:shadow-md;
 }

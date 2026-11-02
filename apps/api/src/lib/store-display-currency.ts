@@ -4,6 +4,7 @@ import {
   resolveDisplayCurrency,
 } from "@ugclab/i18n/store-currency";
 import { parseStoreMarkets } from "./store-markets.js";
+import { fixedPriceForCurrency } from "./country-price.js";
 
 export { resolveDisplayCurrency, applyDisplayCurrency, listDisplayCurrencies };
 
@@ -51,16 +52,32 @@ export function displayCurrencyMeta(
   };
 }
 
+/** Pass the product's `translations` to honour a fixed price set for the display currency. */
 export function priceForDisplay<T extends { priceAmount: number; compareAt?: number | null }>(
   item: T,
   locale: string,
   settings: CurrencySettings,
-  requested?: string | null
+  requested?: string | null,
+  translations?: unknown
 ) {
   const { baseCurrency, displayCurrency } = displayCurrencyMeta(
     locale,
     settings,
     requested
   );
-  return applyDisplayCurrency(item, baseCurrency, displayCurrency);
+  const converted = applyDisplayCurrency(item, baseCurrency, displayCurrency);
+  const fixed =
+    displayCurrency !== baseCurrency.toUpperCase()
+      ? fixedPriceForCurrency(translations, displayCurrency)
+      : null;
+  if (fixed == null) return converted;
+  return {
+    ...converted,
+    priceAmount: fixed,
+    // keep the same "was" discount ratio against the fixed price
+    compareAt:
+      item.compareAt != null && item.priceAmount > 0
+        ? Math.round((item.compareAt * fixed) / item.priceAmount)
+        : null,
+  };
 }

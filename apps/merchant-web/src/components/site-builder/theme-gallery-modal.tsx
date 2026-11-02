@@ -7,7 +7,7 @@ import {
   type StoreThemeCategory,
   type StoreThemePreset,
 } from "./store-themes";
-import { ThemeGalleryPreview } from "./theme-gallery-preview";
+import { ThemeGalleryPreview, ThemeSurfacePreview, type ThemePreviewSurface } from "./theme-gallery-preview";
 import {
   applyThemeCatalog,
   featuredFromCatalog,
@@ -33,6 +33,7 @@ function ThemeCard({
   theme,
   active,
   currentThemeId,
+  inLibrary,
   priceCents,
   owned,
   onSelect,
@@ -41,6 +42,7 @@ function ThemeCard({
   theme: StoreThemePreset;
   active: boolean;
   currentThemeId?: string;
+  inLibrary?: boolean;
   priceCents?: number;
   owned?: boolean;
   onSelect: () => void;
@@ -64,6 +66,7 @@ function ThemeCard({
             primary={theme.preview.primary}
             secondary={theme.preview.secondary}
             background={theme.preview.background}
+            themeId={theme.id}
           />
           {theme.featured ? (
             <span className="theme-gallery-card-badge">Top</span>
@@ -87,10 +90,14 @@ function ThemeCard({
           ) : (
             <p className="mt-1 text-xs text-zinc-400">Free</p>
           )}
-          {currentThemeId === theme.id ? (
+          {currentThemeId === theme.id || currentThemeId === theme.catalogId ? (
             <span className="mt-2 inline-block text-xs font-medium text-violet-600">
               Current draft
             </span>
+          ) : inLibrary ? (
+            <span className="mt-2 inline-block text-xs font-medium text-zinc-500">In library</span>
+          ) : theme.catalogId || theme.id.startsWith("installed_") ? (
+            <span className="mt-2 inline-block text-xs font-medium text-zinc-500">In library</span>
           ) : null}
         </div>
       </button>
@@ -115,6 +122,7 @@ export function ThemeGalleryModal({
 }) {
   const [category, setCategory] = useState<StoreThemeCategory>("all");
   const [preview, setPreview] = useState<StoreThemePreset | null>(null);
+  const [surface, setSurface] = useState<ThemePreviewSurface>("home");
   const [buying, setBuying] = useState(false);
   const [buyError, setBuyError] = useState<string | null>(null);
   const catalogQ = useThemeCatalog(open);
@@ -162,9 +170,11 @@ export function ThemeGalleryModal({
   const list =
     category === "featured"
       ? featuredFromCatalog(basePresets, catalog)
-      : filterStoreThemes(category, customPresets).filter((t) =>
-          catalog?.length ? catalog.some((c) => c.id === t.id) : true
-        );
+      : category === "saved"
+        ? filterStoreThemes(category, customPresets)
+        : filterStoreThemes(category, customPresets).filter((t) =>
+            catalog?.length ? catalog.some((c) => c.id === t.id) : true
+          );
   const sortedList = catalog?.length
     ? applyThemeCatalog(list, catalog)
     : list;
@@ -245,6 +255,7 @@ export function ThemeGalleryModal({
                       theme={theme}
                       active={active?.id === theme.id}
                       currentThemeId={currentThemeId}
+                      inLibrary={customPresets.some((p) => p.catalogId === theme.id)}
                       priceCents={catalogMeta(theme.id)?.priceCents}
                       owned={catalogMeta(theme.id)?.owned}
                       onSelect={() => setPreview(theme)}
@@ -272,6 +283,7 @@ export function ThemeGalleryModal({
                   theme={theme}
                   active={active?.id === theme.id}
                   currentThemeId={currentThemeId}
+                  inLibrary={customPresets.some((p) => p.catalogId === theme.id)}
                   priceCents={catalogMeta(theme.id)?.priceCents}
                   owned={catalogMeta(theme.id)?.owned}
                   onSelect={() => setPreview(theme)}
@@ -286,16 +298,38 @@ export function ThemeGalleryModal({
 
           {active ? (
             <aside className="theme-gallery-detail">
+              <div className="mb-2 flex gap-1">
+                {(
+                  [
+                    ["home", "Home"],
+                    ["product", "Product"],
+                    ["collection", "Collection"],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setSurface(id)}
+                    className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                      surface === id ? "bg-violet-600 text-white" : "bg-zinc-100 text-zinc-600"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
               <div className="theme-gallery-detail-wireframe mb-4 h-52 overflow-hidden rounded-xl border border-zinc-200">
-                <ThemeGalleryPreview
+                <ThemeSurfacePreview
+                  surface={surface}
                   layout={resolveThemeLayoutPreview(active)}
                   primary={active.preview.primary}
                   secondary={active.preview.secondary}
                   background={active.preview.background}
-                  size="detail"
+                  themeId={active.id}
                 />
               </div>
               <h3 className="text-xl font-bold">{active.label}</h3>
+              <p className="mt-1 text-xs text-zinc-500">By Tescommerce · Updated Oct 2026</p>
               {active.inspiredBy ? (
                 <p className="mt-1 text-xs font-medium text-violet-600">
                   Layout inspired by Shopify «{active.inspiredBy}»
@@ -304,6 +338,7 @@ export function ThemeGalleryModal({
               <p className="mt-2 text-sm text-zinc-600">{active.description}</p>
               <ul className="mt-4 space-y-1 text-xs text-zinc-500">
                 <li>{active.homeBlocks.length} homepage sections</li>
+                <li>Also sets product, collection, cart, and 404</li>
                 <li>Brand color {active.primaryColor}</li>
                 <li>
                   {active.theme.fontFamily?.includes("Georgia") ||
@@ -353,7 +388,7 @@ export function ThemeGalleryModal({
                         ? "Opening checkout…"
                         : locked
                           ? `Buy ${active.label}`
-                          : `Apply ${active.label}`}
+                          : `Use ${active.label}`}
                     </button>
                   </>
                 );
@@ -382,7 +417,7 @@ export function ThemeGalleryModal({
                 </button>
               ) : null}
               <p className="mt-2 text-center text-xs text-zinc-400">
-                Replaces homepage blocks & theme style. Save draft after applying.
+                Puts this theme on the draft: home, product, collection, cart, and 404. The design you have now stays under My themes. Buyers see it after you publish.
               </p>
             </aside>
           ) : null}

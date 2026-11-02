@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatMoney } from "@ugclab/i18n";
@@ -30,6 +31,41 @@ export default function CustomerDetailPage() {
       api.updateCustomer(id!, { marketingOptOut }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["customer", id] }),
   });
+  const [creditInput, setCreditInput] = useState("");
+  const [pointsInput, setPointsInput] = useState("");
+  const [adjustError, setAdjustError] = useState<string | null>(null);
+  const adjust = useMutation({
+    mutationFn: (body: { storeCreditDeltaCents?: number; loyaltyPointsDelta?: number }) =>
+      api.updateCustomer(id!, body),
+    onSuccess: () => {
+      setAdjustError(null);
+      setCreditInput("");
+      setPointsInput("");
+      return qc.invalidateQueries({ queryKey: ["customer", id] });
+    },
+    onError: (e) => setAdjustError(e instanceof Error ? e.message : "Update failed"),
+  });
+  const [eraseOpen, setEraseOpen] = useState(false);
+  const [eraseConfirm, setEraseConfirm] = useState("");
+  const [eraseError, setEraseError] = useState<string | null>(null);
+  const [eraseNote, setEraseNote] = useState<string | null>(null);
+  const anonymize = useMutation({
+    mutationFn: () => api.anonymizeCustomer(id!),
+    onSuccess: (r) => {
+      setEraseError(null);
+      setEraseOpen(false);
+      setEraseConfirm("");
+      setEraseNote(
+        r.hadStripeCustomer
+          ? "Personal data erased. Also delete the customer in your Stripe dashboard."
+          : r.alreadyDone
+            ? "Personal data was already erased."
+            : "Personal data erased."
+      );
+      return qc.invalidateQueries({ queryKey: ["customer", id] });
+    },
+    onError: (e) => setEraseError(e instanceof Error ? e.message : "Erase failed"),
+  });
 
   if (isLoading || !data) {
     return (
@@ -46,6 +82,10 @@ export default function CustomerDetailPage() {
     createdAt: string;
     marketingOptOut: boolean;
     emailBounced: boolean;
+    anonymizedAt?: string | null;
+    storeCreditCents?: number | null;
+    storeCreditCurrency?: string | null;
+    loyaltyPoints?: number | null;
     orders: {
       id: string;
       orderNumber: string;
@@ -75,6 +115,33 @@ export default function CustomerDetailPage() {
     updatedAt: string;
   } | null;
 
+  const creditCurrency = customer.storeCreditCurrency || data.currency;
+  const storeCreditCents = customer.storeCreditCents ?? 0;
+  const loyaltyPoints = customer.loyaltyPoints ?? 0;
+  const anonymized = !!customer.anonymizedAt;
+
+  function submitCredit(sign: 1 | -1) {
+    const major = parseFloat(creditInput);
+    if (!Number.isFinite(major) || major <= 0) {
+      setAdjustError("Enter an amount greater than 0");
+      return;
+    }
+    const cents = Math.round(Math.abs(major) * 100) * sign;
+    if (sign < 0 && Math.abs(cents) > storeCreditCents) {
+      if (!confirm("This will take the balance below zero. Continue?")) return;
+    }
+    adjust.mutate({ storeCreditDeltaCents: cents });
+  }
+
+  function submitPoints(sign: 1 | -1) {
+    const pts = parseInt(pointsInput, 10);
+    if (!Number.isFinite(pts) || pts <= 0) {
+      setAdjustError("Enter a whole number of points greater than 0");
+      return;
+    }
+    adjust.mutate({ loyaltyPointsDelta: Math.abs(pts) * sign });
+  }
+
   const latestOrder = customer.orders[0];
   const shipLine = latestOrder
     ? [
@@ -95,15 +162,32 @@ export default function CustomerDetailPage() {
       title={customer.name || customer.email}
       description={customer.name ? customer.email : undefined}
       actions={
-        <Link
-          to="/marketing"
-          className="ugclab-btn border border-zinc-200 bg-white text-sm"
-          state={{ audienceEmail: customer.email }}
-        >
-          Email marketing
-        </Link>
+        anonymized ? (
+          <button
+            type="button"
+            disabled
+            title="Personal data erased — email actions are unavailable"
+            className="ugclab-btn border border-zinc-200 bg-white text-sm opacity-50"
+          >
+            Email marketing
+          </button>
+        ) : (
+          <Link
+            to="/marketing"
+            className="ugclab-btn border border-zinc-200 bg-white text-sm"
+            state={{ audienceEmail: customer.email }}
+          >
+            Email marketing
+          </Link>
+        )
       }
     >
+      {anonymized ? (
+        <div className="mb-6 rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-600">
+          Personal data erased on {formatShortDate(customer.anonymizedAt ?? null)}
+        </div>
+      ) : null}
+
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <CustomerSegmentBadges segment={summary.segment} />
         {customer.country ? (
@@ -138,6 +222,87 @@ export default function CustomerDetailPage() {
           value={formatShortDate(summary.lastOrderAt)}
         />
       </div>
+
+      <section className="admin-card mb-8 p-6 space-y-5">
+        <h2 className="font-semibold text-zinc-900">Store credit & loyalty</h2>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <p className="text-xs text-zinc-500">Store credit</p>
+            <p className="mt-1 text-xl font-bold text-zinc-900">
+              {formatMoney(storeCreditCents, creditCurrency)}
+            </p>
+            <div className="mt-3">
+              <label className="block text-xs font-medium text-zinc-600">
+                Adjust store credit ({creditCurrency})
+              </label>
+              <div className="mt-1 flex gap-2">
+                <input
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  value={creditInput}
+                  onChange={(e) => setCreditInput(e.target.value)}
+                  placeholder="0.00"
+                  className="ugclab-input w-full"
+                />
+                <button
+                  type="button"
+                  disabled={adjust.isPending}
+                  onClick={() => submitCredit(1)}
+                  className="ugclab-btn ugclab-btn-primary text-sm disabled:opacity-50"
+                >
+                  + Add
+                </button>
+                <button
+                  type="button"
+                  disabled={adjust.isPending}
+                  onClick={() => submitCredit(-1)}
+                  className="ugclab-btn border border-zinc-200 bg-white text-sm disabled:opacity-50"
+                >
+                  − Deduct
+                </button>
+              </div>
+            </div>
+          </div>
+          <div>
+            <p className="text-xs text-zinc-500">Loyalty points</p>
+            <p className="mt-1 text-xl font-bold text-zinc-900">
+              {loyaltyPoints.toLocaleString()} pts
+            </p>
+            <div className="mt-3">
+              <label className="block text-xs font-medium text-zinc-600">Adjust points</label>
+              <div className="mt-1 flex gap-2">
+                <input
+                  type="number"
+                  step="1"
+                  min={0}
+                  value={pointsInput}
+                  onChange={(e) => setPointsInput(e.target.value)}
+                  placeholder="0"
+                  className="ugclab-input w-full"
+                />
+                <button
+                  type="button"
+                  disabled={adjust.isPending}
+                  onClick={() => submitPoints(1)}
+                  className="ugclab-btn ugclab-btn-primary text-sm disabled:opacity-50"
+                >
+                  + Add
+                </button>
+                <button
+                  type="button"
+                  disabled={adjust.isPending}
+                  onClick={() => submitPoints(-1)}
+                  className="ugclab-btn border border-zinc-200 bg-white text-sm disabled:opacity-50"
+                >
+                  − Deduct
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        {adjustError ? <p className="text-sm text-red-600">{adjustError}</p> : null}
+      </section>
 
       <section className="admin-card mb-8 p-6 space-y-4">
         <h2 className="font-semibold text-zinc-900">Preferences</h2>
@@ -216,6 +381,85 @@ export default function CustomerDetailPage() {
           </tbody>
         </table>
       </div>
+
+      <section className="admin-card mt-8 p-6 space-y-4">
+        <h2 className="font-semibold text-zinc-900">Privacy</h2>
+        <p className="text-sm text-zinc-600">
+          Export everything stored about this customer, or erase their personal data (GDPR
+          “right to be forgotten”).
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => window.open(api.customerExportUrl(id!), "_blank")}
+            className="ugclab-btn border border-zinc-200 bg-white text-sm"
+          >
+            Export data (JSON)
+          </button>
+          <button
+            type="button"
+            disabled={anonymized || anonymize.isPending}
+            onClick={() => {
+              setEraseError(null);
+              setEraseOpen(true);
+            }}
+            className="ugclab-btn border border-red-200 bg-white text-sm text-red-700 hover:bg-red-50 disabled:opacity-50"
+          >
+            Erase personal data
+          </button>
+        </div>
+        <p className="text-xs text-zinc-500">
+          Blanks name, email, addresses, phone, wishlist, marketing subscription and review names.
+          Orders stay for accounting. Cannot be undone.
+        </p>
+        {eraseOpen && !anonymized ? (
+          <form
+            className="space-y-3 rounded-lg border border-red-200 bg-red-50 p-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (eraseConfirm.trim() !== "ERASE") {
+                setEraseError("Type ERASE to confirm");
+                return;
+              }
+              anonymize.mutate();
+            }}
+          >
+            <p className="text-sm text-red-800">
+              Type <span className="font-mono font-semibold">ERASE</span> to permanently erase
+              this customer’s personal data.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <input
+                value={eraseConfirm}
+                onChange={(e) => setEraseConfirm(e.target.value)}
+                placeholder="ERASE"
+                autoComplete="off"
+                className="ugclab-input w-40 font-mono"
+              />
+              <button
+                type="submit"
+                disabled={eraseConfirm.trim() !== "ERASE" || anonymize.isPending}
+                className="ugclab-btn bg-red-600 text-sm text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {anonymize.isPending ? "Erasing…" : "Erase now"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEraseOpen(false);
+                  setEraseConfirm("");
+                  setEraseError(null);
+                }}
+                className="ugclab-btn border border-zinc-200 bg-white text-sm"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        ) : null}
+        {eraseError ? <p className="text-sm text-red-600">{eraseError}</p> : null}
+        {eraseNote ? <p className="text-sm text-zinc-700">{eraseNote}</p> : null}
+      </section>
     </AdminPageShell>
   );
 }

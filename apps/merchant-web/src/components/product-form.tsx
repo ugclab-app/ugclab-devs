@@ -15,6 +15,7 @@ import {
   type ProductTranslations,
 } from "@/components/product-translations-fields";
 import { slugifyTitle } from "@/lib/slugify";
+import { QuantityOffersFields } from "@/components/quantity-offers-fields";
 import { StickyFormBar } from "@/components/sticky-form-bar";
 import { api } from "@/api/client";
 import { getStorefrontUrl } from "@/lib/storefront";
@@ -44,14 +45,26 @@ export type ProductFormValues = {
   seoDescription?: string;
   sizeChart?: string;
   countryPrices?: string;
+  currencyPrices?: string;
   collectionIds?: string[];
   publishAt?: string;
   costAmount?: string;
   digitalFileName?: string | null;
+  licenseKeysPool?: string | null;
   digitalFileSize?: number | null;
   downloadLimit?: number;
   variants?: VariantRow[];
   translations?: ProductTranslations;
+  quantityOffers?: { qty: number; label?: string; priceCents: number }[] | null;
+  payWhatYouWant?: boolean;
+  minPrice?: string;
+  lessons?: ProductLesson[];
+};
+
+export type ProductLesson = {
+  title: string;
+  body: string;
+  videoUrl: string | null;
 };
 
 type WeightUnit = "g" | "kg" | "lb" | "oz";
@@ -92,6 +105,16 @@ function gramsToDisplay(grams: number, unit: WeightUnit): number {
   if (unit === "lb") return grams / 453.59237;
   if (unit === "oz") return grams / 28.349523125;
   return grams;
+}
+
+function swapLessons(list: ProductLesson[], a: number, b: number): ProductLesson[] {
+  const next = [...list];
+  const itemA = next[a];
+  const itemB = next[b];
+  if (!itemA || !itemB) return list;
+  next[a] = itemB;
+  next[b] = itemA;
+  return next;
 }
 
 function displayToGrams(value: number, unit: WeightUnit): number {
@@ -139,6 +162,12 @@ export function ProductForm({
   const [requiresShipping, setRequiresShipping] = useState(
     initial.requiresShipping ?? true
   );
+  const [payWhatYouWant, setPayWhatYouWant] = useState(
+    initial.payWhatYouWant ?? false
+  );
+  const [lessons, setLessons] = useState<ProductLesson[]>(
+    () => initial.lessons ?? []
+  );
   const initialGrams = Number(initial.weightGrams) || 0;
   const [weightUnit, setWeightUnit] = useState<WeightUnit>(
     initialGrams >= 1000 ? "kg" : "g"
@@ -172,6 +201,22 @@ export function ProductForm({
     try {
       const fd = new FormData(e.currentTarget);
       fd.set("collectionIds", JSON.stringify(collectionIds));
+      fd.set("payWhatYouWant", payWhatYouWant ? "true" : "false");
+      if (!payWhatYouWant) fd.set("minPrice", "");
+      if (type === "DIGITAL") {
+        fd.set(
+          "lessons",
+          JSON.stringify(
+            lessons
+              .filter((l) => l.title.trim() || l.body.trim() || l.videoUrl)
+              .map((l) => ({
+                title: l.title.trim(),
+                body: l.body,
+                videoUrl: l.videoUrl?.trim() ? l.videoUrl.trim() : null,
+              }))
+          )
+        );
+      }
       if (type === "PHYSICAL") {
         fd.set("requiresShipping", requiresShipping ? "true" : "false");
         const parsed = parseFloat(weightDisplay);
@@ -208,6 +253,7 @@ export function ProductForm({
   delete (translationsForLocales as Record<string, unknown>)._seo;
   delete (translationsForLocales as Record<string, unknown>)._sizeChart;
   delete (translationsForLocales as Record<string, unknown>)._countryPrices;
+  delete (translationsForLocales as Record<string, unknown>)._currencyPrices;
 
   return (
     <div className="mx-auto max-w-6xl pb-24">
@@ -277,6 +323,22 @@ export function ProductForm({
                   rows={4}
                   className="ugclab-input mt-1.5 font-mono text-sm"
                   placeholder={"US=19.99\nDE=17.50"}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium">Prices by currency</label>
+                <p className="mt-1 text-xs text-zinc-500">
+                  Fixed price for buyers who pay in another currency (set by Markets or the
+                  currency switcher). Example: EUR=25.00 or GBP:21.00. Without it, the price is
+                  converted from {currency} at the daily exchange rate. Applies to the product
+                  price; variants keep converted prices.
+                </p>
+                <textarea
+                  name="currencyPrices"
+                  defaultValue={initial.currencyPrices ?? ""}
+                  rows={3}
+                  className="ugclab-input mt-1.5 font-mono text-sm"
+                  placeholder={"EUR=25.00\nGBP=21.00"}
                 />
               </div>
             </section>
@@ -392,6 +454,42 @@ export function ProductForm({
                   className="ugclab-input mt-1 w-full"
                 />
               </div>
+              <div className="space-y-2 border-t border-zinc-100 pt-4">
+                <label className="flex cursor-pointer items-start gap-3">
+                  <input
+                    type="checkbox"
+                    name="payWhatYouWant"
+                    checked={payWhatYouWant}
+                    onChange={(e) => setPayWhatYouWant(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-300 text-violet-600 focus:ring-violet-500"
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium text-zinc-900">
+                      Pay what you want
+                    </span>
+                    <span className="mt-0.5 block text-xs leading-relaxed text-zinc-500">
+                      Buyers choose their own price at checkout. The price above is shown as
+                      the suggested amount.
+                    </span>
+                  </span>
+                </label>
+                {payWhatYouWant ? (
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-600">
+                      Minimum price ({currency})
+                    </label>
+                    <input
+                      name="minPrice"
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      defaultValue={initial.minPrice ?? ""}
+                      placeholder="0.00"
+                      className="ugclab-input mt-1 w-full"
+                    />
+                  </div>
+                ) : null}
+              </div>
               <div>
                 <label className="block text-xs font-medium text-zinc-600">
                   Schedule publish
@@ -406,6 +504,7 @@ export function ProductForm({
                   Future date keeps product as draft until then.
                 </p>
               </div>
+              <QuantityOffersFields initial={initial.quantityOffers} currency={currency} />
             </section>
 
             {type === "PHYSICAL" ? (
@@ -574,6 +673,127 @@ export function ProductForm({
                     defaultValue={initial.downloadLimit ?? 5}
                     className="ugclab-input mt-1 w-full"
                   />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600">
+                    License keys (one per line)
+                  </label>
+                  <textarea
+                    name="licenseKeysPool"
+                    rows={5}
+                    defaultValue={initial.licenseKeysPool ?? ""}
+                    placeholder={"AAAA-BBBB-CCCC\nDDDD-EEEE-FFFF"}
+                    className="ugclab-input mt-1 w-full font-mono text-xs"
+                  />
+                  <p className="mt-1 text-[11px] text-zinc-500">
+                    Each paid unit takes the next unused key and emails it with the download link.
+                  </p>
+                </div>
+                <div className="space-y-3 border-t border-zinc-100 pt-4">
+                  <div>
+                    <h3 className="text-xs font-medium text-zinc-600">
+                      Course lessons (gated content)
+                    </h3>
+                    <p className="mt-1 text-[11px] text-zinc-500">
+                      Buyers see lessons in their Library after purchase. Video is embedded, not
+                      downloadable. A file upload is optional for courses.
+                    </p>
+                  </div>
+                  <input type="hidden" name="lessons" value={JSON.stringify(lessons)} />
+                  {lessons.map((lesson, idx) => (
+                    <div
+                      key={idx}
+                      className="space-y-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                          Lesson {idx + 1}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            disabled={idx === 0}
+                            aria-label="Move lesson up"
+                            onClick={() =>
+                              setLessons((prev) => swapLessons(prev, idx - 1, idx))
+                            }
+                            className="rounded border border-zinc-200 bg-white px-1.5 py-0.5 text-xs text-zinc-600 disabled:opacity-40"
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            disabled={idx === lessons.length - 1}
+                            aria-label="Move lesson down"
+                            onClick={() =>
+                              setLessons((prev) => swapLessons(prev, idx, idx + 1))
+                            }
+                            className="rounded border border-zinc-200 bg-white px-1.5 py-0.5 text-xs text-zinc-600 disabled:opacity-40"
+                          >
+                            ↓
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setLessons((prev) => prev.filter((_, i) => i !== idx))
+                            }
+                            className="rounded border border-red-200 bg-red-50 px-1.5 py-0.5 text-xs text-red-700"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                      <input
+                        value={lesson.title}
+                        onChange={(e) =>
+                          setLessons((prev) =>
+                            prev.map((l, i) =>
+                              i === idx ? { ...l, title: e.target.value } : l
+                            )
+                          )
+                        }
+                        placeholder="Lesson title"
+                        className="ugclab-input w-full text-sm"
+                      />
+                      <input
+                        value={lesson.videoUrl ?? ""}
+                        onChange={(e) =>
+                          setLessons((prev) =>
+                            prev.map((l, i) =>
+                              i === idx ? { ...l, videoUrl: e.target.value } : l
+                            )
+                          )
+                        }
+                        placeholder="Video URL (YouTube, Vimeo or Loom link, optional)"
+                        className="ugclab-input w-full text-sm"
+                      />
+                      <textarea
+                        value={lesson.body}
+                        onChange={(e) =>
+                          setLessons((prev) =>
+                            prev.map((l, i) =>
+                              i === idx ? { ...l, body: e.target.value } : l
+                            )
+                          )
+                        }
+                        rows={4}
+                        placeholder="Lesson text, notes or links"
+                        className="ugclab-input w-full text-sm"
+                      />
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setLessons((prev) => [
+                        ...prev,
+                        { title: "", body: "", videoUrl: "" },
+                      ])
+                    }
+                    className="ugclab-btn border border-zinc-200 bg-white text-xs"
+                  >
+                    Add lesson
+                  </button>
                 </div>
               </section>
             ) : null}

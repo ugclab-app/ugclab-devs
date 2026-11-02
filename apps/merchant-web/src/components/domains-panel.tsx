@@ -12,6 +12,34 @@ import {
 
 const RECOMMENDED_REGISTRARS = new Set(["cloudflare", "namecheap"]);
 
+type EntriClient = {
+  purchaseDomain: (config: Record<string, unknown>) => void;
+};
+
+declare global {
+  interface Window {
+    entri?: EntriClient;
+  }
+}
+
+function loadEntri(): Promise<EntriClient> {
+  if (window.entri) return Promise.resolve(window.entri);
+  return new Promise((resolve, reject) => {
+    const ready = () => {
+      if (window.entri) resolve(window.entri);
+      else reject(new Error("Entri did not start"));
+    };
+    window.addEventListener("entri:ready", ready, { once: true });
+    if (document.querySelector("script[data-entri]")) return;
+    const script = document.createElement("script");
+    script.src = "https://cdn.goentri.com/entri.js";
+    script.async = true;
+    script.dataset.entri = "1";
+    script.onerror = () => reject(new Error("Could not load the Entri checkout"));
+    document.head.appendChild(script);
+  });
+}
+
 type Domain = {
   id: string;
   domain: string;
@@ -25,6 +53,7 @@ type DnsInstructions = {
   txtHost: string;
   txtValue: string;
   cnameHost: string;
+  apexHost?: string;
   cnameTarget: string;
   note: string;
 };
@@ -51,6 +80,9 @@ export function DomainsPanel() {
   const [aliasDraft, setAliasDraft] = useState("");
   const [editingAlias, setEditingAlias] = useState<string | null>(null);
   const [editingAliasDraft, setEditingAliasDraft] = useState("");
+  const [showOtherRegistrars, setShowOtherRegistrars] = useState(false);
+  const [checkoutOpen, setCheckoutOpen] = useState(true);
+  const [stepsOpen, setStepsOpen] = useState(true);
 
   const { data, isLoading } = useQuery({
     queryKey: ["domains"],
@@ -96,6 +128,51 @@ export function DomainsPanel() {
       setAlert({
         ok: false,
         message: err instanceof Error ? err.message : "Failed",
+      });
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function buyWithEntri(domain: string) {
+    setPending(true);
+    setSelectedBuyDomain(domain);
+    try {
+      const session = await api.entriPurchaseSession(domain);
+      const entri = await loadEntri();
+      entri.purchaseDomain({
+        applicationId: session.applicationId,
+        token: session.token,
+        userId: session.userId,
+        prefilledDomain: session.domain,
+        dnsRecords: session.dnsRecords,
+        freeDomain: false,
+        disableMailUpsell: true,
+        onSuccess: (data: { domain?: string; freeDomain?: boolean }) => {
+          if (data?.freeDomain) {
+            setAlert({ ok: false, message: ta("domainsPage.entriNotFree") });
+            return;
+          }
+          const bought = data?.domain || session.domain;
+          void api
+            .completeEntriPurchase(bought)
+            .then(async () => {
+              setAlert({ ok: true, message: ta("domainsPage.entriSuccess") });
+              setTab("connect");
+              await queryClient.invalidateQueries({ queryKey: ["domains"] });
+            })
+            .catch((err) => {
+              setAlert({
+                ok: false,
+                message: err instanceof Error ? err.message : ta("domainsPage.entriPending"),
+              });
+            });
+        },
+      });
+    } catch (err) {
+      setAlert({
+        ok: false,
+        message: err instanceof Error ? err.message : "Could not open Entri",
       });
     } finally {
       setPending(false);
@@ -348,6 +425,9 @@ export function DomainsPanel() {
       {tab === "buy" && (
         <div className="space-y-6">
           <SettingsPanelShell title={ta("domainsPage.buyTitle")} description={ta("domainsPage.buyDesc")}>
+            <p className="mb-4 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-violet-950">
+              {ta("domainsPage.youPay")}
+            </p>
             {!entriConfigured ? (
               <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                 {ta("domainsPage.entriHint")}
@@ -418,25 +498,52 @@ export function DomainsPanel() {
                         </span>
                       ) : null}
                     </div>
-                    <button
-                      type="button"
-                      className="ugclab-btn ugclab-btn-secondary text-xs"
-                      onClick={() => setSelectedBuyDomain(r.domain)}
-                    >
-                      {ta("domainsPage.buyOptions")}
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={pending || r.available === false}
+                        className="ugclab-btn ugclab-btn-primary text-xs"
+                        onClick={() => void buyWithEntri(r.domain)}
+                      >
+                        {ta("domainsPage.buyHere")}
+                      </button>
+                      <button
+                        type="button"
+                        className="ugclab-btn ugclab-btn-secondary text-xs"
+                        onClick={() => {
+                          setSelectedBuyDomain(r.domain);
+                          setShowOtherRegistrars(true);
+                          setCheckoutOpen(true);
+                          setStepsOpen(true);
+                        }}
+                      >
+                        {ta("domainsPage.buyOther")}
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>
             ) : null}
 
-            {selectedBuyDomain && registrars.length > 0 ? (
+            {selectedBuyDomain && showOtherRegistrars && registrars.length > 0 ? (
               <div className="mt-6 space-y-4">
                 <div className="rounded-xl border border-violet-100 bg-violet-50/50 p-4">
-                  <p className="text-sm font-semibold text-zinc-900">
-                    {ta("domainsPage.checkoutFor")}{" "}
-                    <span className="font-mono">{selectedBuyDomain}</span>
-                  </p>
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between gap-3 text-left"
+                    aria-expanded={checkoutOpen}
+                    onClick={() => setCheckoutOpen((open) => !open)}
+                  >
+                    <span className="text-sm font-semibold text-zinc-900">
+                      {ta("domainsPage.checkoutFor")}{" "}
+                      <span className="font-mono">{selectedBuyDomain}</span>
+                    </span>
+                    <span className="shrink-0 text-xs font-medium text-violet-700">
+                      {checkoutOpen ? ta("domainsPage.collapse") : ta("domainsPage.expand")}
+                    </span>
+                  </button>
+                  {checkoutOpen ? (
+                  <>
                   <p className="mt-1 text-xs text-zinc-600">
                     {ta("domainsPage.checkoutDesc")}{" "}
                     <button
@@ -480,12 +587,26 @@ export function DomainsPanel() {
                       );
                     })}
                   </ul>
+                  </>
+                  ) : null}
                 </div>
 
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
-                  <p className="text-sm font-semibold text-emerald-950">
-                    {ta("domainsPage.afterPurchaseTitle")}
-                  </p>
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between gap-3 text-left"
+                    aria-expanded={stepsOpen}
+                    onClick={() => setStepsOpen((open) => !open)}
+                  >
+                    <span className="text-sm font-semibold text-emerald-950">
+                      {ta("domainsPage.afterPurchaseTitle")}
+                    </span>
+                    <span className="shrink-0 text-xs font-medium text-emerald-800">
+                      {stepsOpen ? ta("domainsPage.collapse") : ta("domainsPage.expand")}
+                    </span>
+                  </button>
+                  {stepsOpen ? (
+                  <>
                   <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-emerald-900">
                     {ta("domainsPage.afterPurchaseSteps")
                       .split("\n")
@@ -500,6 +621,8 @@ export function DomainsPanel() {
                   >
                     {ta("domainsPage.goToConnect")}
                   </button>
+                  </>
+                  ) : null}
                 </div>
               </div>
             ) : null}
@@ -647,6 +770,9 @@ function DomainConnectCard({
         <div className="mt-4 space-y-3 rounded-lg bg-zinc-50 p-3 text-xs">
           <DnsRow label={ta("domainsPage.dnsTxtHost")} value={instr.txtHost} />
           <DnsRow label={ta("domainsPage.dnsTxtValue")} value={instr.txtValue} copy />
+          {instr.apexHost ? (
+            <DnsRow label={ta("domainsPage.dnsCnameHost")} value={instr.apexHost} />
+          ) : null}
           <DnsRow label={ta("domainsPage.dnsCnameHost")} value={instr.cnameHost} />
           <DnsRow label={ta("domainsPage.dnsCnameTarget")} value={instr.cnameTarget} copy />
           <p className="text-zinc-500">{instr.note}</p>

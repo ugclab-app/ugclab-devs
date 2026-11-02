@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Tescommerce — Promo</title>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const RU = params.get("lang") === "ru";
+    if (params.get("fmt") === "v") document.documentElement.classList.add("v");
+    if (RU) document.documentElement.lang = "ru";
+  </script>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 1920px;
+      height: 1080px;
+      overflow: hidden;
+      background: #f6f3fb;
+      font-family: "Segoe UI", sans-serif;
+      color: #18141f;
+      -webkit-font-smoothing: antialiased;
+    }
+    body.fast *, body.fast *::before, body.fast *::after { transition: none !important; }
+    #stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; }
+    .orb { position: absolute; border-radius: 50%; filter: blur(10px); pointer-events: none; }
+    .orb-a {
+      width: 760px; height: 760px; top: -240px; right: -120px;
+      background: radial-gradient(circle, rgba(91, 33, 182, 0.2), transparent 68%);
+      animation: drift 8s ease-in-out infinite alternate;
+    }
+    .orb-b {
+      width: 640px; height: 640px; bottom: -220px; left: -140px;
+      background: radial-gradient(circle, rgba(13, 148, 136, 0.16), transparent 68%);
+      animation: drift 10s ease-in-out infinite alternate-reverse;
+    }
+    @keyframes drift { to { transform: translate3d(48px, -32px, 0); } }
+
+    /* ---------- scenes ---------- */
+    .scene {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(46px) scale(0.985);
+      transition: opacity 0.5s ease, transform 0.7s cubic-bezier(0.16, 1, 0.3, 1), visibility 0s 0.5s;
+    }
+    .scene.past { transform: translateY(-46px) scale(0.985); }
+    .scene.on {
+      opacity: 1;
+      visibility: visible;
+      transform: none;
+      transition: opacity 0.5s ease 0.1s, transform 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.1s, visibility 0s;
+    }
+
+    .split { display: grid; grid-template-columns: 600px 1080px; gap: 70px; align-items: center; }
+    .kick {
+      display: inline-flex;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: #fff;
+      border: 1px solid rgba(167, 139, 250, 0.5);
+      color: #6d28d9;
+      font-size: 18px;
+      font-weight: 750;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    h2 {
+      margin: 22px 0 0;
+      font-size: 76px;
+      line-height: 1.02;
+      letter-spacing: -0.045em;
+      font-weight: 720;
+    }
+    .grad {
+      background: linear-gradient(90deg, #7c3aed, #4f46e5 55%, #6d28d9);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .sub { margin-top: 22px; font-size: 26px; line-height: 1.4; color: #4b4458; max-width: 540px; }
+    .scene .cap > * { opacity: 0; transform: translateY(18px); }
+    .scene.on .cap > * { animation: rise 0.5s cubic-bezier(0.16, 1.2, 0.3, 1) both; }
+    .scene.on .cap > :nth-child(1) { animation-delay: 0.2s; }
+    .scene.on .cap > :nth-child(2) { animation-delay: 0.32s; }
+    .scene.on .cap > :nth-child(3) { animation-delay: 0.46s; }
+    @keyframes rise { to { opacity: 1; transform: none; } }
+
+    /* ---------- browser window ---------- */
+    .win {
+      position: relative;
+      width: 1080px;
+      height: 700px;
+      border-radius: 22px;
+      background: #fff;
+      box-shadow: 0 40px 90px rgba(48, 20, 80, 0.16), 0 0 0 1px rgba(48, 20, 80, 0.06);
+      overflow: hidden;
+    }
+    .bar {
+      height: 52px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 18px;
+      background: #f4f1f8;
+      border-bottom: 1px solid #ebe5f3;
+    }
+    .dot { width: 13px; height: 13px; border-radius: 50%; background: #e2dbea; }
+    .url {
+      margin-left: 18px;
+      flex: 1;
+      height: 32px;
+      border-radius: 9px;
+      background: #fff;
+      display: flex;
+      align-items: center;
+      padding: 0 14px;
+      font-size: 16px;
+      color: #6b6280;
+      gap: 8px;
+    }
+    .lock { width: 10px; height: 12px; border: 2px solid #9a8fb0; border-radius: 3px; position: relative; }
+    .body { position: absolute; inset: 52px 0 0 0; }
+
+    /* ---------- hook ---------- */
+    .hook { text-align: center; }
+    .hook h1 { margin: 0; font-size: 120px; line-height: 1.02; letter-spacing: -0.05em; font-weight: 700; }
+    .hook .l { display: block; }
+    .hook .l.in { animation: inLeft 0.5s cubic-bezier(0.16, 1.3, 0.3, 1) both; }
+    .hook .l.in2 { animation: inRight 0.5s 0.12s cubic-bezier(0.16, 1.3, 0.3, 1) both; }
+    .strike { position: relative; color: #9a8fb0; }
+    .strike::after {
+      content: "";
+      position: absolute;
+      left: -6px; right: -6px; top: 54%;
+      height: 10px;
+      border-radius: 6px;
+      background: #e11d48;
+      transform: scaleX(0);
+      transform-origin: left;
+    }
+    .strike.go::after { animation: strike 0.35s 0.55s ease-out forwards; }
+    @keyframes strike { to { transform: scaleX(1); } }
+    @keyframes inLeft { from { opacity: 0; transform: translateX(-90px); } to { opacity: 1; transform: none; } }
+    @keyframes inRight { from { opacity: 0; transform: translateX(90px); } to { opacity: 1; transform: none; } }
+
+    /* ---------- create ---------- */
+    .signup {
+      position: absolute;
+      left: 50%; top: 50%;
+      width: 560px;
+      transform: translate(-50%, -50%);
+      padding: 40px;
+      border-radius: 22px;
+      border: 1px solid #ebe5f3;
+      background: #fff;
+      box-shadow: 0 20px 50px rgba(48, 20, 80, 0.08);
+    }
+    .signup h3 { margin: 0 0 26px; font-size: 32px; letter-spacing: -0.03em; }
+    .lbl { font-size: 16px; font-weight: 650; color: #6b6280; margin: 18px 0 8px; }
+    .field {
+      height: 56px;
+      border-radius: 12px;
+      border: 2px solid #e6e0ee;
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      font-size: 22px;
+      font-weight: 600;
+    }
+    .field.focus { border-color: #7c3aed; box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.12); }
+    .field .muted { color: #9a8fb0; font-weight: 500; }
+    .caret { display: inline-block; width: 2px; height: 26px; background: #7c3aed; margin-left: 2px; animation: blink 0.9s steps(1) infinite; }
+    @keyframes blink { 50% { opacity: 0; } }
+    .check {
+      margin-left: auto;
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      background: #10b981;
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-size: 16px;
+      font-weight: 800;
+      transform: scale(0);
+      transition: transform 0.35s cubic-bezier(0.16, 1.6, 0.3, 1);
+    }
+    .check.on { transform: scale(1); }
+    .btn {
+      margin-top: 28px;
+      height: 60px;
+      border-radius: 13px;
+      display: grid;
+      place-items: center;
+      background: #5b21b6;
+      color: #fff;
+      font-size: 22px;
+      font-weight: 750;
+      transition: background 0.3s, transform 0.15s;
+    }
+    .btn.press { transform: scale(0.97); }
+    .btn.ok { background: #059669; }
+    .toast {
+      position: absolute;
+      left: 50%;
+      bottom: 34px;
+      transform: translate(-50%, 30px);
+      opacity: 0;
+      padding: 14px 22px;
+      border-radius: 14px;
+      background: #18141f;
+      color: #fff;
+      font-size: 20px;
+      font-weight: 650;
+      transition: 0.45s cubic-bezier(0.16, 1.3, 0.3, 1);
+      white-space: nowrap;
+    }
+    .toast.on { opacity: 1; transform: translate(-50%, 0); }
+
+    /* ---------- admin ---------- */
+    .admin { display: grid; grid-template-columns: 220px 1fr; height: 100%; }
+    .side { background: #faf8fc; border-right: 1px solid #efe9f6; padding: 22px 14px; }
+    .side .brand { display: flex; align-items: center; gap: 10px; font-weight: 750; font-size: 18px; margin: 0 8px 22px; }
+    .mini {
+      width: 30px; height: 30px; border-radius: 9px;
+      background: linear-gradient(135deg, #0d9488, #059669);
+      color: #fff; display: grid; place-items: center; font-weight: 760; font-size: 17px;
+    }
+    .nav { padding: 11px 12px; border-radius: 10px; font-size: 17px; font-weight: 600; color: #6b6280; }
+    .nav.act { background: #efe7fb; color: #5b21b6; }
+    .main { padding: 28px 32px; position: relative; }
+    .main h4 { margin: 0 0 20px; font-size: 28px; letter-spacing: -0.03em; }
+
+    .grid4 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+    .pcard {
+      display: flex;
+      gap: 16px;
+      padding: 16px;
+      border-radius: 16px;
+      border: 1px solid #ebe5f3;
+      background: #fff;
+      opacity: 0;
+      transform: translateY(26px) scale(0.96);
+    }
+    .pcard.on { opacity: 1; transform: none; transition: 0.45s cubic-bezier(0.16, 1.3, 0.3, 1); }
+    .thumb { width: 110px; height: 110px; border-radius: 13px; flex: none; position: relative; overflow: hidden; }
+    .th1 { background: linear-gradient(135deg, #f59e0b, #ec4899); }
+    .th2 { background: linear-gradient(135deg, #1e293b, #6366f1); }
+    .th3 { background: linear-gradient(135deg, #e7e5e4, #a8a29e); }
+    .th4 { background: linear-gradient(135deg, #14b8a6, #0ea5e9); }
+    .thumb::after {
+      content: "";
+      position: absolute;
+      inset: 28px;
+      border-radius: 50%;
+      border: 5px solid rgba(255, 255, 255, 0.75);
+    }
+    .th3::after { inset: 24px 30px; border-radius: 8px 8px 14px 14px; border-color: #57534e; }
+    .pinfo { flex: 1; min-width: 0; }
+    .pname { font-size: 19px; font-weight: 700; }
+    .pprice { margin-top: 4px; font-size: 22px; font-weight: 760; }
+    .tag {
+      display: inline-flex;
+      margin-top: 8px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 750;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+    .tag.dig { background: #ede9fe; color: #6d28d9; }
+    .tag.phy { background: #fef3c7; color: #b45309; }
+    .up { margin-top: 10px; height: 8px; border-radius: 9px; background: #f1edf6; overflow: hidden; }
+    .up i { display: block; height: 100%; width: 0; background: #7c3aed; border-radius: 9px; }
+    .pcard.on .up i { width: 100%; transition: width 1.1s 0.3s ease-out; }
+    .upl { margin-top: 6px; font-size: 13px; color: #6b6280; font-weight: 600; }
+    .vars { display: flex; gap: 6px; margin-top: 10px; }
+    .vars b {
+      min-width: 34px; height: 30px; border-radius: 8px; border: 1px solid #e6e0ee;
+      display: grid; place-items: center; font-size: 14px; color: #4b4458;
+      opacity: 0; transform: scale(0.6);
+    }
+    .pcard.on .vars b { opacity: 1; transform: none; transition: 0.3s cubic-bezier(0.16, 1.6, 0.3, 1); }
+    .pcard.on .vars b:nth-child(2) { transition-delay: 0.1s; }
+    .pcard.on .vars b:nth-child(3) { transition-delay: 0.2s; }
+    .pcard.on .vars b:nth-child(4) { transition-delay: 0.3s; }
+
+    /* ---------- storefront ---------- */
+    .shop {
+      --accent: #5b21b6;
+      --h1: #ede9fe;
+      --h2: #c7d2fe;
+      --bg: #ffffff;
+      --ink: #18141f;
+      --card: #faf8fc;
+      height: 100%;
+      background: var(--bg);
+      color: var(--ink);
+      padding: 22px 34px;
+      transition: background 0.5s, color 0.5s;
+    }
+    .shop.t2 { --accent: #c2410c; --h1: #ffedd5; --h2: #fecaca; --bg: #fffbf5; --card: #fff4e6; }
+    .shop.t3 { --accent: #a3e635; --h1: #1f2937; --h2: #111827; --bg: #0b0b10; --ink: #f5f5f4; --card: #17171f; }
+    .shead { display: flex; align-items: center; justify-content: space-between; font-weight: 800; letter-spacing: 0.18em; font-size: 20px; }
+    .shead nav { display: flex; gap: 26px; font-size: 15px; letter-spacing: 0.04em; font-weight: 600; opacity: 0.7; }
+    .cart { padding: 8px 16px; border-radius: 999px; background: var(--accent); color: var(--bg); font-size: 14px; letter-spacing: 0.04em; transition: 0.5s; }
+    .hero2 {
+      margin-top: 20px;
+      height: 230px;
+      border-radius: 20px;
+      background: linear-gradient(120deg, var(--h1), var(--h2));
+      padding: 38px 40px;
+      transition: 0.5s;
+    }
+    .hero2 .k { font-size: 15px; font-weight: 750; letter-spacing: 0.14em; color: var(--accent); transition: 0.5s; }
+    .hero2 .t { margin-top: 10px; font-size: 46px; font-weight: 760; letter-spacing: -0.04em; }
+    .hero2 .b { display: inline-block; margin-top: 18px; padding: 11px 20px; border-radius: 11px; background: var(--accent); color: var(--bg); font-weight: 750; font-size: 16px; transition: 0.5s; }
+    .srow { margin-top: 22px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+    .sitem { background: var(--card); border-radius: 16px; padding: 12px; transition: 0.5s; }
+    .sitem .thumb { width: 100%; height: 150px; }
+    .sitem .n { margin-top: 10px; font-size: 15px; font-weight: 650; }
+    .sitem .p { font-size: 16px; font-weight: 760; color: var(--accent); transition: 0.5s; }
+    .chips { position: absolute; left: 34px; bottom: -70px; display: flex; gap: 10px; }
+    .chip {
+      padding: 10px 16px;
+      border-radius: 999px;
+      background: #fff;
+      box-shadow: 0 10px 26px rgba(48, 20, 80, 0.1);
+      font-size: 17px;
+      font-weight: 700;
+      color: #4b4458;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: 0.3s;
+    }
+    .chip i { width: 16px; height: 16px; border-radius: 50%; }
+    .chip.act { color: #18141f; box-shadow: 0 0 0 2px #7c3aed, 0 10px 26px rgba(91, 33, 182, 0.2); }
+    .storewrap { position: relative; }
+    .phone {
+      position: absolute;
+      right: -60px;
+      bottom: -90px;
+      width: 290px;
+      height: 590px;
+      border-radius: 46px;
+      background: #18141f;
+      padding: 12px;
+      box-shadow: 0 40px 80px rgba(24, 20, 31, 0.35);
+      transform: translateY(160px) rotate(6deg);
+      opacity: 0;
+      transition: 0.7s cubic-bezier(0.16, 1.2, 0.3, 1);
+    }
+    .phone.on { transform: rotate(-3deg); opacity: 1; }
+    .phone .shop { border-radius: 36px; padding: 40px 16px 16px; overflow: hidden; }
+    .phone .shead { font-size: 14px; }
+    .phone .cart { padding: 6px 10px; font-size: 11px; }
+    .phone .hero2 { height: 150px; padding: 20px; margin-top: 14px; border-radius: 16px; }
+    .phone .hero2 .t { font-size: 25px; }
+    .phone .hero2 .b { padding: 7px 12px; font-size: 12px; margin-top: 10px; }
+    .phone .srow { grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+    .phone .sitem { padding: 8px; border-radius: 12px; }
+    .phone .sitem .thumb { height: 92px; }
+    .phone .sitem .thumb::after { inset: 22px 30px; }
+    .phone .sitem .n { font-size: 11px; margin-top: 6px; }
+    .phone .sitem .p { font-size: 12px; }
+
+    /* ---------- checkout ---------- */
+    .co { display: grid; grid-template-columns: 1fr 1fr; height: 100%; }
+    .co .sum { background: #faf8fc; padding: 50px 46px; border-right: 1px solid #efe9f6; }
+    .co .sum .thumb { width: 100%; height: 250px; border-radius: 18px; }
+    .co .sum .n { margin-top: 22px; font-size: 26px; font-weight: 720; letter-spacing: -0.02em; }
+    .co .sum .p { margin-top: 6px; font-size: 44px; font-weight: 780; letter-spacing: -0.04em; }
+    .co .sum .d { margin-top: 10px; font-size: 17px; color: #6b6280; }
+    .co .pay { padding: 50px 46px; position: relative; }
+    .wallets { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .wallet { height: 56px; border-radius: 12px; background: #000; color: #fff; display: grid; place-items: center; font-size: 20px; font-weight: 650; }
+    .wallet.g { background: #fff; color: #18141f; border: 2px solid #e6e0ee; }
+    .or { text-align: center; color: #9a8fb0; font-size: 15px; margin: 20px 0 4px; font-weight: 600; }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .cardnum { letter-spacing: 0.06em; }
+    .brandmark { margin-left: auto; font-size: 14px; font-weight: 800; color: #1a1f71; font-style: italic; letter-spacing: 0.02em; }
+    .done {
+      position: absolute;
+      inset: 0;
+      background: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.35s;
+    }
+    .done.on { opacity: 1; }
+    .bigcheck {
+      width: 120px; height: 120px; border-radius: 50%;
+      background: #10b981; color: #fff;
+      display: grid; place-items: center;
+      font-size: 64px; font-weight: 800;
+      transform: scale(0);
+    }
+    .done.on .bigcheck { animation: popin 0.5s 0.1s cubic-bezier(0.16, 1.6, 0.3, 1) forwards; }
+    @keyframes popin { to { transform: scale(1); } }
+    .done .t { margin-top: 24px; font-size: 34px; font-weight: 760; letter-spacing: -0.03em; }
+    .done .s { margin-top: 8px; font-size: 18px; color: #6b6280; }
+    .spin {
+      width: 26px; height: 26px; border-radius: 50%;
+      border: 3px solid rgba(255, 255, 255, 0.35);
+      border-top-color: #fff;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ---------- dashboard ---------- */
+    .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .kpi { padding: 20px 22px; border-radius: 16px; border: 1px solid #ebe5f3; }
+    .kpi .l { font-size: 15px; font-weight: 650; color: #6b6280; }
+    .kpi .v { margin-top: 6px; font-size: 42px; font-weight: 780; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
+    .kpi .dl { margin-top: 2px; font-size: 15px; font-weight: 700; color: #059669; }
+    .chart { margin-top: 18px; padding: 20px 22px; border-radius: 16px; border: 1px solid #ebe5f3; }
+    .chart .l { font-size: 15px; font-weight: 650; color: #6b6280; }
+    .chart svg { display: block; margin-top: 8px; }
+    #line { stroke-dasharray: 1400; stroke-dashoffset: 1400; }
+    #line.draw { stroke-dashoffset: 0; transition: stroke-dashoffset 2.4s cubic-bezier(0.4, 0, 0.2, 1); }
+    #area { opacity: 0; }
+    #area.draw { opacity: 1; transition: opacity 1s 1.4s; }
+    .orders { position: absolute; bottom: 120px; right: 50px; display: flex; flex-direction: column; gap: 10px; width: 330px; }
+    .addp {
+      grid-column: span 2;
+      height: 64px;
+      border-radius: 16px;
+      border: 2px dashed #ddd3ea;
+      display: grid;
+      place-items: center;
+      font-size: 18px;
+      font-weight: 700;
+      color: #7c3aed;
+      opacity: 0;
+    }
+    .addp.on { opacity: 1; transition: opacity 0.4s; }
+    .order {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 16px; border-radius: 14px;
+      background: #fff;
+      box-shadow: 0 16px 40px rgba(48, 20, 80, 0.16);
+      font-size: 16px; font-weight: 600;
+      opacity: 0; transform: translateX(60px);
+    }
+    .order.on { opacity: 1; transform: none; transition: 0.45s cubic-bezier(0.16, 1.3, 0.3, 1); }
+    .order .flag { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; font-size: 13px; font-weight: 800; color: #fff; flex: none; }
+    .order .amt { margin-left: auto; font-weight: 780; font-size: 18px; color: #059669; }
+    .order small { display: block; color: #6b6280; font-weight: 600; font-size: 13px; }
+
+    /* ---------- payout ---------- */
+    .pay-card {
+      position: absolute; left: 50%; top: 50%;
+      width: 620px;
+      transform: translate(-50%, -50%);
+      padding: 40px;
+      border-radius: 24px;
+      border: 1px solid #ebe5f3;
+      box-shadow: 0 20px 50px rgba(48, 20, 80, 0.08);
+      background: #fff;
+    }
+    .bal-l { font-size: 18px; color: #6b6280; font-weight: 650; }
+    .bal { margin-top: 6px; font-size: 68px; font-weight: 780; letter-spacing: -0.05em; font-variant-numeric: tabular-nums; }
+    .ccy { display: flex; gap: 8px; margin-top: 12px; }
+    .ccy span { padding: 6px 12px; border-radius: 999px; background: #f4f0fa; font-weight: 700; font-size: 15px; color: #4b4458; }
+    .ccy span.act { background: #5b21b6; color: #fff; }
+    .steps { margin-top: 26px; display: flex; flex-direction: column; gap: 14px; }
+    .step { display: flex; align-items: center; gap: 14px; font-size: 20px; font-weight: 650; color: #9a8fb0; transition: color 0.3s; }
+    .step .c {
+      width: 30px; height: 30px; border-radius: 50%;
+      border: 2px solid #e6e0ee;
+      display: grid; place-items: center;
+      color: transparent; font-size: 15px; font-weight: 800;
+      transition: 0.3s;
+    }
+    .step.on { color: #18141f; }
+    .step.on .c { background: #10b981; border-color: #10b981; color: #fff; }
+    .step small { margin-left: auto; font-size: 15px; color: #6b6280; font-weight: 600; }
+
+    /* ---------- features ---------- */
+    .feats { text-align: center; }
+    .feats h2 { margin: 0; }
+    .fgrid { margin-top: 56px; display: grid; grid-template-columns: repeat(3, 400px); gap: 22px; justify-content: center; }
+    .f {
+      display: flex; align-items: center; gap: 18px;
+      padding: 24px 26px;
+      border-radius: 20px;
+      background: #fff;
+      box-shadow: 0 18px 44px rgba(48, 20, 80, 0.08);
+      text-align: left;
+      font-size: 24px; font-weight: 720; letter-spacing: -0.02em;
+      opacity: 0; transform: translateY(30px) scale(0.94);
+    }
+    .scene.on .f { animation: fin 0.45s cubic-bezier(0.16, 1.4, 0.3, 1) forwards; }
+    .scene.on .f:nth-child(1) { animation-delay: 0.35s; }
+    .scene.on .f:nth-child(2) { animation-delay: 0.47s; }
+    .scene.on .f:nth-child(3) { animation-delay: 0.59s; }
+    .scene.on .f:nth-child(4) { animation-delay: 0.71s; }
+    .scene.on .f:nth-child(5) { animation-delay: 0.83s; }
+    .scene.on .f:nth-child(6) { animation-delay: 0.95s; }
+    @keyframes fin { to { opacity: 1; transform: none; } }
+    .ic { width: 56px; height: 56px; border-radius: 15px; display: grid; place-items: center; flex: none; }
+    .ic svg { width: 28px; height: 28px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+    /* ---------- end ---------- */
+    .end { text-align: center; display: flex; flex-direction: column; align-items: center; }
+    .mark {
+      width: 108px; height: 108px; border-radius: 32px;
+      display: grid; place-items: center;
+      color: #fff; font-size: 60px; font-weight: 760;
+      background: linear-gradient(135deg, #0d9488, #059669);
+      box-shadow: 0 16px 40px rgba(13, 148, 136, 0.28);
+      position: relative; overflow: hidden;
+    }
+    .scene.on .mark { animation: pop 0.45s cubic-bezier(0.16, 1.45, 0.3, 1) both; }
+    @keyframes pop { from { opacity: 0; transform: scale(0.6) rotate(-8deg); } to { opacity: 1; transform: none; } }
+    .shine {
+      position: absolute; inset: 0;
+      background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.7) 50%, transparent 70%);
+      transform: translateX(-130%);
+    }
+    .mark.spark .shine { animation: shine 0.8s ease forwards; }
+    @keyframes shine { to { transform: translateX(130%); } }
+    .word, .site, .cta, .fine { opacity: 0; transform: translateY(12px); }
+    .word.on, .site.on, .cta.on, .fine.on { opacity: 1; transform: none; transition: 0.32s cubic-bezier(0.16, 1.3, 0.3, 1); }
+    .word { margin-top: 18px; font-size: 80px; font-weight: 760; letter-spacing: -0.045em; }
+    .site { margin-top: 6px; font-size: 28px; font-weight: 700; color: #5b21b6; }
+    .cta { margin-top: 28px; background: #5b21b6; color: #fff; border-radius: 14px; padding: 18px 30px; font-size: 24px; font-weight: 750; }
+    .fine { margin-top: 14px; font-size: 19px; color: #6b6280; }
+
+    /* ---------- vertical 9:16 ---------- */
+    html.v, html.v body, html.v #stage { width: 1080px; height: 1920px; }
+    html.v .orb-a { top: -200px; right: -260px; }
+    html.v .orb-b { bottom: -160px; left: -260px; }
+    html.v .split { grid-template-columns: 1fr; gap: 64px; justify-items: center; }
+    html.v .cap { text-align: center; width: 960px; }
+    html.v h2 { font-size: 92px; }
+    html.v .sub { margin: 24px auto 0; font-size: 32px; max-width: 860px; }
+    html.v .kick { font-size: 22px; }
+    html.v .win, html.v .storewrap { zoom: 0.9; }
+    html.v .storewrap .win { zoom: 1; }
+    html.v .storewrap { margin-bottom: 90px; }
+    html.v .phone { right: 0; }
+    html[lang="ru"]:not(.v) h2 { font-size: 66px; }
+    html[lang="ru"].v .hook h1 { font-size: 92px; }
+    html.v .hook h1 { font-size: 112px; }
+    html.v .fgrid { grid-template-columns: repeat(2, 440px); }
+    html.v .feats h2 { font-size: 92px; }
+    html.v .word { font-size: 96px; }
+
+    /* ---------- cursor ---------- */
+    #cursor {
+      position: absolute;
+      left: 1500px; top: 1200px;
+      width: 34px; height: 34px;
+      z-index: 50;
+      pointer-events: none;
+      opacity: 0;
+      transition: left 0.65s cubic-bezier(0.45, 0, 0.2, 1), top 0.65s cubic-bezier(0.45, 0, 0.2, 1), opacity 0.25s;
+      filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.25));
+    }
+    #cursor.on { opacity: 1; }
+    #cursor svg { position: relative; z-index: 1; }
+    #cursor .ring {
+      position: absolute; left: -22px; top: -22px;
+      width: 44px; height: 44px; border-radius: 50%;
+      background: rgba(124, 58, 237, 0.35);
+      transform: scale(0); opacity: 0;
+    }
+    #cursor.click .ring { animation: ring 0.5s ease-out; }
+    @keyframes ring { from { transform: scale(0.2); opacity: 1; } to { transform: scale(1.6); opacity: 0; } }
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <div class="orb orb-a"></div>
+    <div class="orb orb-b"></div>
+
+    <!-- 0 · hook -->
+    <section class="scene" id="hook">
+      <div class="hook">
+        <h1 id="hookA">
+          <span class="l in">Launching a store</span>
+          <span class="l in2">takes <span class="strike" id="strike">weeks</span>.</span>
+        </h1>
+        <h1 id="hookB" hidden>
+          <span class="l in">Now it takes</span>
+          <span class="l in2 grad">15 minutes.</span>
+        </h1>
+      </div>
+    </section>
+
+    <!-- 1 · create -->
+    <section class="scene" id="create">
+      <div class="split">
+        <div class="cap">
+          <div class="kick">01 · Create</div>
+          <h2>Pick a name.<br /><span class="grad">You're live.</span></h2>
+          <div class="sub">Your own subdomain in minutes. Connect a custom domain whenever you're ready.</div>
+        </div>
+        <div class="win">
+          <div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><div class="url"><i class="lock"></i>tescommerce.com/signup</div></div>
+          <div class="body">
+            <div class="signup">
+              <h3>Create your store</h3>
+              <div class="lbl">Store name</div>
+              <div class="field" id="nameField"><span id="storeName"></span><i class="caret" id="caret1"></i></div>
+              <div class="lbl">Store address</div>
+              <div class="field" id="slugField"><span id="slug"></span><span class="muted">.tescommerce.com</span><span class="check" id="slugOk">✓</span></div>
+              <div class="btn" id="createBtn">Create store</div>
+            </div>
+            <div class="toast" id="liveToast">lumen-studio.tescommerce.com is live</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2 · products -->
+    <section class="scene" id="products">
+      <div class="split">
+        <div class="cap">
+          <div class="kick">02 · Add products</div>
+          <h2>Digital <span class="grad">&amp;</span><br />physical.</h2>
+          <div class="sub">Courses, presets and merch in one catalog. Files are delivered by secure, expiring links.</div>
+        </div>
+        <div class="win">
+          <div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><div class="url"><i class="lock"></i>admin.tescommerce.com/products</div></div>
+          <div class="body">
+            <div class="admin">
+              <div class="side">
+                <div class="brand"><span class="mini">L</span>Lumen Studio</div>
+                <div class="nav">Dashboard</div>
+                <div class="nav">Orders</div>
+                <div class="nav act">Products</div>
+                <div class="nav">Payments</div>
+                <div class="nav">Storefront</div>
+              </div>
+              <div class="main">
+                <h4>Products</h4>
+                <div class="grid4">
+                  <div class="pcard" id="p1">
+                    <div class="thumb th1"></div>
+                    <div class="pinfo"><div class="pname">Golden Hour Presets</div><div class="pprice">$19</div><span class="tag dig">Digital</span><div class="up"><i></i></div><div class="upl">presets.zip · 48 MB</div></div>
+                  </div>
+                  <div class="pcard" id="p2">
+                    <div class="thumb th2"></div>
+                    <div class="pinfo"><div class="pname">Film Photography Course</div><div class="pprice">$49</div><span class="tag dig">Digital</span><div class="up"><i></i></div><div class="upl">12 lessons · video</div></div>
+                  </div>
+                  <div class="pcard" id="p3">
+                    <div class="thumb th3"></div>
+                    <div class="pinfo"><div class="pname">Lumen Tee</div><div class="pprice">$32</div><span class="tag phy">Physical</span><div class="vars"><b>S</b><b>M</b><b>L</b><b>XL</b></div></div>
+                  </div>
+                  <div class="pcard" id="p4">
+                    <div class="thumb th4"></div>
+                    <div class="pinfo"><div class="pname">Photo Zine Vol. 2</div><div class="pprice">$24</div><span class="tag phy">Physical</span><div class="vars"><b>EU</b><b>US</b><b>UK</b></div></div>
+                  </div>
+                  <div class="addp" id="addp">+ Add product</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3 · storefront -->
+    <section class="scene" id="store">
+      <div class="split">
+        <div class="cap">
+          <div class="kick">03 · Design</div>
+          <h2>A storefront<br /><span class="grad">that's yours.</span></h2>
+          <div class="sub">Themes, presets and blocks. Looks right on every screen, no code needed.</div>
+        </div>
+        <div class="storewrap">
+          <div class="win">
+            <div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><div class="url"><i class="lock"></i>lumen-studio.tescommerce.com</div></div>
+            <div class="body">
+              <div class="shop" id="shop">
+                <div class="shead">LUMEN<nav><span>Shop</span><span>Courses</span><span>About</span></nav><span class="cart">Cart · 0</span></div>
+                <div class="hero2"><div class="k">NEW COURSE</div><div class="t">Shoot film like a pro</div><span class="b">Enroll now · $49</span></div>
+                <div class="srow">
+                  <div class="sitem"><div class="thumb th1"></div><div class="n">Golden Hour Presets</div><div class="p">$19</div></div>
+                  <div class="sitem"><div class="thumb th2"></div><div class="n">Film Photography Course</div><div class="p">$49</div></div>
+                  <div class="sitem"><div class="thumb th3"></div><div class="n">Lumen Tee</div><div class="p">$32</div></div>
+                  <div class="sitem"><div class="thumb th4"></div><div class="n">Photo Zine Vol. 2</div><div class="p">$24</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="chips">
+            <div class="chip act" id="chip1"><i style="background:#7c3aed"></i>Lilac</div>
+            <div class="chip" id="chip2"><i style="background:#ea580c"></i>Sunset</div>
+            <div class="chip" id="chip3"><i style="background:#0b0b10"></i>Noir</div>
+          </div>
+          <div class="phone" id="phone">
+            <div class="shop t3" id="shopMobile">
+              <div class="shead">LUMEN<span class="cart">Cart</span></div>
+              <div class="hero2"><div class="k">NEW COURSE</div><div class="t">Shoot film like a pro</div><span class="b">Enroll · $49</span></div>
+              <div class="srow">
+                <div class="sitem"><div class="thumb th1"></div><div class="n">Presets</div><div class="p">$19</div></div>
+                <div class="sitem"><div class="thumb th2"></div><div class="n">Course</div><div class="p">$49</div></div>
+                <div class="sitem"><div class="thumb th3"></div><div class="n">Tee</div><div class="p">$32</div></div>
+                <div class="sitem"><div class="thumb th4"></div><div class="n">Zine</div><div class="p">$24</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4 · checkout -->
+    <section class="scene" id="checkout">
+      <div class="split">
+        <div class="cap">
+          <div class="kick">04 · Checkout</div>
+          <h2>One tap<br /><span class="grad">to pay.</span></h2>
+          <div class="sub">Cards, Apple Pay and Google Pay, powered by Stripe. PCI-compliant by default.</div>
+        </div>
+        <div class="win">
+          <div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><div class="url"><i class="lock"></i>lumen-studio.tescommerce.com/checkout</div></div>
+          <div class="body">
+            <div class="co">
+              <div class="sum">
+                <div class="thumb th2"></div>
+                <div class="n">Film Photography Course</div>
+                <div class="p">$49.00</div>
+                <div class="d">Instant access after payment</div>
+              </div>
+              <div class="pay">
+                <div class="wallets"><div class="wallet">Apple Pay</div><div class="wallet g">Google Pay</div></div>
+                <div class="or">or pay with card</div>
+                <div class="lbl">Email</div>
+                <div class="field" id="emailField"><span id="email"></span></div>
+                <div class="lbl">Card</div>
+                <div class="field" id="cardField"><span class="cardnum" id="cardnum"></span><span class="brandmark">VISA</span></div>
+                <div class="row2">
+                  <div><div class="lbl">Expiry</div><div class="field" id="exp"></div></div>
+                  <div><div class="lbl">CVC</div><div class="field" id="cvc"></div></div>
+                </div>
+                <div class="btn" id="payBtn">Pay $49.00</div>
+                <div class="done" id="paid">
+                  <div class="bigcheck">✓</div>
+                  <div class="t">Payment received</div>
+                  <div class="s">Your download link is on its way</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5 · dashboard -->
+    <section class="scene" id="dash">
+      <div class="split">
+        <div class="cap">
+          <div class="kick">05 · Grow</div>
+          <h2>Sell worldwide.<br /><span class="grad">Watch it grow.</span></h2>
+          <div class="sub">Orders, revenue and conversion in one dashboard. Buyers from any country.</div>
+        </div>
+        <div class="win">
+          <div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><div class="url"><i class="lock"></i>admin.tescommerce.com</div></div>
+          <div class="body">
+            <div class="admin">
+              <div class="side">
+                <div class="brand"><span class="mini">L</span>Lumen Studio</div>
+                <div class="nav act">Dashboard</div>
+                <div class="nav">Orders</div>
+                <div class="nav">Products</div>
+                <div class="nav">Payments</div>
+                <div class="nav">Storefront</div>
+              </div>
+              <div class="main">
+                <h4>Last 30 days</h4>
+                <div class="kpis">
+                  <div class="kpi"><div class="l">Revenue</div><div class="v" id="kRev">$0</div><div class="dl">▲ 38%</div></div>
+                  <div class="kpi"><div class="l">Orders</div><div class="v" id="kOrd">0</div><div class="dl">▲ 24%</div></div>
+                  <div class="kpi"><div class="l">Conversion</div><div class="v" id="kConv">0.0%</div><div class="dl">▲ 0.6 pt</div></div>
+                </div>
+                <div class="chart">
+                  <div class="l">Revenue</div>
+                  <svg width="780" height="250" viewBox="0 0 780 250">
+                    <defs>
+                      <linearGradient id="ag" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0" stop-color="#7c3aed" stop-opacity="0.22" />
+                        <stop offset="1" stop-color="#7c3aed" stop-opacity="0" />
+                      </linearGradient>
+                    </defs>
+                    <g stroke="#f1edf6" stroke-width="1">
+                      <line x1="0" y1="60" x2="780" y2="60" /><line x1="0" y1="130" x2="780" y2="130" /><line x1="0" y1="200" x2="780" y2="200" />
+                    </g>
+                    <path id="area" fill="url(#ag)" d="M0 222 C60 214 90 206 130 200 S210 170 260 176 S350 142 390 132 S470 128 520 100 S610 82 650 64 S730 36 780 22 L780 250 L0 250 Z" />
+                    <path id="line" fill="none" stroke="#7c3aed" stroke-width="5" stroke-linecap="round" d="M0 222 C60 214 90 206 130 200 S210 170 260 176 S350 142 390 132 S470 128 520 100 S610 82 650 64 S730 36 780 22" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="orders">
+            <div class="order" id="o1"><span class="flag" style="background:#7c3aed">DE</span><div>New order<small>Berlin, Germany</small></div><span class="amt">+$49</span></div>
+            <div class="order" id="o2"><span class="flag" style="background:#059669">BR</span><div>New order<small>São Paulo, Brazil</small></div><span class="amt">+$19</span></div>
+            <div class="order" id="o3"><span class="flag" style="background:#e11d48">JP</span><div>New order<small>Tokyo, Japan</small></div><span class="amt">+$32</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6 · payout -->
+    <section class="scene" id="payout">
+      <div class="split">
+        <div class="cap">
+          <div class="kick">06 · Get paid</div>
+          <h2>Your money,<br /><span class="grad">wherever you are.</span></h2>
+          <div class="sub">No Shopify Payments in your country? No problem. Payouts in USD or EUR via Wise.</div>
+        </div>
+        <div class="win">
+          <div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><div class="url"><i class="lock"></i>admin.tescommerce.com/payouts</div></div>
+          <div class="body">
+            <div class="pay-card">
+              <div class="bal-l">Available balance</div>
+              <div class="bal" id="bal">$4,215.00</div>
+              <div class="ccy"><span class="act">USD</span><span>EUR</span></div>
+              <div class="btn" id="payoutBtn">Request payout</div>
+              <div class="steps">
+                <div class="step" id="st1"><span class="c">✓</span>Payout requested</div>
+                <div class="step" id="st2"><span class="c">✓</span>Approved</div>
+                <div class="step" id="st3"><span class="c">✓</span>Sent via Wise<small>3–7 business days</small></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7 · features -->
+    <section class="scene" id="feats">
+      <div class="feats">
+        <h2>Everything you need.<br /><span class="grad">Nothing you don't.</span></h2>
+        <div class="fgrid">
+          <div class="f"><span class="ic" style="background:#ede9fe;color:#6d28d9"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18" /></svg></span>Global storefront</div>
+          <div class="f"><span class="ic" style="background:#e0e7ff;color:#4338ca"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg></span>Digital &amp; physical</div>
+          <div class="f"><span class="ic" style="background:#e0f2fe;color:#0369a1"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2" /><path d="M3 10h18M7 15h4" /></svg></span>Stripe checkout</div>
+          <div class="f"><span class="ic" style="background:#fef3c7;color:#b45309"><svg viewBox="0 0 24 24"><path d="M3 8l9-5 9 5v8l-9 5-9-5z" /><path d="M3 8l9 5 9-5M12 13v8" /></svg></span>Shipping zones</div>
+          <div class="f"><span class="ic" style="background:#d1fae5;color:#047857"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></svg></span>Built-in analytics</div>
+          <div class="f"><span class="ic" style="background:#ffe4e6;color:#be123c"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" /><path d="M9 12l2 2 4-4" /></svg></span>Secure delivery</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 8 · end -->
+    <section class="scene" id="end">
+      <div class="end">
+        <div class="mark" id="mark">T<span class="shine"></span></div>
+        <div class="word" id="endWord">Tescommerce</div>
+        <div class="site" id="endSite">tescommerce.com</div>
+        <div class="cta" id="endCta">Start your store free</div>
+        <div class="fine" id="endFine">No credit card required · Set up in minutes</div>
+      </div>
+    </section>
+
+    <div id="cursor">
+      <span class="ring"></span>
+      <svg width="34" height="34" viewBox="0 0 24 24"><path d="M4 2l15 11.5-6.6 1 3.8 7.4-2.9 1.4-3.8-7.5L4 20z" fill="#18141f" stroke="#fff" stroke-width="1.4" stroke-linejoin="round" /></svg>
+    </div>
+  </div>
+  <script>
+    const shot = params.get("shot");
+    const FAST = !!shot;
+    const tr = (en, ru) => (RU ? ru : en);
+
+    // Russian copy: selector -> innerHTML for each match (cycled when fewer strings than matches)
+    const ruCopy = [
+      ["#hookA", '<span class="l in">Запустить магазин —</span><span class="l in2">это <span class="strike" id="strike">недели</span>.</span>'],
+      ["#hookB", '<span class="l in">Теперь —</span><span class="l in2 grad">15 минут.</span>'],
+      [".kick", "01 · Создание", "02 · Товары", "03 · Дизайн", "04 · Оплата", "05 · Рост", "06 · Выплаты"],
+      ["#create h2", 'Придумайте имя.<br /><span class="grad">Вы онлайн.</span>'],
+      ["#products h2", 'Цифровые <span class="grad">и</span><br />физические.'],
+      ["#store h2", 'Витрина<br /><span class="grad">в вашем стиле.</span>'],
+      ["#checkout h2", 'Оплата<br /><span class="grad">в один тап.</span>'],
+      ["#dash h2", 'Весь мир —<br /><span class="grad">ваши клиенты.</span>'],
+      ["#payout h2", 'Деньги —<br /><span class="grad">в любой стране.</span>'],
+      ["#feats h2", 'Всё, что нужно.<br /><span class="grad">Ничего лишнего.</span>'],
+      [".sub",
+        "Свой поддомен за пару минут. Собственный домен — когда будете готовы.",
+        "Курсы, пресеты и мерч в одном каталоге. Файлы — по защищённым ссылкам с ограниченным сроком.",
+        "Темы, пресеты и блоки. Отлично выглядит на любом экране — без кода.",
+        "Карты, Apple Pay и Google Pay на базе Stripe. PCI-совместимость по умолчанию.",
+        "Заказы, выручка и конверсия в одном дашборде. Покупатели из любой страны.",
+        "Нет Shopify Payments в вашей стране? Не проблема. Выплаты в USD или EUR через Wise."],
+      [".signup h3", "Создайте магазин"],
+      ["#create .lbl", "Название магазина", "Адрес магазина"],
+      ["#createBtn", "Создать магазин"],
+      ["#liveToast", "lumen-studio.tescommerce.com уже работает"],
+      [".nav", "Дашборд", "Заказы", "Товары", "Платежи", "Витрина"],
+      ["#products h4", "Товары"],
+      [".tag.dig", "Цифровой"],
+      [".tag.phy", "Физический"],
+      ["#p2 .upl", "12 уроков · видео"],
+      ["#addp", "+ Добавить товар"],
+      [".co .sum .d", "Доступ сразу после оплаты"],
+      [".or", "или картой"],
+      ["#checkout .lbl", "Email", "Карта", "Срок", "CVC"],
+      ["#payBtn", "Оплатить $49.00"],
+      ["#paid .t", "Оплата получена"],
+      ["#paid .s", "Ссылка на скачивание уже в пути"],
+      ["#dash h4", "Последние 30 дней"],
+      [".kpi .l", "Выручка", "Заказы", "Конверсия"],
+      [".kpi .dl", "▲ 38%", "▲ 24%", "▲ 0,6 п.п."],
+      [".chart .l", "Выручка"],
+      ["#o1 div", "Новый заказ<small>Берлин, Германия</small>"],
+      ["#o2 div", "Новый заказ<small>Сан-Паулу, Бразилия</small>"],
+      ["#o3 div", "Новый заказ<small>Токио, Япония</small>"],
+      [".bal-l", "Доступный баланс"],
+      ["#payoutBtn", "Запросить выплату"],
+      ["#st1", '<span class="c">✓</span>Выплата запрошена'],
+      ["#st2", '<span class="c">✓</span>Одобрено'],
+      ["#st3", '<span class="c">✓</span>Отправлено через Wise<small>3–7 рабочих дней</small>'],
+      [".f", null],
+      ["#endCta", "Создать магазин бесплатно"],
+      ["#endFine", "Без банковской карты · Запуск за несколько минут"]
+    ];
+    const ruFeatures = ["Глобальная витрина", "Цифровые и физические", "Оплата через Stripe", "Зоны доставки", "Встроенная аналитика", "Защищённая доставка"];
+    if (RU) {
+      for (const [sel, ...texts] of ruCopy) {
+        document.querySelectorAll(sel).forEach((el, i) => {
+          if (sel === ".f") el.lastChild.textContent = ruFeatures[i];
+          else el.innerHTML = texts[i % texts.length];
+        });
+      }
+    }
+    if (FAST) document.body.classList.add("fast");
+    const $ = (id) => document.getElementById(id);
+    const scenes = [...document.querySelectorAll(".scene")];
+    const cursor = $("cursor");
+
+    function later(ms, fn) {
+      if (FAST) fn();
+      else setTimeout(fn, ms);
+    }
+    function show(id) {
+      const idx = scenes.findIndex((el) => el.id === id);
+      scenes.forEach((el, i) => {
+        el.classList.toggle("on", i === idx);
+        el.classList.toggle("past", i < idx);
+      });
+    }
+    function reveal(id, on = true) {
+      $(id).classList.toggle("on", on);
+    }
+    function type(id, text, ms) {
+      const el = $(id);
+      if (FAST) {
+        el.textContent = text;
+        return;
+      }
+      let i = 0;
+      el.textContent = "";
+      const iv = setInterval(() => {
+        i += 1;
+        el.textContent = text.slice(0, i);
+        if (i >= text.length) clearInterval(iv);
+      }, ms / text.length);
+    }
+    function count(id, to, ms, fmt) {
+      const el = $(id);
+      if (FAST) {
+        el.textContent = fmt(to);
+        return;
+      }
+      const t0 = performance.now();
+      const tick = (now) => {
+        const p = Math.min(1, (now - t0) / ms);
+        el.textContent = fmt(to * (1 - Math.pow(1 - p, 3)));
+        if (p < 1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    }
+    function cursorTo(id, fx = 0.6, fy = 0.6) {
+      const r = $(id).getBoundingClientRect();
+      cursor.style.left = r.left + r.width * fx + "px";
+      cursor.style.top = r.top + r.height * fy + "px";
+      cursor.classList.add("on");
+    }
+    function cursorOff() {
+      cursor.classList.remove("on");
+    }
+    function click(id) {
+      cursor.classList.remove("click");
+      void cursor.offsetWidth;
+      cursor.classList.add("click");
+      const btn = $(id);
+      btn.classList.add("press");
+      later(150, () => btn.classList.remove("press"));
+    }
+    const usd = (v) => "$" + Math.round(v).toLocaleString("en-US");
+
+    const timeline = [
+      { name: "hook", ms: 1900, apply: () => {
+        show("hook");
+        $("strike").classList.add("go");
+      } },
+      { name: "hook-b", ms: 2300, apply: () => {
+        $("hookA").hidden = true;
+        $("hookB").hidden = false;
+      } },
+
+      { name: "create", ms: 900, apply: () => {
+        show("create");
+        $("nameField").classList.add("focus");
+      } },
+      { name: "create-type", ms: 1500, apply: () => {
+        type("storeName", "Lumen Studio", 650);
+        later(750, () => {
+          $("nameField").classList.remove("focus");
+          $("caret1").hidden = true;
+          $("slugField").classList.add("focus");
+          type("slug", "lumen-studio", 500);
+        });
+        later(1350, () => reveal("slugOk"));
+      } },
+      { name: "create-move", ms: 800, apply: () => {
+        $("slugField").classList.remove("focus");
+        cursorTo("createBtn");
+      } },
+      { name: "create-click", ms: 2500, apply: () => {
+        click("createBtn");
+        later(250, () => {
+          $("createBtn").classList.add("ok");
+          $("createBtn").textContent = tr("✓ Store created", "✓ Магазин создан");
+          reveal("liveToast");
+        });
+        later(1200, cursorOff);
+      } },
+
+      { name: "products", ms: 700, apply: () => show("products") },
+      { name: "p1", ms: 550, apply: () => reveal("p1") },
+      { name: "p2", ms: 550, apply: () => reveal("p2") },
+      { name: "p3", ms: 550, apply: () => reveal("p3") },
+      { name: "p4", ms: 2700, apply: () => {
+        reveal("p4");
+        later(500, () => reveal("addp"));
+      } },
+
+      { name: "store", ms: 1600, apply: () => show("store") },
+      { name: "theme-sunset", ms: 1300, apply: () => {
+        $("shop").className = "shop t2";
+        $("chip1").classList.remove("act");
+        $("chip2").classList.add("act");
+      } },
+      { name: "theme-noir", ms: 1100, apply: () => {
+        $("shop").className = "shop t3";
+        $("chip2").classList.remove("act");
+        $("chip3").classList.add("act");
+      } },
+      { name: "phone", ms: 2600, apply: () => reveal("phone") },
+
+      { name: "checkout", ms: 800, apply: () => show("checkout") },
+      { name: "co-type", ms: 1500, apply: () => {
+        $("cardField").classList.add("focus");
+        type("email", "maya@studio.de", 450);
+        type("cardnum", "4242 4242 4242 4242", 900);
+        later(950, () => {
+          $("exp").textContent = "08 / 29";
+          $("cvc").textContent = "•••";
+          $("cardField").classList.remove("focus");
+        });
+      } },
+      { name: "co-move", ms: 700, apply: () => cursorTo("payBtn") },
+      { name: "co-click", ms: 2600, apply: () => {
+        click("payBtn");
+        $("payBtn").innerHTML = '<span class="spin"></span>';
+        later(650, () => reveal("paid"));
+        later(1100, cursorOff);
+      } },
+
+      { name: "dash", ms: 700, apply: () => show("dash") },
+      { name: "dash-grow", ms: 4800, apply: () => {
+        count("kRev", 12480, 2600, usd);
+        count("kOrd", 318, 2600, (v) => String(Math.round(v)));
+        count("kConv", 3.8, 2600, (v) => v.toFixed(1) + "%");
+        $("line").classList.add("draw");
+        $("area").classList.add("draw");
+        later(500, () => reveal("o1"));
+        later(1300, () => reveal("o2"));
+        later(2100, () => reveal("o3"));
+      } },
+
+      { name: "payout", ms: 900, apply: () => show("payout") },
+      { name: "payout-move", ms: 700, apply: () => cursorTo("payoutBtn") },
+      { name: "payout-click", ms: 3300, apply: () => {
+        click("payoutBtn");
+        later(200, () => {
+          $("payoutBtn").classList.add("ok");
+          $("payoutBtn").textContent = tr("✓ Payout requested", "✓ Выплата запрошена");
+          reveal("st1");
+        });
+        later(800, () => reveal("st2"));
+        later(1400, () => reveal("st3"));
+        later(1000, cursorOff);
+      } },
+
+      { name: "feats", ms: 3800, apply: () => show("feats") },
+
+      { name: "end", ms: 400, apply: () => show("end") },
+      { name: "end-word", ms: 400, apply: () => reveal("endWord") },
+      { name: "end-url", ms: 400, apply: () => reveal("endSite") },
+      { name: "end-cta", ms: 3000, apply: () => {
+        reveal("endCta");
+        reveal("endFine");
+        $("mark").classList.add("spark");
+      } }
+    ];
+
+    window.__filmMs = timeline.reduce((sum, step) => sum + step.ms, 0);
+    window.__previewShots = ["hook", "hook-b", "create-click", "p4", "theme-sunset", "phone", "co-move", "co-click", "dash-grow", "payout-click", "feats", "end-cta"];
+    const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    async function play() {
+      for (const step of timeline) {
+        step.apply();
+        if (shot && step.name === shot) {
+          await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          window.__filmReady = true;
+          return;
+        }
+        if (!shot) await wait(step.ms);
+      }
+      if (shot) window.__filmReady = true;
+      window.__filmDone = true;
+    }
+    play();
+  </script>
+</body>
+</html>

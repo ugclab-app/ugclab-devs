@@ -35,20 +35,39 @@ export function BuilderOverlayPreview({ block }: { block: HomeBlock }) {
         <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-violet-700">
           Popup preview (shows after {block.popupDelaySec ?? 3}s on live store)
         </p>
-        <div className="mx-auto max-w-xs rounded-xl border border-zinc-200 bg-white p-5 shadow-xl">
-          <p className="text-center text-sm font-bold text-zinc-900">
-            {block.title ?? "10% off your first order"}
-          </p>
-          {block.subtitle ? (
-            <p className="mt-1 text-center text-xs text-zinc-600">{block.subtitle}</p>
-          ) : null}
-          {block.discountCode ? (
-            <p className="mt-3 text-center font-mono text-xs text-violet-700">{block.discountCode}</p>
-          ) : null}
-          {block.ctaLabel ? (
-            <p className="mt-3 text-center text-xs font-medium text-violet-600">{block.ctaLabel}</p>
-          ) : null}
-        </div>
+        {block.collectEmail ? (
+          <div className="mx-auto grid max-w-md grid-cols-2 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xl">
+            <div className="min-h-[120px] bg-zinc-100">
+              {block.imageUrl ? (
+                <img src={block.imageUrl} alt="" className="h-full w-full object-cover" />
+              ) : null}
+            </div>
+            <div className="p-3">
+              <p className="text-xs font-semibold text-zinc-900">{block.title ?? "Claim your exclusive gift"}</p>
+              <p className="mt-2 rounded border border-zinc-200 px-2 py-1 text-[10px] text-zinc-400">
+                Enter your Email
+              </p>
+              <p className="mt-2 bg-zinc-900 px-2 py-1 text-center text-[10px] font-bold uppercase tracking-wide text-white">
+                {block.ctaLabel || "Sign up"}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="mx-auto max-w-xs rounded-xl border border-zinc-200 bg-white p-5 shadow-xl">
+            <p className="text-center text-sm font-bold text-zinc-900">
+              {block.title ?? "10% off your first order"}
+            </p>
+            {block.subtitle ? (
+              <p className="mt-1 text-center text-xs text-zinc-600">{block.subtitle}</p>
+            ) : null}
+            {block.discountCode ? (
+              <p className="mt-3 text-center font-mono text-xs text-violet-700">{block.discountCode}</p>
+            ) : null}
+            {block.ctaLabel ? (
+              <p className="mt-3 text-center text-xs font-medium text-violet-600">{block.ctaLabel}</p>
+            ) : null}
+          </div>
+        )}
       </div>
     );
   }

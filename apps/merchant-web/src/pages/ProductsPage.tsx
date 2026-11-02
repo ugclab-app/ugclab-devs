@@ -14,6 +14,7 @@ import type { ProductStatus, ProductType } from "@/lib/database-types";
 import { useAdminT } from "@/hooks/use-admin-t";
 import { FormAlert } from "@/components/form-alert";
 import { CsvImportPanel } from "@/components/csv-import-panel";
+import { StoreImportPanel } from "@/components/store-import-panel";
 
 const CSV_TEMPLATE =
   "id,title,slug,type,status,price_cents,inventory,tags,weight_grams,barcode\n" +
@@ -23,6 +24,7 @@ export default function ProductsPage() {
   const { ta, c, t } = useAdminT();
   const [importAlert, setImportAlert] = useState<{ ok?: boolean; message?: string }>({});
   const [importOpen, setImportOpen] = useState(false);
+  const [migrateOpen, setMigrateOpen] = useState(false);
   const SORT_OPTIONS = [
     { value: "newest", label: ta("sort.newest") },
     { value: "oldest", label: ta("sort.oldest") },
@@ -125,6 +127,15 @@ export default function ProductsPage() {
           }}
         />
       ) : null}
+      {migrateOpen ? (
+        <StoreImportPanel
+          onCancel={() => setMigrateOpen(false)}
+          onDone={(message) => {
+            setMigrateOpen(false);
+            setImportAlert({ ok: true, message });
+          }}
+        />
+      ) : null}
       <ProductFilterChips />
       {lowStockFilter ? (
         <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-900">
@@ -165,10 +176,23 @@ export default function ProductsPage() {
           </button>
           <button
             type="button"
-            onClick={() => setImportOpen(true)}
+            onClick={() => {
+              setMigrateOpen(false);
+              setImportOpen(true);
+            }}
             className="ugclab-btn border border-zinc-200 bg-white text-sm"
           >
             {c.import}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setImportOpen(false);
+              setMigrateOpen((v) => !v);
+            }}
+            className="ugclab-btn border border-zinc-200 bg-white text-sm"
+          >
+            Migrate from Shopify / WooCommerce / Etsy
           </button>
           <Link to="/products/new" className="ugclab-btn ugclab-btn-primary px-5 py-2.5 text-center">
             {ta("productsPage.addProduct")}

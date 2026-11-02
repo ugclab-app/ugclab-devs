@@ -19,20 +19,8 @@ export async function refundOrderInStripe(
   });
   if (!order?.stripePaymentId) return { refundId: null, amountCents: 0 };
 
-  let amountCents = opts.amountCents;
-  if (opts.lineItems?.length) {
-    amountCents = 0;
-    for (const req of opts.lineItems) {
-      const line = order.items.find((i) => i.id === req.lineId);
-      if (!line || req.quantity <= 0) continue;
-      const qty = Math.min(req.quantity, line.quantity);
-      amountCents += Math.round((line.unitAmount * qty));
-    }
-  }
-  if (amountCents == null || amountCents <= 0) {
-    amountCents = order.totalAmount;
-  }
-  amountCents = Math.min(amountCents, order.totalAmount);
+  const { refundAmountCents } = await import("./order-math.js");
+  const amountCents = refundAmountCents(order, opts);
 
   const stripe = getStripe();
   const refund = await stripe.refunds.create({

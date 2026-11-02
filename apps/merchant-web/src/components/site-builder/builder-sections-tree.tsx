@@ -36,6 +36,7 @@ export function BuilderSectionsTree({
     const active = selectionEquals(selection, sel);
     return (
       <button
+        key={`${sel.kind}:${"id" in sel ? sel.id ?? "" : ""}`}
         type="button"
         onClick={() => onSelect(sel)}
         className={`site-builder-tree-item${active ? " is-active" : ""}${

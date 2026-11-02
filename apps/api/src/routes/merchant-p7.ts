@@ -187,6 +187,14 @@ p7.get("/inventory", async (c) => {
   });
 });
 
+/** "Runs out in N days" per product, from paid sales over the window. */
+p7.get("/inventory/forecast", async (c) => {
+  const { tenant } = await requireTenant(c.get("session"));
+  const { getStockForecast } = await import("../lib/stock-forecast.js");
+  const windowDays = parseInt(c.req.query("days") ?? "30", 10) || 30;
+  return c.json(await getStockForecast(tenant.id, { windowDays }));
+});
+
 p7.post("/inventory/transfers", async (c) => {
   const { tenant, session } = await requireTenant(c.get("session"));
   const body = await c.req.json<{

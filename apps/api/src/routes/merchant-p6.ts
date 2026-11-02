@@ -107,8 +107,28 @@ p6.get("/growth", async (c) => {
       stripeTaxEnabled: settings?.stripeTaxEnabled ?? false,
       seoTitle: settings?.seoTitle,
       seoDescription: settings?.seoDescription,
-      integrations: parseIntegrations(settings?.integrations),
+      integrations: {
+        ...parseIntegrations(settings?.integrations),
+        ...((settings?.integrations &&
+        typeof settings.integrations === "object"
+          ? settings.integrations
+          : {}) as object),
+      },
       postCheckoutUpsell: parsePostCheckoutUpsell(settings?.postCheckoutUpsell),
+      loyaltyEnabled: settings?.loyaltyEnabled ?? false,
+      loyaltyEarnPerMajor: settings?.loyaltyEarnPerMajor ?? 1,
+      loyaltyRedeemCentsPerPoint: settings?.loyaltyRedeemCentsPerPoint ?? 1,
+      blockedCountries: settings?.blockedCountries ?? [],
+      tipsEnabled: settings?.tipsEnabled ?? false,
+      tipPresets: settings?.tipPresets ?? [5, 10, 15],
+      checkoutFields: (await import("../lib/checkout-extras.js")).parseCheckoutFields(
+        settings?.checkoutFields
+      ),
+      bnplEnabled: settings?.bnplEnabled ?? false,
+      invoicePrefix: settings?.invoicePrefix ?? "",
+      invoiceNextNumber: settings?.invoiceNextNumber ?? 1,
+      turnstileSiteKey: settings?.turnstileSiteKey ?? "",
+      turnstileSecretSet: Boolean(settings?.turnstileSecretKey),
     },
     giftCards,
     bundles,
@@ -159,6 +179,10 @@ p6.patch("/growth/settings", async (c) => {
       existing?.integrations && typeof existing.integrations === "object"
         ? { ...(existing.integrations as Record<string, unknown>) }
         : {};
+    const incoming =
+      body.integrations && typeof body.integrations === "object"
+        ? (body.integrations as Record<string, unknown>)
+        : {};
     const pixels = parseIntegrations(body.integrations);
     integrationsPatch = {
       ...prev,
@@ -169,6 +193,9 @@ p6.patch("/growth/settings", async (c) => {
       tiktokAccessToken: pixels.tiktokAccessToken,
       gtmId: pixels.gtmId,
       aiCatalogEnabled: pixels.aiCatalogEnabled === true,
+      productFeedsEnabled: pixels.productFeedsEnabled === true,
+      ...(incoming.twilio !== undefined ? { twilio: incoming.twilio } : {}),
+      ...(incoming.wise !== undefined ? { wise: incoming.wise } : {}),
     };
   }
 
@@ -212,6 +239,82 @@ p6.patch("/growth/settings", async (c) => {
         : {}),
       ...(postCheckoutUpsell !== undefined
         ? { postCheckoutUpsell: postCheckoutUpsell as object }
+        : {}),
+      ...(body.loyaltyEnabled != null
+        ? {
+            loyaltyEnabled:
+              body.loyaltyEnabled === true || body.loyaltyEnabled === "true",
+          }
+        : {}),
+      ...(body.loyaltyEarnPerMajor != null
+        ? {
+            loyaltyEarnPerMajor:
+              parseInt(String(body.loyaltyEarnPerMajor), 10) || 1,
+          }
+        : {}),
+      ...(body.loyaltyRedeemCentsPerPoint != null
+        ? {
+            loyaltyRedeemCentsPerPoint:
+              parseInt(String(body.loyaltyRedeemCentsPerPoint), 10) || 1,
+          }
+        : {}),
+      ...(body.blockedCountries !== undefined
+        ? {
+            blockedCountries: (
+              await import("../lib/checkout-extras.js")
+            ).normalizeBlockedCountries(body.blockedCountries),
+          }
+        : {}),
+      ...(body.tipsEnabled != null
+        ? { tipsEnabled: body.tipsEnabled === true || body.tipsEnabled === "true" }
+        : {}),
+      ...(body.tipPresets !== undefined
+        ? {
+            tipPresets: (Array.isArray(body.tipPresets)
+              ? body.tipPresets
+              : String(body.tipPresets ?? "").split(/[\s,;]+/)
+            )
+              .map((n) => parseInt(String(n), 10))
+              .filter((n) => Number.isFinite(n) && n > 0 && n <= 100)
+              .slice(0, 5),
+          }
+        : {}),
+      ...(body.checkoutFields !== undefined
+        ? {
+            checkoutFields: (
+              await import("../lib/checkout-extras.js")
+            ).parseCheckoutFields(body.checkoutFields) as object[],
+          }
+        : {}),
+      ...(body.bnplEnabled != null
+        ? { bnplEnabled: body.bnplEnabled === true || body.bnplEnabled === "true" }
+        : {}),
+      ...(body.invoicePrefix !== undefined
+        ? {
+            invoicePrefix:
+              String(body.invoicePrefix ?? "")
+                .trim()
+                .replace(/[^A-Za-z0-9_\-\/.]/g, "")
+                .slice(0, 12) || null,
+          }
+        : {}),
+      ...(body.invoiceNextNumber != null
+        ? {
+            invoiceNextNumber: Math.max(
+              1,
+              parseInt(String(body.invoiceNextNumber), 10) || 1
+            ),
+          }
+        : {}),
+      ...(body.turnstileSiteKey !== undefined
+        ? { turnstileSiteKey: String(body.turnstileSiteKey ?? "").trim().slice(0, 120) || null }
+        : {}),
+      // Empty string clears; undefined leaves unchanged.
+      ...(body.turnstileSecretKey !== undefined
+        ? {
+            turnstileSecretKey:
+              String(body.turnstileSecretKey ?? "").trim().slice(0, 120) || null,
+          }
         : {}),
     },
   });
@@ -417,9 +520,9 @@ p6.post("/growth/webhooks", async (c) => {
   const events = (body.events ?? ["order.paid"]).filter((e) =>
     ["order.paid", "product.updated", "order.created"].includes(e)
   );
-  if (!url.startsWith("https://")) {
-    return c.json({ error: "HTTPS URL required" }, 400);
-  }
+  const { checkWebhookUrl } = await import("../lib/webhook-url-guard.js");
+  const check = checkWebhookUrl(url);
+  if (!check.ok) return c.json({ error: check.reason }, 400);
   const hook = await prisma.merchantWebhook.create({
     data: {
       tenantId: tenant.id,
@@ -453,7 +556,70 @@ p6.post("/growth/webhooks/:id/test", async (c) => {
     test: true,
     orderId: "test_order",
   });
+  const last = await prisma.merchantWebhookDelivery.findFirst({
+    where: { webhookId: hook.id },
+    orderBy: { createdAt: "desc" },
+  });
+  return c.json({
+    ok: last?.status === "SUCCESS",
+    status: last?.status ?? null,
+    statusCode: last?.lastStatusCode ?? null,
+    error: last?.lastError ?? null,
+  });
+});
+
+p6.patch("/growth/webhooks/:id", async (c) => {
+  const { tenant, access } = await actor(c);
+  if (!requireGrowth(access)) return c.json({ error: "Forbidden" }, 403);
+  const body = await c.req.json<{ active?: boolean }>();
+  const r = await prisma.merchantWebhook.updateMany({
+    where: { id: c.req.param("id"), tenantId: tenant.id },
+    data: { ...(typeof body.active === "boolean" ? { active: body.active } : {}) },
+  });
+  if (!r.count) return c.json({ error: "Not found" }, 404);
   return c.json({ ok: true });
+});
+
+/** Delivery log for one endpoint (newest first). */
+p6.get("/growth/webhooks/:id/deliveries", async (c) => {
+  const { tenant, access } = await actor(c);
+  if (!requireGrowth(access)) return c.json({ error: "Forbidden" }, 403);
+  const hook = await prisma.merchantWebhook.findFirst({
+    where: { id: c.req.param("id"), tenantId: tenant.id },
+    select: { id: true },
+  });
+  if (!hook) return c.json({ error: "Not found" }, 404);
+  const rows = await prisma.merchantWebhookDelivery.findMany({
+    where: { webhookId: hook.id },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+    select: {
+      id: true,
+      event: true,
+      status: true,
+      attempts: true,
+      lastStatusCode: true,
+      lastError: true,
+      nextAttemptAt: true,
+      deliveredAt: true,
+      createdAt: true,
+      payload: true,
+    },
+  });
+  return c.json({ deliveries: rows });
+});
+
+p6.post("/growth/webhook-deliveries/:id/redeliver", async (c) => {
+  const { tenant, access } = await actor(c);
+  if (!requireGrowth(access)) return c.json({ error: "Forbidden" }, 403);
+  const { redeliverWebhook } = await import("../lib/merchant-webhooks.js");
+  const ok = await redeliverWebhook(tenant.id, c.req.param("id"));
+  if (!ok) return c.json({ error: "Not found" }, 404);
+  const row = await prisma.merchantWebhookDelivery.findUnique({
+    where: { id: c.req.param("id") },
+    select: { status: true, lastStatusCode: true, lastError: true, attempts: true },
+  });
+  return c.json({ ok: row?.status === "SUCCESS", delivery: row });
 });
 
 p6.post("/growth/api-keys", async (c) => {

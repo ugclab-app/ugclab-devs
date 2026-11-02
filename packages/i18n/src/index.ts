@@ -3,13 +3,14 @@ import ru from "../messages/ru.json" with { type: "json" };
 import ky from "../messages/ky.json" with { type: "json" };
 import kk from "../messages/kk.json" with { type: "json" };
 import uz from "../messages/uz.json" with { type: "json" };
+import tr from "../messages/tr.json" with { type: "json" };
 import { getAdminMessages, createAdminTa } from "./admin/index.js";
 
-export const locales = ["en", "ru", "ky", "kk", "uz"] as const;
+export const locales = ["en", "ru", "ky", "kk", "uz", "tr"] as const;
 export type Locale = (typeof locales)[number];
 export const defaultLocale: Locale = "en";
 
-const storefrontMessages: Record<Locale, typeof en> = { en, ru, ky, kk, uz };
+const storefrontMessages: Record<Locale, typeof en> = { en, ru, ky, kk, uz, tr };
 
 export function getMessages(locale?: string) {
   const key =

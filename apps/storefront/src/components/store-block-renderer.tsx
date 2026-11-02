@@ -29,6 +29,12 @@ import {
   ProductCompareBlockSection,
   TabsBlockSection,
 } from "@/components/builder-extra-blocks";
+import {
+  CompareTableSection,
+  IconAccordionSection,
+  OrderStepsSection,
+  PickupSection,
+} from "@/components/sales-blocks";
 import { ReviewsBlockSection } from "@/components/reviews-block-section";
 import { ScrollReveal } from "@/components/scroll-reveal";
 
@@ -165,6 +171,7 @@ export function StoreBlockRenderer({
           featuredCollections={ctx.collections}
           theme={heroTheme}
           featuredCollection={featuredCollection}
+          block={block}
         />
       );
     }
@@ -197,6 +204,10 @@ export function StoreBlockRenderer({
     if (block.type === "product_compare") {
       emit(block.id, <ProductCompareBlockSection block={block} />);
     }
+    if (block.type === "compare_table") emit(block.id, <CompareTableSection block={block} />);
+    if (block.type === "order_steps") emit(block.id, <OrderStepsSection block={block} />);
+    if (block.type === "pickup") emit(block.id, <PickupSection block={block} />);
+    if (block.type === "icon_accordion") emit(block.id, <IconAccordionSection block={block} />);
     if (block.type === "reviews") {
       emit(block.id, <ReviewsBlockSection block={block} tenant={nav.tenant} nav={nav} />);
     }

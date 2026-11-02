@@ -100,16 +100,16 @@ export async function notifyPlatformPayoutRequested(opts: {
   currency: string;
   payoutId: string;
 }) {
-  const to = process.env.PLATFORM_OPS_EMAIL?.trim();
-  if (!to) return;
   const amountFmt = formatMoney(opts.amount, opts.currency);
   const adminUrl = process.env.PLATFORM_ADMIN_URL ?? "http://localhost:3003";
-  await sendEmail({
-    to,
+  const { notifyPlatformOps } = await import("./platform-ops-notify.js");
+  await notifyPlatformOps({
     subject: `[MoR] Payout request — ${opts.tenantSlug} ${amountFmt}`,
     html: `
       <p>Merchant <strong>${opts.tenantName}</strong> (${opts.tenantSlug}) requested a payout of <strong>${amountFmt}</strong>.</p>
-      <p><a href="${adminUrl}/tenants">Review in platform admin →</a></p>
+      <p><a href="${adminUrl}/payouts">Review payouts</a></p>
     `,
+    text: `Payout request ${opts.tenantSlug} ${amountFmt}`,
+    dedupeKey: `payout-${opts.payoutId}`,
   }).catch((e) => console.error("[payout-email] platform ops", e));
 }

@@ -28,7 +28,11 @@ export type HomeSection =
   | "blog_feed"
   | "carousel"
   | "instagram_embed"
-  | "product_compare";
+  | "product_compare"
+  | "compare_table"
+  | "order_steps"
+  | "pickup"
+  | "icon_accordion";
 
 export type TabItem = { label: string; body: string };
 export type FaqItem = { question: string; answer: string };
@@ -48,6 +52,14 @@ export type BlockPadding = "none" | "sm" | "md" | "lg" | "xl";
 export type BlockWidth = "full" | "boxed";
 export type ScrollAnimation = "none" | "fade" | "slide";
 
+export type HeroSlide = {
+  imageUrl?: string;
+  title?: string;
+  subtitle?: string;
+  ctaLabel?: string;
+  ctaPath?: string;
+};
+
 export type HomeBlock = {
   id: string;
   type: HomeSection;
@@ -56,6 +68,8 @@ export type HomeBlock = {
   body?: string;
   imageUrl?: string;
   videoUrl?: string;
+  /** Cover slides. Two or more rotate on the storefront. */
+  slides?: HeroSlide[];
   htmlContent?: string;
   faqItems?: FaqItem[];
   features?: FeatureItem[];
@@ -82,6 +96,8 @@ export type HomeBlock = {
   popupDelaySec?: number;
   /** Discount popup: promo code shown to customer */
   discountCode?: string;
+  /** Discount popup: photo on the left, email signup on the right */
+  collectEmail?: boolean;
   /** Visibility */
   hiddenOnMobile?: boolean;
   hiddenOnDesktop?: boolean;
@@ -184,7 +200,13 @@ export type CustomThemePreset = {
   label: string;
   savedAt: string;
   primaryColor: string;
+  /** Catalog theme this snapshot came from, when it was added from the gallery. */
+  catalogId?: string;
   homeBlocks: HomeBlock[];
+  productPageBlocks?: HomeBlock[];
+  collectionBlocks?: HomeBlock[];
+  cartBlocks?: HomeBlock[];
+  notFoundBlocks?: HomeBlock[];
   theme: Partial<
     Pick<
       StoreTheme,
@@ -226,6 +248,8 @@ export type StoreTheme = {
   storeClosedMessage?: string;
   customCss?: string;
   trustBadgesEnabled?: boolean;
+  /** Card marks in the cart drawer. Omitted means shown. */
+  showPaymentIcons?: boolean;
   /** Visual blocks per CMS page slug (`/pages/about`) */
   pageBlocks?: Record<string, HomeBlock[]>;
   /** Blocks on every page (promo strip, trust bar) */
@@ -337,6 +361,10 @@ const HOME_SECTIONS = new Set<HomeSection>([
   "carousel",
   "instagram_embed",
   "product_compare",
+  "compare_table",
+  "order_steps",
+  "pickup",
+  "icon_accordion",
 ]);
 
 function parseAlign(v: unknown): BlockAlign | undefined {
@@ -414,6 +442,21 @@ function parseTabItems(raw: unknown): TabItem[] | undefined {
   return items.length > 0 ? items : undefined;
 }
 
+function parseSlides(raw: unknown): HeroSlide[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const slides: HeroSlide[] = [];
+  for (const row of raw as Record<string, unknown>[]) {
+    const imageUrl = str(row.imageUrl);
+    const title = str(row.title);
+    const subtitle = str(row.subtitle);
+    const ctaLabel = str(row.ctaLabel);
+    const ctaPath = str(row.ctaPath);
+    if (!imageUrl && !title) continue;
+    slides.push({ imageUrl, title, subtitle, ctaLabel, ctaPath });
+  }
+  return slides.length > 0 ? slides : undefined;
+}
+
 function parseTitleSize(v: unknown): TitleSize | undefined {
   return v === "sm" || v === "md" || v === "lg" || v === "xl" ? v : undefined;
 }
@@ -447,6 +490,7 @@ function parseHomeBlocks(raw: unknown): HomeBlock[] | undefined {
       subtitle: str(row.subtitle),
       body: str(row.body),
       imageUrl: str(row.imageUrl),
+      slides: parseSlides(row.slides),
       videoUrl: str(row.videoUrl),
       htmlContent: str(row.htmlContent),
       faqItems: parseFaqItems(row.faqItems),
@@ -487,6 +531,7 @@ function parseHomeBlocks(raw: unknown): HomeBlock[] | undefined {
           ? row.popupDelaySec
           : parseInt(String(row.popupDelaySec ?? ""), 10) || undefined,
       discountCode: str(row.discountCode),
+      collectEmail: row.collectEmail === true,
       hiddenOnMobile: row.hiddenOnMobile === true,
       hiddenOnDesktop: row.hiddenOnDesktop === true,
       borderRadius:
@@ -620,7 +665,12 @@ function parseCustomThemePresets(raw: unknown): CustomThemePreset[] | undefined 
       label,
       savedAt: str(row.savedAt) ?? new Date().toISOString(),
       primaryColor: str(row.primaryColor) ?? "#7c3aed",
+      catalogId: str(row.catalogId),
       homeBlocks,
+      productPageBlocks: parseHomeBlocks(row.productPageBlocks),
+      collectionBlocks: parseHomeBlocks(row.collectionBlocks),
+      cartBlocks: parseHomeBlocks(row.cartBlocks),
+      notFoundBlocks: parseHomeBlocks(row.notFoundBlocks),
       theme: {
         secondaryColor: str((row.theme as Record<string, unknown>)?.secondaryColor),
         fontFamily: str((row.theme as Record<string, unknown>)?.fontFamily),
@@ -773,6 +823,7 @@ export function parseStoreTheme(raw: unknown): StoreTheme {
     storeClosedMessage: str(t.storeClosedMessage),
     customCss: str(t.customCss),
     trustBadgesEnabled: t.trustBadgesEnabled === true,
+    showPaymentIcons: t.showPaymentIcons === false ? false : undefined,
     pageBlocks: parsePageBlocks(t.pageBlocks),
     globalBlocks: parseHomeBlocks(t.globalBlocks),
     collectionPageBlocks: parsePageBlocks(t.collectionPageBlocks),

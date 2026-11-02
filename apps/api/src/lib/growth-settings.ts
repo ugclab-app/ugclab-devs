@@ -7,6 +7,8 @@ export type StoreIntegrations = {
   gtmId?: string;
   /** When true, public AI catalog feed is enabled for this store. */
   aiCatalogEnabled?: boolean;
+  /** Google Merchant / Meta / TikTok product catalog feeds. */
+  productFeedsEnabled?: boolean;
 };
 
 export type PostCheckoutUpsell = {
@@ -35,6 +37,8 @@ export function parseIntegrations(raw: unknown): StoreIntegrations {
     gtmId: o.gtmId ? String(o.gtmId).trim() : undefined,
     aiCatalogEnabled:
       o.aiCatalogEnabled === true || o.aiCatalogEnabled === "true",
+    productFeedsEnabled:
+      o.productFeedsEnabled === true || o.productFeedsEnabled === "true",
   };
 }
 
@@ -60,5 +64,6 @@ export function publicIntegrations(raw: unknown): StoreIntegrations {
     tiktokPixelId: full.tiktokPixelId,
     gtmId: full.gtmId,
     aiCatalogEnabled: full.aiCatalogEnabled,
+    productFeedsEnabled: full.productFeedsEnabled,
   };
 }

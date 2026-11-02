@@ -11,6 +11,7 @@ import { DashboardStatCards } from "@/components/dashboard-stat-cards";
 import { LowStockPanel } from "@/components/low-stock-panel";
 import { LowStockAlert } from "@/components/low-stock-alert";
 import { StripeConnectBanner } from "@/components/stripe-connect-banner";
+import { PassportKycBanner } from "@/components/passport-kyc-banner";
 import { OnboardingWizard } from "@/components/onboarding-wizard";
 import { StoreUrlCard } from "@/components/store-url-card";
 import { FirstSalePanel } from "@/components/first-sale-panel";
@@ -105,6 +106,8 @@ export default function DashboardPage() {
       <DailyPulsePanel />
 
       <FirstSalePanel firstSale={firstSale} currency={currency} />
+
+      <PassportKycBanner />
 
       <StripeConnectBanner />
 

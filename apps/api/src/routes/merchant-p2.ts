@@ -607,6 +607,8 @@ p2.post("/orders/:id/refund", async (c) => {
     reason?: string;
     amountCents?: number;
     lineItems?: { lineId: string; quantity: number }[];
+    /** Credit the customer's store balance instead of refunding to the card. */
+    toStoreCredit?: boolean;
   }>();
   const order = await prisma.order.findFirst({
     where: { id: c.req.param("id"), tenantId: tenant.id },
@@ -619,8 +621,48 @@ p2.post("/orders/:id/refund", async (c) => {
 
   try {
     const { refundOrderInStripe, markOrderRefunded } = await import("../lib/stripe-refund.js");
+    const { refundAmountCents: calcRefund, isPartialRefund } = await import("../lib/order-math.js");
     let refundAmountCents = body.amountCents;
     let stripeRefund = false;
+    if (body.toStoreCredit) {
+      if (!order.customerId) {
+        return c.json({ error: "Guest orders cannot be refunded to store credit" }, 400);
+      }
+      const full = await prisma.order.findUnique({
+        where: { id: order.id },
+        include: { items: true },
+      });
+      refundAmountCents = calcRefund(full ?? { ...order, items: [] }, body);
+      const base = tenant.settings?.currency ?? order.currency;
+      let creditCents = refundAmountCents;
+      if (base !== order.currency) {
+        const { convertAmount } = await import("@ugclab/i18n/store-currency");
+        const { ensureFxRates } = await import("../lib/fx-rates.js");
+        await ensureFxRates().catch(() => {});
+        creditCents = convertAmount(refundAmountCents, order.currency, base);
+      }
+      await prisma.customer.update({
+        where: { id: order.customerId },
+        data: { storeCreditCents: { increment: creditCents } },
+      });
+      await prisma.orderEvent.create({
+        data: {
+          tenantId: tenant.id,
+          orderId: order.id,
+          type: "NOTE",
+          body: `Refunded ${(refundAmountCents / 100).toFixed(2)} ${order.currency} to store credit`,
+          authorEmail: user?.email ?? null,
+        },
+      });
+      const partial = isPartialRefund(refundAmountCents, order.totalAmount);
+      const updated = await markOrderRefunded(order.id, {
+        reason: body.reason ? `${body.reason} (store credit)` : "Store credit",
+        authorEmail: user?.email,
+        partial,
+        refundAmountCents,
+      });
+      return c.json({ order: updated, stripeRefund: false, partial, refundAmountCents, storeCredit: true });
+    }
     if (order.stripePaymentId) {
       const r = await refundOrderInStripe(order.id, {
         amountCents: body.amountCents,
@@ -628,22 +670,15 @@ p2.post("/orders/:id/refund", async (c) => {
       });
       refundAmountCents = r.amountCents;
       stripeRefund = Boolean(r.refundId);
-    } else if (body.lineItems?.length) {
+    } else {
       const full = await prisma.order.findUnique({
         where: { id: order.id },
         include: { items: true },
       });
-      refundAmountCents = 0;
-      for (const req of body.lineItems) {
-        const line = full?.items.find((i) => i.id === req.lineId);
-        if (line) refundAmountCents += line.unitAmount * Math.min(req.quantity, line.quantity);
-      }
-    } else {
-      refundAmountCents = refundAmountCents ?? order.totalAmount;
+      refundAmountCents = calcRefund(full ?? { ...order, items: [] }, body);
     }
 
-    const partial =
-      (refundAmountCents ?? 0) > 0 && (refundAmountCents ?? 0) < order.totalAmount;
+    const partial = isPartialRefund(refundAmountCents ?? 0, order.totalAmount);
     const updated = await markOrderRefunded(order.id, {
       reason: body.reason,
       authorEmail: user?.email,

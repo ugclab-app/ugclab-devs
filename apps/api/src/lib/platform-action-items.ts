@@ -1,4 +1,4 @@
-import { OrderStatus, prisma, TenantStatus } from "@ugclab/database";
+import { MerchantKycStatus, OrderStatus, prisma, TenantStatus } from "@ugclab/database";
 import { isMorPaymentModel } from "./payment-model.js";
 import { getMorPlatformMetrics } from "./mor-platform-metrics.js";
 
@@ -56,6 +56,20 @@ export async function getPlatformActionItems(): Promise<PlatformActionItem[]> {
         href: `/tenants/${t.tenantId}`,
       });
     }
+  }
+
+  const passportWaiting = await prisma.merchantKyc.count({
+    where: { status: MerchantKycStatus.PENDING },
+  });
+  if (passportWaiting > 0) {
+    items.push({
+      id: "passport-kyc",
+      priority: "high",
+      title: `Passport checks waiting: ${passportWaiting}`,
+      description: "Tescommerce reviews these passport photos. Finik, Stripe, and Wise do not.",
+      href: "/kyc",
+      count: passportWaiting,
+    });
   }
 
   const inactive = await prisma.tenant.count({

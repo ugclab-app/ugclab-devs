@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <title>Tescommerce — Reel: Shopify Payments not available</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 1080px;
+      height: 1920px;
+      overflow: hidden;
+      background: #eef0f6;
+      font-family: "Segoe UI Variable Display", "Segoe UI", sans-serif;
+      color: #0b0d14;
+      -webkit-font-smoothing: antialiased;
+    }
+    :root { --blue: #2546f0; --ink: #0b0d14; --muted: #687083; --line: #e3e7f0; --green: #059669; --red: #e11d48; }
+    #stage { position: relative; width: 1080px; height: 1920px; overflow: hidden; }
+    .abs { position: absolute; }
+    .layer { position: absolute; inset: 0; will-change: transform, filter, opacity; }
+    .gtext { background: linear-gradient(90deg, #1f3fe8, #5b78ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    #bg { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 38%, #ffffff 0%, #f1f3f9 55%, #e4e8f2 100%); }
+    .blob { position: absolute; border-radius: 50%; }
+    #blobA { width: 1000px; height: 1000px; background: radial-gradient(circle, rgba(37, 70, 240, 0.17), transparent 65%); }
+    #blobB { width: 900px; height: 900px; background: radial-gradient(circle, rgba(91, 120, 255, 0.15), transparent 65%); }
+
+    .title { position: absolute; left: 0; right: 0; text-align: center; font-size: 104px; font-weight: 680; letter-spacing: -0.045em; line-height: 1.04; }
+    .title > div { display: block; }
+    .card { position: absolute; left: 90px; width: 900px; border-radius: 40px; background: #fff; box-shadow: 0 50px 120px rgba(20, 30, 80, 0.16), 0 0 0 1px rgba(20, 30, 80, 0.04); padding: 48px; }
+    .pill { display: inline-flex; align-items: center; gap: 12px; border-radius: 999px; white-space: nowrap; font-weight: 650; }
+    .btn { height: 110px; border-radius: 28px; display: grid; place-items: center; font-size: 38px; font-weight: 700; color: #fff; background: var(--blue); position: relative; }
+    .xpin { position: absolute; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 50%; background: var(--red); color: #fff; display: grid; place-items: center; font-size: 34px; font-weight: 800; box-shadow: 0 10px 30px rgba(225, 29, 72, 0.4); }
+    .pain { position: absolute; left: 90px; width: 900px; padding: 36px 44px; border-radius: 34px; background: #fff; box-shadow: 0 24px 60px rgba(20, 30, 80, 0.12); font-size: 44px; font-weight: 650; letter-spacing: -0.02em; display: flex; align-items: center; gap: 26px; }
+    .pain .n { width: 70px; height: 70px; border-radius: 22px; background: #ffe4e6; color: var(--red); display: grid; place-items: center; font-size: 34px; font-weight: 800; flex: none; }
+    .pain .strike { position: absolute; left: 40px; right: 40px; top: 50%; height: 8px; margin-top: -4px; border-radius: 6px; background: var(--red); transform-origin: left; }
+    .wallets { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 36px; }
+    .wallet { height: 110px; border-radius: 26px; display: grid; place-items: center; font-size: 36px; font-weight: 650; }
+    .cardrow { margin-top: 20px; height: 100px; border-radius: 24px; border: 3px solid var(--line); display: flex; align-items: center; padding: 0 30px; gap: 20px; font-size: 34px; color: var(--muted); }
+    .okover { position: absolute; inset: 0; border-radius: 40px; background: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .bigcheck { width: 200px; height: 200px; border-radius: 50%; background: #10b981; color: #fff; display: grid; place-items: center; font-size: 110px; font-weight: 800; }
+    .spin { width: 50px; height: 50px; border-radius: 50%; border: 6px solid rgba(255, 255, 255, 0.3); border-top-color: #fff; }
+    .note { position: absolute; left: 90px; width: 900px; display: flex; align-items: center; gap: 26px; padding: 28px 36px; border-radius: 34px; background: #fff; box-shadow: 0 24px 60px rgba(20, 30, 80, 0.14); font-size: 34px; font-weight: 650; }
+    .note .ic { width: 84px; height: 84px; border-radius: 24px; display: grid; place-items: center; color: #fff; font-size: 26px; font-weight: 800; }
+    .note small { display: block; font-size: 26px; color: var(--muted); font-weight: 600; }
+    .note .amt { margin-left: auto; color: var(--green); font-size: 44px; font-weight: 750; }
+    .stp { display: flex; align-items: center; gap: 22px; margin-top: 30px; font-size: 40px; font-weight: 650; }
+    .stp .c { width: 58px; height: 58px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 30px; font-weight: 800; flex: none; }
+    .stp small { display: block; font-size: 28px; color: var(--muted); font-weight: 600; margin-top: 2px; }
+    .ccy { display: flex; gap: 14px; margin-top: 20px; }
+    .ccy span { padding: 12px 24px; border-radius: 999px; background: #eef0f6; font-weight: 700; font-size: 28px; color: #39404f; }
+    .ccy span.on { background: var(--blue); color: #fff; }
+    .chk { position: absolute; left: 90px; width: 900px; display: flex; align-items: center; gap: 28px; padding: 34px 40px; border-radius: 34px; background: #fff; box-shadow: 0 24px 60px rgba(20, 30, 80, 0.12); font-size: 44px; font-weight: 680; letter-spacing: -0.02em; }
+    .chk i { width: 70px; height: 70px; border-radius: 50%; background: #10b981; color: #fff; display: grid; place-items: center; font-size: 38px; font-weight: 800; font-style: normal; flex: none; }
+    .mark { display: grid; place-items: center; color: #fff; font-weight: 700; background: linear-gradient(135deg, #1f3fe8, #5b78ff); box-shadow: 0 24px 60px rgba(37, 70, 240, 0.35); }
+    .hand { position: absolute; width: 64px; height: 64px; filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.25)); }
+    .ring { position: absolute; width: 110px; height: 110px; margin: -55px 0 0 -55px; border-radius: 50%; background: rgba(37, 70, 240, 0.3); }
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <div id="bg"></div>
+    <div class="blob" id="blobA"></div>
+    <div class="blob" id="blobB"></div>
+
+    <!-- hook -->
+    <div class="layer" id="s-hook">
+      <div class="title" id="hookT" style="top:250px">
+        <div><span class="gtext">Shopify Payments</span></div>
+        <div>ülkende</div>
+        <div>yok mu?</div>
+      </div>
+      <svg class="abs" id="globe" style="left:90px;top:760px" width="900" height="900" viewBox="0 0 900 900"></svg>
+      <div id="pins"></div>
+    </div>
+
+    <!-- pain -->
+    <div class="layer" id="s-pain">
+      <div class="title" id="painT" style="top:330px"><div>O zaman</div><div>genelde…</div></div>
+      <div class="pain" id="pn0" style="top:720px"><span class="n">1</span>Ödeme altyapısı ararsın<span class="strike" id="ps0"></span></div>
+      <div class="pain" id="pn1" style="top:920px"><span class="n">2</span>Yurt dışında şirket açarsın<span class="strike" id="ps1"></span></div>
+      <div class="pain" id="pn2" style="top:1120px"><span class="n">3</span>Ödemede satış kaçırırsın<span class="strike" id="ps2"></span></div>
+    </div>
+
+    <!-- turn -->
+    <div class="layer" id="s-turn">
+      <div class="abs" style="left:0;right:0;top:640px;display:flex;flex-direction:column;align-items:center">
+        <div class="title" id="turnT" style="position:relative"><div id="tt0">Ya da</div><div id="tt1" style="font-size:150px"><span class="gtext">sat gitsin.</span></div></div>
+        <div class="pill" id="turnLogo" style="margin-top:60px;gap:22px;font-size:58px;font-weight:700;letter-spacing:-0.04em">
+          <span class="mark" style="width:96px;height:96px;border-radius:28px;font-size:54px">T</span>Tescommerce
+        </div>
+      </div>
+    </div>
+
+    <!-- buyer pays -->
+    <div class="layer" id="s-pay">
+      <div class="title" id="payT" style="top:230px"><div>Alıcılar her yerden</div><div><span class="gtext">ödeme yapar.</span></div></div>
+      <div class="card" id="payCard" style="top:620px">
+        <div style="display:flex;gap:30px;align-items:center">
+          <div style="width:150px;height:150px;border-radius:28px;background:linear-gradient(135deg,#1e293b,#4f46e5);flex:none"></div>
+          <div><div style="font-size:40px;font-weight:700;letter-spacing:-0.02em">Film Fotoğrafçılığı Kursu</div><div style="font-size:52px;font-weight:750;letter-spacing:-0.03em;margin-top:4px">$49.00</div></div>
+        </div>
+        <div class="wallets"><div class="wallet" style="background:#000;color:#fff">Apple Pay</div><div class="wallet" style="border:3px solid var(--line)">Google Pay</div></div>
+        <div class="cardrow"><span style="font-weight:800;color:#1a1f71;font-style:italic">VISA</span>•••• 4242</div>
+        <div class="btn" id="payBtn" style="margin-top:30px"><span id="payTxt">$49.00 öde</span></div>
+        <div class="okover" id="paid"><div class="bigcheck" id="bigcheck">✓</div><div style="margin-top:34px;font-size:54px;font-weight:750;letter-spacing:-0.03em">$49.00 ödendi</div></div>
+      </div>
+    </div>
+
+    <!-- balance -->
+    <div class="layer" id="s-balance">
+      <div class="title" id="balT" style="top:230px"><div>Bakiyende</div><div><span class="gtext">birikir.</span></div></div>
+      <div class="abs" id="balBox" style="left:0;right:0;top:600px;text-align:center">
+        <div style="font-size:34px;font-weight:650;color:var(--muted)">Kullanılabilir bakiye</div>
+        <div id="balV" style="font-size:160px;font-weight:750;letter-spacing:-0.05em;font-variant-numeric:tabular-nums">$0</div>
+      </div>
+      <div id="orders"></div>
+    </div>
+
+    <!-- payout -->
+    <div class="layer" id="s-payout">
+      <div class="title" id="poT" style="top:230px"><div>Ödeme</div><div><span class="gtext">talep et.</span></div></div>
+      <div class="card" id="poCard" style="top:600px">
+        <div style="font-size:30px;font-weight:650;color:var(--muted)">Kullanılabilir bakiye</div>
+        <div style="font-size:110px;font-weight:750;letter-spacing:-0.05em">$1,240.00</div>
+        <div class="ccy"><span class="on">USD</span><span>EUR</span></div>
+        <div class="btn" id="poBtn" style="margin-top:36px"><span id="poTxt">Ödeme talep et</span></div>
+        <div id="steps"></div>
+      </div>
+    </div>
+
+    <!-- checklist -->
+    <div class="layer" id="s-check">
+      <div class="title" id="ckT" style="top:330px"><div>Her yerden</div><div><span class="gtext">satış yap.</span></div></div>
+      <div class="chk" id="ck0" style="top:720px"><i>✓</i>Stripe hesabı gerekmez</div>
+      <div class="chk" id="ck1" style="top:900px"><i>✓</i>Ödemeler USD veya EUR olarak</div>
+      <div class="chk" id="ck2" style="top:1080px"><i>✓</i>Vergi birçok bölgede halledilir</div>
+      <div class="chk" id="ck3" style="top:1260px"><i>✓</i>Kart, Apple Pay, Google Pay</div>
+    </div>
+
+    <!-- end -->
+    <div class="layer" id="s-end">
+      <div class="abs" style="left:0;right:0;top:620px;display:flex;flex-direction:column;align-items:center">
+        <div class="mark" id="endMark" style="width:200px;height:200px;border-radius:60px;font-size:116px">T</div>
+        <div id="endWord" style="margin-top:36px;font-size:120px;font-weight:700;letter-spacing:-0.05em"></div>
+        <div id="endTag" style="margin-top:10px;font-size:50px;font-weight:600;letter-spacing:-0.02em"><span class="gtext">Dünyaya sat. Paranı her yerde al.</span></div>
+        <div id="endCta" class="pill" style="margin-top:70px;padding:30px 52px;background:var(--blue);color:#fff;font-size:42px;box-shadow:0 24px 60px rgba(37,70,240,.35)">Ücretsiz başla → link bio'da</div>
+      </div>
+    </div>
+
+    <div class="hand" id="hand"><svg width="64" height="64" viewBox="0 0 24 24"><path d="M4 2l15 11.5-6.6 1 3.8 7.4-2.9 1.4-3.8-7.5L4 20z" fill="#0b0d14" stroke="#fff" stroke-width="1.4" stroke-linejoin="round" /></svg></div>
+    <div class="ring" id="ring"></div>
+  </div>
+
+  <script>
+    const SCENES = [
+      { id: "hook", dur: 3.4 }, { id: "pain", dur: 4.2 }, { id: "turn", dur: 2.6 }, { id: "pay", dur: 4.2 },
+      { id: "balance", dur: 3.8 }, { id: "payout", dur: 4.6 }, { id: "check", dur: 4.0 }, { id: "end", dur: 4.6 }
+    ];
+    const plan = { scenes: [], duration: 0 };
+    {
+      let t = 0;
+      for (const s of SCENES) {
+        plan.scenes.push({ id: s.id, start: t, dur: s.dur, vo: null, voOffset: 0 });
+        t += s.dur;
+      }
+      plan.duration = t;
+    }
+    window.__plan = plan;
+
+    // ---------- helpers (same engine as reel-digital.html) ----------
+    const $ = (id) => document.getElementById(id);
+    const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+    const seg = (t, a, b) => clamp((t - a) / (b - a));
+    const lerp = (a, b, p) => a + (b - a) * p;
+    const E = {
+      out: (x) => 1 - Math.pow(1 - x, 3),
+      expo: (x) => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * x)),
+      inOut: (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2),
+      in: (x) => x * x * x,
+      back: (x) => { const c1 = 1.6, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); }
+    };
+    const set = (el, o) => { for (const k in o) el.style[k] = o[k]; };
+    const fx = (el, { x = 0, y = 0, s = 1, r = 0, o = 1, b = 0, extra = "" }) =>
+      set(el, { transform: `${extra} translate(${x}px, ${y}px) scale(${s}) rotate(${r}deg)`, opacity: o, filter: b > 0.05 ? `blur(${b}px)` : "none" });
+    const rise = (el, t, at, dist = 70, dur = 0.5) => {
+      const p = E.expo(seg(t, at, at + dur));
+      fx(el, { y: (1 - p) * dist, o: p, b: (1 - p) * 14 });
+      return p;
+    };
+    const pop = (el, t, at, extra = "") => {
+      const q = E.back(seg(t, at, at + 0.45));
+      fx(el, { extra, s: 0.5 + 0.5 * q, o: clamp(q * 1.6) });
+    };
+    const tap = (t, at, x, y) => {
+      const hand = $("hand"), ring = $("ring");
+      const pin = seg(t, at - 0.55, at - 0.05), pout = seg(t, at + 0.35, at + 0.6);
+      set(hand, { left: lerp(x + 300, x, E.inOut(pin)) + "px", top: lerp(y + 300, y, E.inOut(pin)) + "px", opacity: pin > 0 && pout < 1 ? (1 - pout) * clamp(pin * 3) : 0, transform: `scale(${t > at && t < at + 0.15 ? 0.86 : 1})` });
+      const pr = seg(t, at, at + 0.5);
+      set(ring, { left: x + 10 + "px", top: y + 10 + "px", opacity: pr > 0 && pr < 1 ? 1 - pr : 0, transform: `scale(${0.3 + pr * 1.6})` });
+    };
+    const centerOf = (id) => { const r = $(id).getBoundingClientRect(); return [r.left + r.width * 0.55, r.top + r.height * 0.55]; };
+    const titleIn = (t, id, at = 0.08) => [...$(id).children].forEach((c, i) => rise(c, t, at + i * 0.12));
+
+    // ---------- dynamic DOM ----------
+    // pins sit on the globe face; no specific countries are named on purpose
+    const pins = [[300, 330], [560, 260], [640, 470], [380, 560], [230, 470], [520, 640], [700, 330]];
+    $("pins").innerHTML = pins.map((_, i) => `<div class="xpin" id="xp${i}">✕</div>`).join("");
+    const orders = [["DE", "Berlin", "+$49", "#2546f0"], ["US", "Austin", "+$19", "#7c3aed"], ["JP", "Osaka", "+$49", "#e11d48"], ["BR", "Recife", "+$29", "#059669"]];
+    $("orders").innerHTML = orders.map(([cc, city, amt, col], i) =>
+      `<div class="note" id="od${i}"><span class="ic" style="background:${col}">${cc}</span><div>Yeni sipariş<small>${city}</small></div><span class="amt">${amt}</span></div>`).join("");
+    const steps = [["Ödeme talep edildi", ""], ["Onaylandı", ""], ["Wise ile gönderildi", "Genellikle 3–7 iş günü"]];
+    $("steps").innerHTML = steps.map(([a, b], i) => `<div class="stp" id="st${i}"><span class="c" id="stc${i}">✓</span><div>${a}${b ? `<small>${b}</small>` : ""}</div></div>`).join("");
+    $("endWord").innerHTML = [..."Tescommerce"].map((c, i) => `<span id="ew${i}" style="display:inline-block">${c}</span>`).join("");
+
+    function drawGlobe(t, tint) {
+      const R = 400, cx = 450, cy = 450, rot = t * 0.4;
+      let dots = "";
+      for (let lat = -80; lat <= 80; lat += 9) {
+        const phi = (lat * Math.PI) / 180;
+        const step = Math.max(7, 9 / Math.cos(phi));
+        for (let lon = -180; lon < 180; lon += step) {
+          const lam = (lon * Math.PI) / 180 + rot;
+          const z = Math.cos(phi) * Math.cos(lam);
+          if (z < -0.05) continue;
+          const x = cx + R * Math.cos(phi) * Math.sin(lam), y = cy - R * Math.sin(phi);
+          const r = Math.round(lerp(37, 225, tint)), g = Math.round(lerp(70, 29, tint)), b = Math.round(lerp(240, 72, tint));
+          dots += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(2.4 + z * 2.8).toFixed(2)}" fill="rgba(${r},${g},${b},${(0.15 + z * 0.55).toFixed(2)})"/>`;
+        }
+      }
+      $("globe").innerHTML = `<circle cx="${cx}" cy="${cy}" r="${R + 8}" fill="rgba(255,255,255,0.6)" stroke="#c7d0ff" stroke-width="2"/>${dots}`;
+    }
+
+    // ---------- scenes ----------
+    const scenes = {
+      hook(t, d) {
+        titleIn(t, "hookT", 0);
+        const g = E.expo(seg(t, 0.2, 1.0));
+        drawGlobe(t, seg(t, 1.0, 2.2) * 0.85);
+        fx($("globe"), { s: 0.8 + 0.2 * g, o: g });
+        pins.forEach(([x, y], i) => {
+          const el = $("xp" + i);
+          set(el, { left: 90 + x + "px", top: 760 + y + "px" });
+          pop(el, t, 1.0 + i * 0.13);
+        });
+      },
+      pain(t, d) {
+        titleIn(t, "painT");
+        [0, 1, 2].forEach((i) => {
+          const at = 0.4 + i * 0.3;
+          const p = E.expo(seg(t, at, at + 0.5));
+          fx($("pn" + i), { x: (1 - p) * -140, o: p, b: (1 - p) * 10 });
+          const s = E.out(seg(t, 1.9 + i * 0.35, 2.2 + i * 0.35));
+          $("ps" + i).style.transform = `scaleX(${s})`;
+          $("pn" + i).style.color = s > 0.5 ? "#9aa2b4" : "";
+        });
+      },
+      turn(t, d) {
+        const p0 = E.expo(seg(t, 0.05, 0.5));
+        fx($("tt0"), { y: (1 - p0) * 60, o: p0, b: (1 - p0) * 12 });
+        const p1 = E.back(seg(t, 0.3, 0.85));
+        fx($("tt1"), { s: 0.7 + 0.3 * p1 + t * 0.015, o: clamp(p1 * 2) });
+        rise($("turnLogo"), t, 0.9, 50);
+      },
+      pay(t, d) {
+        titleIn(t, "payT");
+        const pc = E.expo(seg(t, 0.15, 0.8));
+        fx($("payCard"), { y: (1 - pc) * 140, o: pc });
+        const at = 1.7;
+        const [x, y] = centerOf("payBtn");
+        tap(t, at, x, y);
+        $("payTxt").innerHTML = t > at + 0.05 && t < at + 0.7 ? `<span class="spin" style="display:inline-block;transform:rotate(${t * 720}deg)"></span>` : "$49.00 öde";
+        $("paid").style.opacity = seg(t, at + 0.7, at + 0.95);
+        fx($("bigcheck"), { s: E.back(seg(t, at + 0.75, at + 1.2)) });
+      },
+      balance(t, d) {
+        titleIn(t, "balT");
+        rise($("balBox"), t, 0.2, 60);
+        const target = [49, 68, 117, 146];
+        let shown = 0;
+        orders.forEach((_, i) => {
+          const at = 0.5 + i * 0.5;
+          const q = E.back(seg(t, at, at + 0.45));
+          set($("od" + i), { top: 960 + i * 160 + "px" });
+          fx($("od" + i), { x: (1 - q) * 160, o: clamp(q * 1.6) });
+          if (t > at) shown = lerp(i ? target[i - 1] : 0, target[i], E.out(seg(t, at, at + 0.35)));
+        });
+        // last beat: the month's total rolls up to the payout amount
+        const roll = E.inOut(seg(t, 2.7, 3.5));
+        $("balV").textContent = "$" + Math.round(lerp(shown, 1240, roll)).toLocaleString("en-US");
+      },
+      payout(t, d) {
+        titleIn(t, "poT");
+        const pc = E.expo(seg(t, 0.15, 0.8));
+        fx($("poCard"), { y: (1 - pc) * 140, o: pc });
+        const at = 1.4;
+        const [x, y] = centerOf("poBtn");
+        tap(t, at, x, y);
+        const done = t > at + 0.08;
+        $("poTxt").textContent = done ? "✓ Ödeme talep edildi" : "Ödeme talep et";
+        $("poBtn").style.background = done ? "#059669" : "";
+        steps.forEach((_, i) => {
+          const s0 = at + 0.25 + i * 0.5;
+          const q = seg(t, s0, s0 + 0.25);
+          $("stc" + i).style.background = q > 0.5 ? "#10b981" : "#dfe3ec";
+          fx($("stc" + i), { s: q > 0 && q < 1 ? 1 + Math.sin(q * Math.PI) * 0.35 : 1 });
+          $("st" + i).style.color = q > 0.5 ? "var(--ink)" : "#9aa2b4";
+        });
+      },
+      check(t, d) {
+        titleIn(t, "ckT");
+        [0, 1, 2, 3].forEach((i) => {
+          const at = 0.45 + i * 0.3;
+          const p = E.expo(seg(t, at, at + 0.5));
+          fx($("ck" + i), { y: (1 - p) * 80, o: p, b: (1 - p) * 10 });
+          fx($("ck" + i).querySelector("i"), { s: E.back(seg(t, at + 0.15, at + 0.55)) });
+        });
+      },
+      end(t, d) {
+        const pm = E.back(seg(t, 0.05, 0.6));
+        fx($("endMark"), { s: 0.3 + 0.7 * pm, r: (1 - pm) * -25, o: clamp(pm * 2) });
+        for (let i = 0; i < 11; i += 1) {
+          const p = E.expo(seg(t, 0.3 + i * 0.035, 0.75 + i * 0.035));
+          fx($("ew" + i), { y: (1 - p) * 80, o: p, b: (1 - p) * 10 });
+        }
+        rise($("endTag"), t, 0.85, 50, 0.6);
+        const pc = E.back(seg(t, 1.25, 1.75));
+        fx($("endCta"), { s: (0.7 + 0.3 * pc) * (1 + 0.025 * Math.sin(Math.max(0, t - 1.8) * 5)), o: clamp(pc * 2) });
+      }
+    };
+
+    // ---------- frame ----------
+    const ENTER = 0.45, EXIT = 0.3;
+    function renderAt(time) {
+      set($("blobA"), { left: 300 + Math.sin(time * 0.3) * 160 + "px", top: -380 + Math.cos(time * 0.25) * 100 + "px" });
+      set($("blobB"), { left: -420 + Math.cos(time * 0.27) * 120 + "px", top: 1200 + Math.sin(time * 0.33) * 120 + "px" });
+      set($("hand"), { opacity: 0 });
+      set($("ring"), { opacity: 0 });
+      for (const s of plan.scenes) {
+        const layer = $("s-" + s.id);
+        const t = time - s.start;
+        const last = s === plan.scenes[plan.scenes.length - 1];
+        if (t < -0.001 || (!last && t > s.dur)) { layer.style.visibility = "hidden"; continue; }
+        layer.style.visibility = "visible";
+        const pin = s.start === 0 ? 1 : E.expo(seg(t, 0, ENTER));
+        const pout = last ? 0 : E.in(seg(t, s.dur - EXIT, s.dur));
+        fx(layer, { s: lerp(0.94, 1, pin) * (1 + pout * 0.14), o: pin * (1 - pout), b: (1 - pin) * 16 + pout * 18 });
+        scenes[s.id](t, s.dur);
+      }
+    }
+    window.renderAt = renderAt;
+    document.fonts.ready.then(() => {
+      renderAt(0);
+      window.__ready = true;
+    });
+  </script>
+</body>
+</html>

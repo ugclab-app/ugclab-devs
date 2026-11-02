@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Tescommerce — Reel: Sell it, never pack it (suppliers)</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 1080px;
+      height: 1920px;
+      overflow: hidden;
+      background: #f6f1ea;
+      font-family: "Segoe UI Variable Display", "Segoe UI", sans-serif;
+      color: #1a1410;
+      -webkit-font-smoothing: antialiased;
+    }
+    /* warm kraft-paper palette so this reel looks unlike the blue ones */
+    :root { --blue: #2546f0; --ink: #1a1410; --muted: #7a6d60; --line: #eadfd2; --green: #059669; --red: #e11d48; --kraft: #c98f55; --orange: #f97316; }
+    #stage { position: relative; width: 1080px; height: 1920px; overflow: hidden; }
+    .abs { position: absolute; }
+    .layer { position: absolute; inset: 0; will-change: transform, filter, opacity; }
+    .otext { background: linear-gradient(90deg, #ea580c, #f59e0b); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    #bg { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 38%, #fffaf3 0%, #f6efe5 55%, #ece1d2 100%); }
+    #grain { position: absolute; inset: 0; opacity: 0.35; background-image: radial-gradient(rgba(120, 90, 60, 0.08) 1px, transparent 1.2px); background-size: 7px 7px; }
+    .blob { position: absolute; border-radius: 50%; }
+    #blobA { width: 1000px; height: 1000px; background: radial-gradient(circle, rgba(249, 115, 22, 0.14), transparent 65%); }
+    #blobB { width: 900px; height: 900px; background: radial-gradient(circle, rgba(201, 143, 85, 0.18), transparent 65%); }
+
+    .title { position: absolute; left: 0; right: 0; text-align: center; font-size: 100px; font-weight: 700; letter-spacing: -0.045em; line-height: 1.04; }
+    .title > div { display: block; }
+    .kicker { font-size: 34px !important; font-weight: 750; letter-spacing: 0.08em !important; color: var(--orange); text-transform: uppercase; margin-bottom: 16px; }
+    .card { position: absolute; left: 90px; width: 900px; border-radius: 40px; background: #fff; box-shadow: 0 50px 120px rgba(80, 50, 20, 0.16), 0 0 0 1px rgba(80, 50, 20, 0.05); padding: 44px; }
+    .pill { display: inline-flex; align-items: center; gap: 12px; border-radius: 999px; white-space: nowrap; font-weight: 650; }
+    .btn { height: 100px; border-radius: 26px; display: grid; place-items: center; font-size: 36px; font-weight: 700; color: #fff; background: var(--ink); position: relative; }
+    .sup { display: flex; align-items: center; gap: 28px; padding: 30px 34px; border-radius: 30px; border: 3px solid var(--line); margin-top: 22px; font-size: 40px; font-weight: 700; }
+    .sup:first-child { margin-top: 0; }
+    .sup .lg { width: 86px; height: 86px; border-radius: 24px; display: grid; place-items: center; color: #fff; font-size: 32px; font-weight: 800; flex: none; }
+    .sup small { display: block; font-size: 26px; color: var(--muted); font-weight: 600; margin-top: 2px; }
+    .sup .st { margin-left: auto; font-size: 30px; font-weight: 700; padding: 14px 26px; border-radius: 999px; background: #f4ede4; color: #5b4f44; }
+    .search { height: 100px; border-radius: 26px; border: 3px solid var(--orange); display: flex; align-items: center; gap: 18px; padding: 0 30px; font-size: 38px; font-weight: 600; }
+    .caret { display: inline-block; width: 4px; height: 44px; background: var(--orange); }
+    .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 28px; }
+    .tile { height: 300px; border-radius: 30px; position: relative; padding: 22px; display: flex; flex-direction: column; justify-content: flex-end; color: #fff; overflow: hidden; }
+    .tile svg { position: absolute; left: 50%; top: 40px; margin-left: -70px; }
+    .tile b { font-size: 32px; }
+    .tile small { font-size: 26px; font-weight: 650; opacity: 0.85; }
+    .tile.sel::after { content: ""; position: absolute; inset: 0; border-radius: 30px; border: 8px solid var(--orange); }
+    .slider { position: relative; height: 18px; border-radius: 999px; background: #efe6da; margin: 50px 0 20px; }
+    .slider i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; background: linear-gradient(90deg, #f59e0b, #ea580c); }
+    .slider em { position: absolute; top: 50%; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 50%; background: #fff; box-shadow: 0 6px 20px rgba(80, 50, 20, 0.3); border: 6px solid #ea580c; }
+    .kv { display: flex; justify-content: space-between; align-items: baseline; font-size: 36px; font-weight: 650; color: #5b4f44; margin-top: 18px; }
+    .kv b { font-size: 46px; color: var(--ink); font-variant-numeric: tabular-nums; }
+    .notif { position: absolute; left: 90px; width: 900px; display: flex; gap: 26px; align-items: center; padding: 30px 36px; border-radius: 36px; background: rgba(255, 255, 255, 0.96); box-shadow: 0 30px 80px rgba(80, 50, 20, 0.2); }
+    .notif .ic { width: 96px; height: 96px; border-radius: 26px; display: grid; place-items: center; background: linear-gradient(135deg, #1f3fe8, #5b78ff); color: #fff; font-size: 48px; font-weight: 800; flex: none; }
+    .notif b { font-size: 38px; }
+    .notif small { display: block; font-size: 30px; color: var(--muted); font-weight: 600; margin-top: 4px; }
+    .node { position: absolute; left: 110px; width: 860px; display: flex; align-items: center; gap: 34px; }
+    .node .dot { width: 96px; height: 96px; border-radius: 50%; background: #efe6da; display: grid; place-items: center; font-size: 40px; font-weight: 800; color: #fff; flex: none; position: relative; z-index: 2; }
+    .node .tx { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; color: #b5a796; }
+    .node .tx small { display: block; font-size: 28px; font-weight: 600; margin-top: 4px; }
+    .node .tag { margin-left: auto; font-size: 26px; font-weight: 750; padding: 10px 20px; border-radius: 999px; background: #fde7d3; color: #c2410c; letter-spacing: 0.04em; }
+    #stamp { position: absolute; left: 140px; top: 760px; width: 800px; padding: 30px 0; text-align: center; font-size: 170px; font-weight: 850; letter-spacing: 0.08em; color: #dc2626; border: 16px solid #dc2626; border-radius: 34px; mix-blend-mode: multiply; }
+    .receipt { position: absolute; left: 190px; width: 700px; background: #fff; padding: 50px 54px 70px; font-family: "Cascadia Mono", "Consolas", monospace; color: #2b241e; box-shadow: 0 40px 90px rgba(80, 50, 20, 0.18);
+      -webkit-mask: linear-gradient(#000 0 0) top / 100% calc(100% - 26px) no-repeat, conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) bottom / 52px 26px repeat-x; }
+    .receipt .ln { display: flex; justify-content: space-between; font-size: 32px; padding: 9px 0; }
+    .receipt .hr { border-top: 4px dashed #d8ccbd; margin: 16px 0; }
+    .receipt .tot { font-size: 44px; font-weight: 800; color: var(--green); }
+    #counter { position: absolute; left: 50px; top: 60px; display: flex; align-items: center; gap: 18px; padding: 16px 30px 16px 18px; border-radius: 999px; background: #1a1410; color: #fff; font-size: 30px; font-weight: 650; box-shadow: 0 20px 50px rgba(26, 20, 16, 0.3); }
+    #counter b { font-size: 46px; font-weight: 800; font-variant-numeric: tabular-nums; min-width: 80px; }
+    .mark { display: grid; place-items: center; color: #fff; font-weight: 700; background: linear-gradient(135deg, #1f3fe8, #5b78ff); box-shadow: 0 24px 60px rgba(37, 70, 240, 0.35); }
+    .hand { position: absolute; width: 64px; height: 64px; filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.25)); }
+    .ring { position: absolute; width: 110px; height: 110px; margin: -55px 0 0 -55px; border-radius: 50%; background: rgba(249, 115, 22, 0.35); }
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <div id="bg"></div>
+    <div id="grain"></div>
+    <div class="blob" id="blobA"></div>
+    <div class="blob" id="blobB"></div>
+
+    <!-- hook: a box that refuses to be packed -->
+    <div class="layer" id="s-hook">
+      <div class="title" id="hookT" style="top:280px;font-size:118px"><div>Sell 1,000 products.</div><div><span class="otext">Pack zero boxes.</span></div></div>
+      <div class="abs" id="hookBox" style="left:290px;top:820px;width:500px;height:500px"></div>
+      <div class="abs" id="hookShadow" style="left:340px;top:1310px;width:400px;height:60px;border-radius:50%;background:radial-gradient(ellipse,rgba(80,50,20,.28),transparent 70%)"></div>
+    </div>
+
+    <!-- the old way: a tower of boxes that collapses -->
+    <div class="layer" id="s-old">
+      <div class="title" id="oldT" style="top:260px"><div style="font-size:60px;color:#7a6d60;font-weight:650">The old way:</div><div>stock, pack, ship,</div><div>repeat.</div></div>
+      <div id="tower"></div>
+      <div class="abs" id="nope" style="left:0;right:0;top:880px;text-align:center;font-size:170px;font-weight:800;letter-spacing:-0.05em"><span class="otext">Not anymore.</span></div>
+    </div>
+
+    <!-- 1 connect -->
+    <div class="layer" id="s-connect">
+      <div class="title" id="cnT" style="top:300px"><div class="kicker">Step 1</div><div>Connect</div><div><span class="otext">a supplier.</span></div></div>
+      <div class="card" id="cnCard" style="top:800px">
+        <div class="sup" id="sp0"><span class="lg" style="background:#111">CJ</span><div>CJ Dropshipping<small>Millions of products</small></div><span class="st" id="st0">Connect</span></div>
+        <div class="sup" id="sp1"><span class="lg" style="background:#16a34a">P</span><div>Printful<small>Print on demand</small></div><span class="st">Connect</span></div>
+        <div class="sup" id="sp2"><span class="lg" style="background:#0ea5e9">P</span><div>Printify<small>Print on demand</small></div><span class="st">Connect</span></div>
+      </div>
+      <div class="abs" id="cnNote" style="left:0;right:0;top:1560px;text-align:center;font-size:34px;font-weight:650;color:#7a6d60">Your own supplier account · your supplier prices</div>
+    </div>
+
+    <!-- 2 pick -->
+    <div class="layer" id="s-pick">
+      <div class="title" id="pkT" style="top:230px"><div class="kicker">Step 2</div><div>Pick what</div><div><span class="otext">to sell.</span></div></div>
+      <div class="card" id="pkCard" style="top:700px">
+        <div class="search"><svg width="40" height="40" viewBox="0 0 24 24"><circle cx="10" cy="10" r="7" fill="none" stroke="#7a6d60" stroke-width="2.6" /><path d="M15 15l6 6" stroke="#7a6d60" stroke-width="2.6" stroke-linecap="round" /></svg><span id="q"></span><span class="caret" id="qc"></span></div>
+        <div class="tiles" id="tiles"></div>
+        <div class="btn" id="impBtn" style="margin-top:28px;background:var(--orange)"><span id="impTxt">Import to my store</span></div>
+      </div>
+    </div>
+
+    <!-- 3 markup -->
+    <div class="layer" id="s-markup">
+      <div class="title" id="mkT" style="top:300px"><div class="kicker">Step 3</div><div>Set your</div><div><span class="otext">markup.</span></div></div>
+      <div class="card" id="mkCard" style="top:820px">
+        <div style="display:flex;gap:30px;align-items:center">
+          <div id="mkThumb" style="width:150px;height:150px;border-radius:30px;flex:none;position:relative;background:linear-gradient(135deg,#ea580c,#f59e0b)"></div>
+          <div><div style="font-size:40px;font-weight:750">Speckled Ceramic Mug</div><div style="font-size:30px;color:#7a6d60;font-weight:600;margin-top:4px">Imported · 3 variants</div></div>
+        </div>
+        <div class="kv" style="margin-top:40px">Supplier cost<b>$8.50</b></div>
+        <div class="kv">Markup<b id="mkPct" style="color:#ea580c">0%</b></div>
+        <div class="slider"><i id="mkFill"></i><em id="mkKnob"></em></div>
+        <div class="kv" style="margin-top:34px;padding-top:30px;border-top:3px solid #f1e8dc">Your price<b id="mkPrice" style="font-size:72px">$8.50</b></div>
+      </div>
+    </div>
+
+    <!-- 4 sale -->
+    <div class="layer" id="s-sale">
+      <div class="title" id="saT" style="top:330px;font-size:120px"><div>Somebody</div><div><span class="otext">buys it.</span></div></div>
+      <div class="notif" id="n0" style="top:820px"><span class="ic">T</span><div><b>New order · $19.90</b><small>Speckled Ceramic Mug · incl. shipping</small></div></div>
+      <div class="abs" id="saBox" style="left:390px;top:1140px;width:300px;height:300px"></div>
+      <div class="abs" id="saCap" style="left:0;right:0;top:1480px;text-align:center;font-size:44px;font-weight:700;color:#7a6d60">You didn't touch this box.</div>
+    </div>
+
+    <!-- 5 auto pipeline -->
+    <div class="layer" id="s-auto">
+      <div class="title" id="auT" style="top:200px"><div>From here,</div><div><span class="otext">it runs itself.</span></div></div>
+      <div class="abs" style="left:156px;top:640px;width:8px;height:880px;border-radius:8px;background:#efe6da"></div>
+      <div class="abs" id="auLine" style="left:156px;top:640px;width:8px;height:0;border-radius:8px;background:linear-gradient(#f59e0b,#059669)"></div>
+      <div id="nodes"></div>
+      <div class="abs" id="parcel" style="left:120px;width:80px;height:80px"></div>
+      <div id="stamp">SHIPPED</div>
+    </div>
+
+    <!-- 6 tracking map -->
+    <div class="layer" id="s-track">
+      <div class="title" id="trT" style="top:230px"><div>Tracked</div><div><span class="otext">door to door.</span></div></div>
+      <svg class="abs" id="map" style="left:60px;top:560px" width="960" height="760" viewBox="0 0 960 760"></svg>
+      <div class="card" id="trCard" style="top:1380px;padding:34px 40px">
+        <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:28px;font-weight:650;color:#7a6d60">Tracking number</div><span class="pill" id="trSt" style="padding:10px 22px;font-size:26px;background:#fde7d3;color:#c2410c">In transit</span></div>
+        <div style="font-size:50px;font-weight:800;letter-spacing:0.04em;margin-top:8px;font-family:Cascadia Mono,Consolas,monospace">TRK 4821 9930 77</div>
+        <div style="font-size:28px;font-weight:600;color:#7a6d60;margin-top:8px">Synced to the order · buyer emailed automatically</div>
+      </div>
+    </div>
+
+    <!-- 7 margin receipt -->
+    <div class="layer" id="s-receipt">
+      <div class="title" id="rcT" style="top:200px"><div>And the</div><div><span class="otext">margin is yours.</span></div></div>
+      <div class="abs" id="rcClip" style="left:0;right:0;top:560px;height:1000px;overflow:hidden">
+        <div class="receipt" id="receipt" style="top:0">
+          <div style="text-align:center;font-size:30px;font-weight:800;letter-spacing:0.2em">ORDER #1042</div>
+          <div class="hr"></div>
+          <div class="ln"><span>Mug</span><span>$13.60</span></div>
+          <div class="ln"><span>Shipping (buyer)</span><span>$6.30</span></div>
+          <div class="ln" style="font-weight:800"><span>Buyer paid</span><span>$19.90</span></div>
+          <div class="hr"></div>
+          <div class="ln" style="color:#9a3412"><span>Supplier product</span><span>−$8.50</span></div>
+          <div class="ln" style="color:#9a3412"><span>Supplier shipping</span><span>−$4.20</span></div>
+          <div class="hr"></div>
+          <div class="ln tot"><span>You keep</span><span>$7.20</span></div>
+        </div>
+      </div>
+      <div class="abs" id="rcMul" style="left:0;right:0;top:1500px;text-align:center">
+        <div style="font-size:40px;font-weight:650;color:#7a6d60">× 120 orders a month</div>
+        <div style="font-size:150px;font-weight:800;letter-spacing:-0.05em;line-height:1.05;font-variant-numeric:tabular-nums" class="otext" id="rcTot">$0</div>
+      </div>
+      <div class="abs" style="left:0;right:0;top:1840px;text-align:center;font-size:24px;color:#9a8b7c;font-weight:600">Example numbers. Supplier costs are charged to your own supplier account.</div>
+    </div>
+
+    <!-- end -->
+    <div class="layer" id="s-end">
+      <div class="abs" style="left:0;right:0;top:470px;display:flex;flex-direction:column;align-items:center">
+        <div class="abs" id="endBox" style="left:390px;top:0;width:300px;height:300px"></div>
+        <div style="height:300px"></div>
+        <div id="endWord" style="margin-top:40px;font-size:120px;font-weight:700;letter-spacing:-0.05em"></div>
+        <div id="endTag" style="margin-top:10px;font-size:56px;font-weight:650;letter-spacing:-0.02em"><span class="otext">You sell it. They ship it.</span></div>
+        <div id="endCta" class="pill" style="margin-top:70px;padding:30px 52px;background:#1a1410;color:#fff;font-size:42px;box-shadow:0 24px 60px rgba(26,20,16,.3)">Start free → link in bio</div>
+        <div id="endSup" style="margin-top:50px;font-size:30px;font-weight:650;color:#7a6d60">Works with CJ Dropshipping · Printful · Printify</div>
+      </div>
+    </div>
+
+    <div id="counter"><svg width="56" height="56" viewBox="0 0 200 200" id="cIcon"></svg><span>Boxes you packed</span><b id="cVal">0</b></div>
+    <div class="hand" id="hand"><svg width="64" height="64" viewBox="0 0 24 24"><path d="M4 2l15 11.5-6.6 1 3.8 7.4-2.9 1.4-3.8-7.5L4 20z" fill="#1a1410" stroke="#fff" stroke-width="1.4" stroke-linejoin="round" /></svg></div>
+    <div class="ring" id="ring"></div>
+  </div>
+
+  <script>
+    const SCENES = [
+      { id: "hook", dur: 4.4 }, { id: "old", dur: 5.2 }, { id: "connect", dur: 5.0 }, { id: "pick", dur: 5.8 },
+      { id: "markup", dur: 5.2 }, { id: "sale", dur: 4.4 }, { id: "auto", dur: 6.8 }, { id: "track", dur: 5.0 },
+      { id: "receipt", dur: 6.2 }, { id: "end", dur: 5.2 }
+    ];
+    const plan = { scenes: [], duration: 0 };
+    {
+      let t = 0;
+      for (const s of SCENES) {
+        plan.scenes.push({ id: s.id, start: t, dur: s.dur, vo: null, voOffset: 0 });
+        t += s.dur;
+      }
+      plan.duration = t;
+    }
+    window.__plan = plan;
+
+    // ---------- helpers (same engine as reel-payments.html) ----------
+    const $ = (id) => document.getElementById(id);
+    const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+    const seg = (t, a, b) => clamp((t - a) / (b - a));
+    const lerp = (a, b, p) => a + (b - a) * p;
+    const E = {
+      out: (x) => 1 - Math.pow(1 - x, 3),
+      expo: (x) => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * x)),
+      inOut: (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2),
+      in: (x) => x * x * x,
+      back: (x) => { const c1 = 1.6, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); },
+      bounce: (x) => { const n = 7.5625, d = 2.75; if (x < 1 / d) return n * x * x; if (x < 2 / d) return n * (x -= 1.5 / d) * x + 0.75; if (x < 2.5 / d) return n * (x -= 2.25 / d) * x + 0.9375; return n * (x -= 2.625 / d) * x + 0.984375; }
+    };
+    const set = (el, o) => { for (const k in o) el.style[k] = o[k]; };
+    const fx = (el, { x = 0, y = 0, s = 1, sx = 1, sy = 1, r = 0, o = 1, b = 0, extra = "" }) =>
+      set(el, { transform: `${extra} translate(${x}px, ${y}px) scale(${s * sx}, ${s * sy}) rotate(${r}deg)`, opacity: o, filter: b > 0.05 ? `blur(${b}px)` : "none" });
+    const rise = (el, t, at, dist = 70, dur = 0.5) => {
+      const p = E.expo(seg(t, at, at + dur));
+      fx(el, { y: (1 - p) * dist, o: p, b: (1 - p) * 14 });
+      return p;
+    };
+    const pop = (el, t, at, extra = "") => {
+      const q = E.back(seg(t, at, at + 0.45));
+      fx(el, { extra, s: 0.5 + 0.5 * q, o: clamp(q * 1.6) });
+    };
+    const tap = (t, at, x, y) => {
+      const hand = $("hand"), ring = $("ring");
+      const pin = seg(t, at - 0.55, at - 0.05), pout = seg(t, at + 0.35, at + 0.6);
+      set(hand, { left: lerp(x + 300, x, E.inOut(pin)) + "px", top: lerp(y + 300, y, E.inOut(pin)) + "px", opacity: pin > 0 && pout < 1 ? (1 - pout) * clamp(pin * 3) : 0, transform: `scale(${t > at && t < at + 0.15 ? 0.86 : 1})` });
+      const pr = seg(t, at, at + 0.5);
+      set(ring, { left: x + 10 + "px", top: y + 10 + "px", opacity: pr > 0 && pr < 1 ? 1 - pr : 0, transform: `scale(${0.3 + pr * 1.6})` });
+    };
+    const centerOf = (id) => { const r = $(id).getBoundingClientRect(); return [r.left + r.width * 0.55, r.top + r.height * 0.55]; };
+    const titleIn = (t, id, at = 0.08) => [...$(id).children].forEach((c, i) => rise(c, t, at + i * 0.12));
+    const money = (v) => "$" + v.toFixed(2);
+
+    // isometric kraft box; `label` is printed on its front face, `logo` tapes a blue T on top
+    function boxSVG({ label = "", logo = false, open = 0 } = {}) {
+      const lid = open > 0
+        ? `<polygon points="20,60 100,100 ${100 - 30 * open},${100 - 70 * open} ${20 - 30 * open},${60 - 70 * open}" fill="#dcae78"/><polygon points="180,60 100,100 ${100 + 30 * open},${100 - 70 * open} ${180 + 30 * open},${60 - 70 * open}" fill="#d29e66"/>`
+        : `<polygon points="88,26 112,26 112,26 188,64 164,64" fill="none"/><polygon points="58,45 72,38 152,78 138,85" fill="#f3dcb4" opacity=".9"/>`;
+      return `<svg width="100%" height="100%" viewBox="-20 -20 240 230">
+        <polygon points="100,20 180,60 100,100 20,60" fill="${open > 0 ? "#7a4f28" : "#e9c08a"}"/>
+        <polygon points="20,60 100,100 100,190 20,150" fill="#c98f55"/>
+        <polygon points="100,100 180,60 180,150 100,190" fill="#b07a43"/>
+        ${lid}
+        ${label ? `<text x="60" y="102" font-size="${label.length > 7 ? 13 : 17}" font-weight="800" letter-spacing="1" fill="#6b4421" font-family="Segoe UI" transform="matrix(1 0.5 0 1 0 0)" text-anchor="middle">${label}</text>` : ""}
+        ${logo ? `<g transform="translate(100,60) scale(1,0.5) rotate(45)"><rect x="-26" y="-26" width="52" height="52" rx="12" fill="#2546f0"/><text x="0" y="13" text-anchor="middle" font-size="38" font-weight="800" fill="#fff" font-family="Segoe UI" transform="rotate(-45)">T</text></g>` : ""}
+      </svg>`;
+    }
+
+    // ---------- dynamic DOM ----------
+    $("hookBox").innerHTML = boxSVG();
+    $("saBox").innerHTML = boxSVG({ label: "MUG" });
+    $("cIcon").innerHTML = boxSVG().replace(/<svg[^>]*>|<\/svg>/g, "");
+    const towerLabels = ["STOCK", "PACK", "TAPE", "LABEL", "POST", "RETURNS", "RESTOCK"];
+    $("tower").innerHTML = towerLabels.map((l, i) => `<div class="abs" id="tw${i}" style="left:${380 + (i % 2 ? 26 : -18)}px;top:${1500 - i * 150}px;width:320px;height:300px">${boxSVG({ label: l })}</div>`).join("");
+    const icons = {
+      mug: `<svg width="140" height="140" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"><path d="M5 7h11v9a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4z"/><path d="M16 9h2a2.5 2.5 0 0 1 0 5h-2"/><path d="M8 3c0 1 1 1 1 2M12 3c0 1 1 1 1 2"/></svg>`,
+      tee: `<svg width="140" height="140" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"><path d="M8 3l-5 3 2 4 2-1v12h10V9l2 1 2-4-5-3a4 4 0 0 1-8 0z"/></svg>`,
+      tote: `<svg width="140" height="140" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"><path d="M4 8h16l-1.5 13h-13z"/><path d="M8 8a4 4 0 0 1 8 0"/></svg>`,
+      cap: `<svg width="140" height="140" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"><path d="M3 15a9 9 0 0 1 18 0z"/><path d="M12 6v2"/><path d="M14 15h8"/></svg>`
+    };
+    const tiles = [["mug", "Ceramic Mug", "$8.50 cost", "linear-gradient(135deg,#ea580c,#f59e0b)"], ["tee", "Heavy Tee", "$9.80 cost", "linear-gradient(135deg,#1a1410,#57534e)"],
+      ["tote", "Canvas Tote", "$7.10 cost", "linear-gradient(135deg,#0f766e,#14b8a6)"], ["cap", "Dad Cap", "$8.90 cost", "linear-gradient(135deg,#7c3aed,#c084fc)"]];
+    $("tiles").innerHTML = tiles.map(([ic, n, c, bg], i) => `<div class="tile" id="tl${i}" style="background:${bg}">${icons[ic]}<b>${n}</b><small>${c}</small></div>`).join("");
+    $("mkThumb").innerHTML = icons.mug.replace('width="140" height="140"', 'width="110" height="110" style="position:absolute;left:20px;top:20px"');
+    const nodes = [["$", "Buyer pays", "$19.90 at your checkout", "#2546f0", ""], ["→", "Order sent to the supplier", "automatically, the moment it's paid", "#ea580c", "AUTO"],
+      ["▣", "Supplier packs & ships", "from their warehouse", "#a16207", ""], ["#", "Tracking synced", "order marked fulfilled", "#0f766e", "AUTO"], ["✉", "Buyer gets a shipping email", "with the tracking number", "#059669", "AUTO"]];
+    $("nodes").innerHTML = nodes.map(([ic, a, b, col, tag], i) =>
+      `<div class="node" id="nd${i}" style="top:${600 + i * 210}px"><span class="dot" id="ndd${i}" data-c="${col}">${ic}</span><div class="tx" id="ndt${i}">${a}<small>${b}</small></div>${tag ? `<span class="tag" id="ndg${i}">${tag}</span>` : ""}</div>`).join("");
+    $("parcel").innerHTML = boxSVG();
+    $("endBox").innerHTML = boxSVG({ logo: true });
+    $("endWord").innerHTML = [..."Tescommerce"].map((c, i) => `<span id="ew${i}" style="display:inline-block">${c}</span>`).join("");
+
+    // stylised map: dotted land masses (deterministic), a curved route and two pins
+    {
+      let dots = "";
+      const blobs = [[200, 260, 170, 120], [300, 470, 90, 150], [560, 230, 120, 90], [600, 420, 110, 160], [780, 290, 170, 130], [820, 560, 90, 70]];
+      for (let y = 30; y < 740; y += 22) for (let x = 20; x < 950; x += 22) {
+        const inside = blobs.some(([cx, cy, rx, ry]) => ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 < 1);
+        if (inside) dots += `<circle cx="${x}" cy="${y}" r="5" fill="#d9c7b0"/>`;
+      }
+      $("map").innerHTML = `<rect x="0" y="0" width="960" height="760" rx="44" fill="#fffaf3"/>${dots}
+        <path id="route" d="M790 300 C 640 80, 360 120, 230 290" fill="none" stroke="#ea580c" stroke-width="8" stroke-linecap="round" stroke-dasharray="1 22"/>
+        <path id="routeDone" d="M790 300 C 640 80, 360 120, 230 290" fill="none" stroke="#ea580c" stroke-width="10" stroke-linecap="round"/>
+        <g id="pinA"><circle cx="790" cy="300" r="26" fill="#1a1410"/><text x="790" y="358" text-anchor="middle" font-size="28" font-weight="700" fill="#7a6d60" font-family="Segoe UI">Supplier warehouse</text></g>
+        <g id="pinB"><circle cx="230" cy="290" r="30" fill="#059669"/><circle id="pinPulse" cx="230" cy="290" r="30" fill="none" stroke="#059669" stroke-width="6"/><text x="230" y="352" text-anchor="middle" font-size="28" font-weight="700" fill="#7a6d60" font-family="Segoe UI">Your buyer</text></g>
+        <g id="truck"><rect x="-42" y="-26" width="58" height="44" rx="8" fill="#1a1410"/><path d="M16 -14h16l12 14v18h-28z" fill="#ea580c"/><circle cx="-24" cy="22" r="9" fill="#1a1410" stroke="#fffaf3" stroke-width="4"/><circle cx="28" cy="22" r="9" fill="#1a1410" stroke="#fffaf3" stroke-width="4"/></g>`;
+    }
+
+    // ---------- scenes ----------
+    const scenes = {
+      hook(t, d) {
+        titleIn(t, "hookT", 0);
+        // drop in with a squash, then a little "nope" shake
+        const fall = seg(t, 0.4, 1.1);
+        const y = lerp(-900, 0, E.bounce(fall));
+        const squash = t > 0.75 && t < 1.0 ? Math.sin(seg(t, 0.75, 1.0) * Math.PI) * 0.12 : 0;
+        const shake = t > 2.0 && t < 2.9 ? Math.sin(t * 40) * 5 * (1 - seg(t, 2.0, 2.9)) : 0;
+        fx($("hookBox"), { y, r: shake, sx: 1 + squash, sy: 1 - squash, o: fall > 0 ? 1 : 0, extra: "" });
+        $("hookBox").style.transformOrigin = "50% 100%";
+        fx($("hookShadow"), { s: lerp(0.3, 1, E.out(fall)), o: fall });
+      },
+      old(t, d) {
+        titleIn(t, "oldT");
+        const collapse = seg(t, 3.0, 4.2);
+        towerLabels.forEach((_, i) => {
+          const at = 0.3 + i * 0.28;
+          const land = E.bounce(seg(t, at, at + 0.45));
+          const wob = Math.sin(t * 6 + i * 0.6) * (1 + i) * 0.9 * seg(t, 1.4, 3.0);
+          const fallX = (i % 2 ? 1 : -1) * (120 + i * 60) * E.in(collapse);
+          const fallY = 900 * E.in(collapse) * (0.5 + i * 0.12);
+          const fallR = (i % 2 ? 1 : -1) * (40 + i * 18) * E.in(collapse);
+          const el = $("tw" + i);
+          fx(el, { x: fallX, y: lerp(-1400, 0, land) + fallY, r: wob + fallR, o: t > at ? 1 : 0 });
+          el.style.transformOrigin = "50% 100%";
+        });
+        $("oldT").style.opacity = 1 - seg(t, 3.0, 3.4);
+        const n = E.back(seg(t, 3.7, 4.2));
+        fx($("nope"), { s: 0.4 + 0.6 * n, r: (1 - n) * -8, o: clamp(n * 1.8) });
+      },
+      connect(t, d) {
+        titleIn(t, "cnT");
+        [0, 1, 2].forEach((i) => {
+          const p = E.expo(seg(t, 0.35 + i * 0.15, 0.85 + i * 0.15));
+          fx($("sp" + i), { x: (1 - p) * 120, o: p });
+        });
+        fx($("cnCard"), { o: E.expo(seg(t, 0.15, 0.6)) });
+        const at = 1.9;
+        const [x, y] = centerOf("st0");
+        tap(t, at, x, y);
+        const done = t > at + 0.08;
+        $("st0").textContent = done ? "✓ Connected" : "Connect";
+        set($("st0"), { background: done ? "#d1fae5" : "", color: done ? "#047857" : "" });
+        $("sp0").style.borderColor = done ? "#10b981" : "";
+        rise($("cnNote"), t, 2.6, 30);
+      },
+      pick(t, d) {
+        titleIn(t, "pkT");
+        const pc = E.expo(seg(t, 0.15, 0.8));
+        fx($("pkCard"), { y: (1 - pc) * 140, o: pc });
+        const q = "ceramic mug";
+        $("q").textContent = q.slice(0, Math.round(q.length * seg(t, 0.7, 1.5)));
+        $("qc").style.opacity = t < 1.9 && Math.floor(t * 3) % 2 === 0 ? 1 : 0;
+        tiles.forEach((_, i) => pop($("tl" + i), t, 1.5 + i * 0.1));
+        const sel = 2.7;
+        $("tl0").classList.toggle("sel", t > sel + 0.05);
+        const imp = 3.9;
+        const target = t < 3.3 ? "tl0" : "impBtn";
+        const [x, y] = centerOf(target);
+        tap(t, t < 3.3 ? sel : imp, x, y);
+        const done = t > imp + 0.08;
+        $("impTxt").textContent = done ? "✓ Imported with variants & photos" : "Import to my store";
+        $("impBtn").style.background = done ? "#059669" : "var(--orange)";
+        const fly = E.inOut(seg(t, imp + 0.1, imp + 0.7));
+        fx($("tl0"), { s: t > imp ? lerp(1, 0.2, fly) : 1, x: lerp(0, 380, fly), y: lerp(0, 520, fly), o: t > imp ? 1 - fly : clamp(E.back(seg(t, 1.5, 1.95)) * 1.6) });
+      },
+      markup(t, d) {
+        titleIn(t, "mkT");
+        const pc = E.expo(seg(t, 0.15, 0.8));
+        fx($("mkCard"), { y: (1 - pc) * 140, o: pc });
+        const p = E.inOut(seg(t, 1.2, 3.0));
+        const pct = Math.round(60 * p);
+        $("mkPct").textContent = pct + "%";
+        $("mkFill").style.width = p * 60 + "%";
+        $("mkKnob").style.left = p * 60 + "%";
+        $("mkPrice").textContent = money(8.5 * (1 + pct / 100));
+        fx($("mkPrice"), { s: 1 + Math.sin(seg(t, 3.0, 3.4) * Math.PI) * 0.12 });
+        // drag gesture rides on the knob
+        const [kx, ky] = centerOf("mkKnob");
+        const show = seg(t, 0.7, 1.1) * (1 - seg(t, 3.2, 3.5));
+        set($("hand"), { left: kx - 4 + "px", top: ky - 4 + "px", opacity: show, transform: "scale(1)" });
+      },
+      sale(t, d) {
+        titleIn(t, "saT");
+        const n = E.back(seg(t, 0.4, 0.9));
+        fx($("n0"), { y: (1 - n) * -260, o: clamp(n * 1.6) });
+        const b = E.bounce(seg(t, 1.2, 1.9));
+        fx($("saBox"), { y: lerp(-600, 0, b), o: t > 1.2 ? 1 : 0 });
+        rise($("saCap"), t, 2.1, 40);
+      },
+      auto(t, d) {
+        titleIn(t, "auT");
+        const step = (i) => 0.6 + i * 0.9;
+        nodes.forEach(([, , , col], i) => {
+          const at = step(i);
+          const on = t > at;
+          const q = E.back(seg(t, at, at + 0.4));
+          const dot = $("ndd" + i);
+          dot.style.background = on ? col : "#efe6da";
+          fx(dot, { s: on ? 0.7 + 0.3 * q : 1 });
+          $("ndt" + i).style.color = on ? "var(--ink)" : "#b5a796";
+          const g = $("ndg" + i);
+          if (g) pop(g, t, at + 0.15);
+          rise($("nd" + i), t, 0.3 + i * 0.08, 40);
+        });
+        const prog = seg(t, step(0), step(4));
+        $("auLine").style.height = 840 * prog + "px";
+        set($("parcel"), { top: 608 + 840 * prog + "px" });
+        fx($("parcel"), { o: seg(t, 0.6, 0.8) * (1 - seg(t, step(4), step(4) + 0.3)), r: Math.sin(t * 9) * 6 });
+        // rubber stamp slams after the last step, with a screen shake
+        const st = seg(t, 5.2, 5.45);
+        fx($("stamp"), { s: lerp(2.6, 1, E.in(st)), r: -12, o: st > 0 ? Math.min(1, st * 3) * 0.92 : 0 });
+        const kick = t > 5.45 && t < 5.9 ? Math.sin((t - 5.45) * 70) * 14 * (1 - seg(t, 5.45, 5.9)) : 0;
+        $("s-auto").style.transform += ` translate(${kick}px, ${kick * 0.6}px)`;
+      },
+      track(t, d) {
+        titleIn(t, "trT");
+        const m = E.expo(seg(t, 0.1, 0.7));
+        fx($("map"), { y: (1 - m) * 80, o: m });
+        const route = $("route"), done = $("routeDone");
+        const L = route.getTotalLength();
+        const p = E.inOut(seg(t, 0.8, 3.4));
+        done.setAttribute("stroke-dasharray", `${L * p} ${L}`);
+        const pt = route.getPointAtLength(L * p), pt2 = route.getPointAtLength(Math.min(L, L * p + 2));
+        const ang = (Math.atan2(pt2.y - pt.y, pt2.x - pt.x) * 180) / Math.PI;
+        // the route runs right-to-left, so flip the truck to face its direction of travel
+        $("truck").setAttribute("transform", `translate(${pt.x},${pt.y - 30}) rotate(${ang + 180}) scale(-1,1)`);
+        const arrived = t > 3.4;
+        const pr = seg(t, 3.4, 4.2);
+        $("pinPulse").setAttribute("r", 30 + pr * 50);
+        $("pinPulse").setAttribute("opacity", arrived ? 1 - pr : 0);
+        rise($("trCard"), t, 0.9, 80);
+        $("trSt").textContent = arrived ? "✓ Delivered" : "In transit";
+        set($("trSt"), { background: arrived ? "#d1fae5" : "#fde7d3", color: arrived ? "#047857" : "#c2410c" });
+      },
+      receipt(t, d) {
+        titleIn(t, "rcT");
+        // the receipt "prints" downward out of a slot
+        const h = $("receipt").offsetHeight;
+        const p = E.out(seg(t, 0.5, 2.6));
+        set($("receipt"), { top: lerp(-h, 0, p) + "px" });
+        const m = E.back(seg(t, 3.0, 3.5));
+        fx($("rcMul"), { s: 0.6 + 0.4 * m, o: clamp(m * 1.6) });
+        $("rcTot").textContent = "$" + Math.round(864 * E.out(seg(t, 3.2, 4.4))).toLocaleString("en-US");
+      },
+      end(t, d) {
+        // the box arrives one last time, now with a Tescommerce tape mark
+        const b = E.bounce(seg(t, 0.05, 0.8));
+        fx($("endBox"), { y: lerp(-700, 0, b), o: t > 0.05 ? 1 : 0 });
+        for (let i = 0; i < 11; i += 1) {
+          const p = E.expo(seg(t, 0.6 + i * 0.035, 1.05 + i * 0.035));
+          fx($("ew" + i), { y: (1 - p) * 80, o: p, b: (1 - p) * 10 });
+        }
+        rise($("endTag"), t, 1.1, 50, 0.6);
+        const pc = E.back(seg(t, 1.5, 2.0));
+        fx($("endCta"), { s: (0.7 + 0.3 * pc) * (1 + 0.025 * Math.sin(Math.max(0, t - 2.0) * 5)), o: clamp(pc * 2) });
+        rise($("endSup"), t, 2.1, 30);
+      }
+    };
+
+    // running gag: the old way racks up boxes, Tescommerce resets the counter to 0 for good
+    function drawCounter(time) {
+      const i = plan.scenes.findIndex((s) => time >= s.start && time < s.start + s.dur);
+      const visible = i >= 1 && i <= 8;
+      const fade = E.expo(seg(time, plan.scenes[1].start, plan.scenes[1].start + 0.4)) * (1 - seg(time, plan.scenes[9].start - 0.3, plan.scenes[9].start));
+      $("counter").style.opacity = visible ? fade : 0;
+      if (!visible) return;
+      const t = time - plan.scenes[i].start;
+      let v = 0, bad = false, bump = 0;
+      if (SCENES[i].id === "old") {
+        v = Math.round(248 * E.in(seg(t, 0.3, 3.0)));
+        bad = true;
+        if (t > 3.6) { v = 0; bad = false; bump = Math.sin(seg(t, 3.6, 4.0) * Math.PI); }
+      }
+      $("cVal").textContent = v;
+      $("counter").style.background = bad ? "#b91c1c" : "#1a1410";
+      $("cVal").style.color = bad ? "#fff" : "#4ade80";
+      fx($("counter"), { s: 1 + bump * 0.18 + (bad ? Math.sin(time * 30) * 0.015 : 0) });
+    }
+
+    // ---------- frame ----------
+    const ENTER = 0.45, EXIT = 0.3;
+    function renderAt(time) {
+      set($("blobA"), { left: 300 + Math.sin(time * 0.3) * 160 + "px", top: -380 + Math.cos(time * 0.25) * 100 + "px" });
+      set($("blobB"), { left: -420 + Math.cos(time * 0.27) * 120 + "px", top: 1200 + Math.sin(time * 0.33) * 120 + "px" });
+      set($("hand"), { opacity: 0 });
+      set($("ring"), { opacity: 0 });
+      for (const s of plan.scenes) {
+        const layer = $("s-" + s.id);
+        const t = time - s.start;
+        const last = s === plan.scenes[plan.scenes.length - 1];
+        if (t < -0.001 || (!last && t > s.dur)) { layer.style.visibility = "hidden"; continue; }
+        layer.style.visibility = "visible";
+        const pin = s.start === 0 ? 1 : E.expo(seg(t, 0, ENTER));
+        const pout = last ? 0 : E.in(seg(t, s.dur - EXIT, s.dur));
+        fx(layer, { s: lerp(0.94, 1, pin) * (1 + pout * 0.14), o: pin * (1 - pout), b: (1 - pin) * 16 + pout * 18 });
+        scenes[s.id](t, s.dur);
+      }
+      drawCounter(time);
+    }
+    window.renderAt = renderAt;
+    document.fonts.ready.then(() => {
+      renderAt(0);
+      window.__ready = true;
+    });
+  </script>
+</body>
+</html>

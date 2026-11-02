@@ -51,6 +51,7 @@ export function CaRegionSetupBanner() {
             ["kg", ta("caRegion.applyKg")],
             ["kz", ta("caRegion.applyKz")],
             ["uz", ta("caRegion.applyUz")],
+            ["tr", ta("caRegion.applyTr")],
           ] as const
         ).map(([id, label]) => (
           <button

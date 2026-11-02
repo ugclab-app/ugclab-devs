@@ -57,6 +57,13 @@ export const EMAIL_TEMPLATE_SEED = [
     text: "Hi {{name}}, launch your brand on {{platformName}}: {{signupUrl}}",
   },
   {
+    key: "merchant_activation_nudge",
+    label: "Store has no product yet",
+    subject: "{{name}}, add a product to {{storeName}}",
+    html: "<p>Hi {{name}},</p><p>{{storeName}} is open, and it still has no product. Add one and you can take a payment.</p><p><a href=\"{{adminUrl}}\">Open your admin</a></p>",
+    text: "Hi {{name}}, {{storeName}} has no product yet. Open your admin: {{adminUrl}}",
+  },
+  {
     key: "merchant_outreach",
     label: "Legacy — welcome layout",
     subject: "Launch your store on {{platformName}}",

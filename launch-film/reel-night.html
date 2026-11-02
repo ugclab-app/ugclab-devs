@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Tescommerce — Reel: Emails that sell while you sleep</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 1080px;
+      height: 1920px;
+      overflow: hidden;
+      background: #0b1026;
+      font-family: "Segoe UI Variable Display", "Segoe UI", sans-serif;
+      color: #fff;
+      -webkit-font-smoothing: antialiased;
+    }
+    #stage { position: relative; width: 1080px; height: 1920px; overflow: hidden; }
+    .abs { position: absolute; }
+    .layer { position: absolute; inset: 0; will-change: transform, filter, opacity; }
+    .mtext { background: linear-gradient(90deg, #a5b4fc, #f0abfc); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .dtext { background: linear-gradient(90deg, #ea580c, #db2777); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    #sky { position: absolute; inset: 0; }
+    #stars { position: absolute; inset: 0; }
+    #moon { position: absolute; left: 110px; top: 50px; width: 120px; height: 120px; border-radius: 50%; box-shadow: -26px 14px 0 0 #fde68a; filter: drop-shadow(0 0 40px rgba(253, 230, 138, 0.45)); }
+    #sun { position: absolute; left: 340px; width: 400px; height: 400px; border-radius: 50%; background: radial-gradient(circle, #fff7d6 0%, #fdba74 45%, rgba(253, 186, 116, 0) 70%); }
+
+    .title { position: absolute; left: 0; right: 0; text-align: center; font-size: 100px; font-weight: 700; letter-spacing: -0.045em; line-height: 1.04; }
+    .title > div { display: block; }
+    .glass { position: absolute; left: 90px; width: 900px; border-radius: 40px; background: rgba(24, 28, 70, 0.88); border: 2px solid rgba(255, 255, 255, 0.14); box-shadow: 0 40px 100px rgba(0, 0, 0, 0.35); padding: 40px 44px; }
+    .row { display: flex; align-items: center; gap: 26px; padding: 26px 0; border-bottom: 2px solid rgba(255, 255, 255, 0.08); font-size: 38px; font-weight: 650; }
+    .row:last-child { border-bottom: 0; }
+    .row .ic { width: 80px; height: 80px; border-radius: 22px; display: grid; place-items: center; font-size: 36px; flex: none; }
+    .row small { display: block; font-size: 26px; color: rgba(255, 255, 255, 0.55); font-weight: 600; margin-top: 2px; }
+    .tg { margin-left: auto; width: 110px; height: 64px; border-radius: 999px; background: rgba(255, 255, 255, 0.16); position: relative; flex: none; }
+    .tg i { position: absolute; top: 6px; left: 6px; width: 52px; height: 52px; border-radius: 50%; background: #fff; }
+    .cnt { margin-left: auto; font-size: 34px; font-weight: 750; color: #86efac; font-variant-numeric: tabular-nums; }
+    .bigtime { position: absolute; left: 0; right: 0; text-align: center; font-size: 230px; font-weight: 800; letter-spacing: -0.04em; color: rgba(255, 255, 255, 0.1); font-variant-numeric: tabular-nums; }
+    .ev { position: absolute; left: 90px; width: 900px; display: flex; align-items: center; gap: 28px; padding: 34px 40px; border-radius: 36px; background: rgba(24, 28, 70, 0.9); border: 2px solid rgba(255, 255, 255, 0.14); font-size: 40px; font-weight: 700; }
+    .ev .ic { width: 96px; height: 96px; border-radius: 28px; display: grid; place-items: center; font-size: 44px; flex: none; }
+    .ev small { display: block; font-size: 28px; color: rgba(255, 255, 255, 0.6); font-weight: 600; margin-top: 4px; }
+    .ev.win { background: rgba(10, 60, 60, 0.92); border-color: rgba(52, 211, 153, 0.5); }
+    .ev .amt { margin-left: auto; font-size: 46px; font-weight: 800; color: #6ee7b7; }
+    .plane { position: absolute; width: 110px; height: 110px; }
+    .trail { position: absolute; inset: 0; }
+    #clock { position: absolute; right: 60px; top: 60px; display: flex; align-items: center; gap: 16px; padding: 18px 30px; border-radius: 999px; background: rgba(255, 255, 255, 0.1); border: 2px solid rgba(255, 255, 255, 0.18); font-size: 44px; font-weight: 750; font-variant-numeric: tabular-nums; }
+    #clock span { font-size: 36px; }
+    .ntf { position: absolute; left: 110px; width: 860px; display: flex; gap: 24px; align-items: center; padding: 28px 32px; border-radius: 36px; background: rgba(255, 255, 255, 0.82); color: #1c1917; box-shadow: 0 24px 60px rgba(120, 60, 20, 0.18); }
+    .ntf .ic { width: 84px; height: 84px; border-radius: 24px; display: grid; place-items: center; background: linear-gradient(135deg, #1f3fe8, #5b78ff); color: #fff; font-size: 42px; font-weight: 800; flex: none; }
+    .ntf b { font-size: 34px; }
+    .ntf small { display: block; font-size: 27px; color: #78716c; font-weight: 600; margin-top: 2px; }
+    .ntf .amt { margin-left: auto; font-size: 42px; font-weight: 800; color: #059669; }
+    .mark { display: grid; place-items: center; color: #fff; font-weight: 700; background: linear-gradient(135deg, #1f3fe8, #5b78ff); box-shadow: 0 24px 60px rgba(37, 70, 240, 0.35); }
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <div id="sky"></div>
+    <div id="sun"></div>
+    <svg id="stars" width="1080" height="1920"></svg>
+    <div id="moon"></div>
+
+    <div class="layer" id="s-hook">
+      <div class="title" id="hookT" style="top:760px;font-size:118px"><div>Emails that sell</div><div><span class="mtext">while you sleep.</span></div></div>
+      <div id="zzz"></div>
+    </div>
+
+    <div class="layer" id="s-setup">
+      <div class="title" id="suT" style="top:250px"><div>Before bed,</div><div><span class="mtext">switch these on.</span></div></div>
+      <div class="glass" id="suCard" style="top:650px;padding:16px 44px">
+        <div class="row"><span class="ic" style="background:#4f46e5">👋</span><div>Welcome email<small>when someone new signs up</small></div><span class="tg" id="tg0"><i></i></span></div>
+        <div class="row"><span class="ic" style="background:#ea580c">🛒</span><div>Abandoned cart reminder<small>when a checkout is left behind</small></div><span class="tg" id="tg1"><i></i></span></div>
+        <div class="row"><span class="ic" style="background:#059669">💌</span><div>Thank you after purchase<small>sent 1 hour after the order</small></div><span class="tg" id="tg2"><i></i></span></div>
+        <div class="row"><span class="ic" style="background:#db2777">🌙</span><div>Win-back<small>customers quiet for 60 days</small></div><span class="tg" id="tg3"><i></i></span></div>
+      </div>
+      <div class="abs" id="suNote" style="left:0;right:0;top:1500px;text-align:center;font-size:44px;font-weight:650;color:rgba(255,255,255,.75)">Then go to sleep. Seriously.</div>
+    </div>
+
+    <div id="events"></div>
+
+    <div class="layer" id="s-morning">
+      <div class="title" id="mnT" style="top:220px;color:#1c1917"><div>Good morning.</div><div style="font-size:64px;font-weight:650;letter-spacing:-.02em;margin-top:14px"><span class="dtext">While you slept:</span></div></div>
+      <div id="ntfs"></div>
+      <div class="abs" id="mnTot" style="left:0;right:0;top:1500px;text-align:center;color:#1c1917">
+        <div style="font-size:40px;font-weight:650;color:#78716c">Sold overnight</div>
+        <div style="font-size:150px;font-weight:800;letter-spacing:-0.05em;line-height:1.05;font-variant-numeric:tabular-nums" class="dtext" id="mnV">$0</div>
+      </div>
+    </div>
+
+    <div class="layer" id="s-recap">
+      <div class="title" id="rcT" style="top:280px;color:#1c1917"><div>Set it once.</div><div><span class="dtext">It runs every night.</span></div></div>
+      <div class="glass" id="rcCard" style="top:680px;padding:16px 44px;background:rgba(255,255,255,.75);border-color:rgba(255,255,255,.9);color:#1c1917;box-shadow:0 40px 100px rgba(120,60,20,.15)">
+        <div class="row" style="border-color:#f1e7dc"><span class="ic" style="background:#4f46e5">👋</span><div>Welcome</div><span class="cnt" id="rc0" style="color:#059669"></span></div>
+        <div class="row" style="border-color:#f1e7dc"><span class="ic" style="background:#ea580c">🛒</span><div>Cart reminders</div><span class="cnt" id="rc1" style="color:#059669"></span></div>
+        <div class="row" style="border-color:#f1e7dc"><span class="ic" style="background:#059669">💌</span><div>Thank you</div><span class="cnt" id="rc2" style="color:#059669"></span></div>
+        <div class="row"><span class="ic" style="background:#db2777">🌙</span><div>Win-back</div><span class="cnt" id="rc3" style="color:#059669"></span></div>
+      </div>
+      <div class="abs" id="rcNote" style="left:0;right:0;top:1420px;text-align:center;font-size:30px;font-weight:600;color:#78716c">emails sent this month · example store</div>
+    </div>
+
+    <div class="layer" id="s-end">
+      <div class="abs" style="left:0;right:0;top:620px;display:flex;flex-direction:column;align-items:center;color:#1c1917">
+        <div class="mark" id="endMark" style="width:200px;height:200px;border-radius:60px;font-size:116px">T</div>
+        <div id="endWord" style="margin-top:36px;font-size:120px;font-weight:700;letter-spacing:-0.05em"></div>
+        <div id="endTag" style="margin-top:10px;font-size:56px;font-weight:650;letter-spacing:-0.02em"><span class="dtext">Your store never sleeps.</span></div>
+        <div id="endCta" style="margin-top:70px;padding:30px 52px;border-radius:999px;background:#1c1917;color:#fff;font-size:42px;font-weight:700;box-shadow:0 24px 60px rgba(28,25,23,.3)">Start free → link in bio</div>
+      </div>
+    </div>
+
+    <div id="clock"><span id="clockIc">🌙</span><b id="clockV">23:00</b></div>
+  </div>
+
+  <script>
+    // four things that happen overnight; each gets its own scene built from the same template
+    const EVENTS = [
+      { id: "ev0", time: "23:14", head: ["A new customer", "signs up."], a: ["👋", "#4f46e5", "New customer", "ana.k@mail.com"], b: ["Welcome email sent", "your story + best sellers", ""] },
+      { id: "ev1", time: "01:47", head: ["A cart is", "left behind."], a: ["🛒", "#ea580c", "Checkout abandoned", "Linen Shirt · $89"], b: ["Reminder sent", "they came back · cart recovered", "+$89"] },
+      { id: "ev2", time: "03:20", head: ["Someone", "buys."], a: ["💳", "#2563eb", "Order #1051 paid", "Ceramic Set · $62"], b: ["Thank-you email sent", "1 hour later, automatically", "+$62"] },
+      { id: "ev3", time: "05:05", head: ["An old customer", "comes back."], a: ["🌙", "#db2777", "Quiet for 60 days", "last order in spring"], b: ["Win-back email sent", "they ordered again · Candle Trio", "+$45"] }
+    ];
+    const SCENES = [
+      { id: "hook", dur: 4.6, clock: [23 * 60, 23 * 60 + 2] }, { id: "setup", dur: 5.4, clock: [23 * 60 + 2, 23 * 60 + 10] },
+      ...EVENTS.map((e, i) => {
+        const [h, m] = e.time.split(":").map(Number);
+        const start = (h < 12 ? h + 24 : h) * 60 + m;
+        const next = EVENTS[i + 1] ? EVENTS[i + 1].time.split(":").map(Number) : [6, 59];
+        return { id: e.id, dur: 5.0, clock: [start, (next[0] < 12 ? next[0] + 24 : next[0]) * 60 + next[1] - 4] };
+      }),
+      { id: "morning", dur: 5.8, clock: [31 * 60, 31 * 60 + 2] }, { id: "recap", dur: 4.8 }, { id: "end", dur: 5.0 }
+    ];
+    const plan = { scenes: [], duration: 0 };
+    {
+      let t = 0;
+      for (const s of SCENES) {
+        plan.scenes.push({ id: s.id, start: t, dur: s.dur, vo: null, voOffset: 0 });
+        t += s.dur;
+      }
+      plan.duration = t;
+    }
+    window.__plan = plan;
+
+    // ---------- helpers (same engine as reel-payments.html) ----------
+    const $ = (id) => document.getElementById(id);
+    const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+    const seg = (t, a, b) => clamp((t - a) / (b - a));
+    const lerp = (a, b, p) => a + (b - a) * p;
+    const E = {
+      out: (x) => 1 - Math.pow(1 - x, 3),
+      expo: (x) => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * x)),
+      inOut: (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2),
+      in: (x) => x * x * x,
+      back: (x) => { const c1 = 1.6, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); }
+    };
+    const set = (el, o) => { for (const k in o) el.style[k] = o[k]; };
+    const fx = (el, { x = 0, y = 0, s = 1, r = 0, o = 1, b = 0, extra = "" }) =>
+      set(el, { transform: `${extra} translate(${x}px, ${y}px) scale(${s}) rotate(${r}deg)`, opacity: o, filter: b > 0.05 ? `blur(${b}px)` : "none" });
+    const rise = (el, t, at, dist = 70, dur = 0.5) => {
+      const p = E.expo(seg(t, at, at + dur));
+      fx(el, { y: (1 - p) * dist, o: p, b: (1 - p) * 14 });
+      return p;
+    };
+    const pop = (el, t, at, extra = "") => {
+      const q = E.back(seg(t, at, at + 0.45));
+      fx(el, { extra, s: 0.5 + 0.5 * q, o: clamp(q * 1.6) });
+    };
+    const titleIn = (t, id, at = 0.08) => [...$(id).children].forEach((c, i) => rise(c, t, at + i * 0.12));
+    const hhmm = (min) => { const m = Math.floor(min) % (24 * 60); return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`; };
+    const mix = (a, b, p) => a.map((v, i) => Math.round(lerp(v, b[i], p)));
+    const rgb = (c) => `rgb(${c.join(",")})`;
+
+    // ---------- dynamic DOM ----------
+    {
+      let s = "", seed = 7;
+      const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+      for (let i = 0; i < 140; i += 1) s += `<circle id="st${i}" cx="${(rnd() * 1080).toFixed(0)}" cy="${(rnd() * 1500).toFixed(0)}" r="${(1 + rnd() * 2.6).toFixed(1)}" fill="#fff"/>`;
+      $("stars").innerHTML = s;
+    }
+    const plane = (col) => `<svg class="plane" viewBox="0 0 24 24"><path d="M2 11l20-8-6 19-4-8z" fill="${col}"/><path d="M12 14l10-11" stroke="#0b1026" stroke-width="1" opacity=".35"/></svg>`;
+    $("events").innerHTML = EVENTS.map((e) => `
+      <div class="layer" id="s-${e.id}">
+        <div class="bigtime" style="top:250px" id="${e.id}-tm">${e.time}</div>
+        <div class="title" id="${e.id}-T" style="top:560px"><div>${e.head[0]}</div><div><span class="mtext">${e.head[1]}</span></div></div>
+        <div class="ev" id="${e.id}-a" style="top:920px"><span class="ic" style="background:${e.a[1]}">${e.a[0]}</span><div>${e.a[2]}<small>${e.a[3]}</small></div></div>
+        <svg class="trail" width="1080" height="1920"><path id="${e.id}-path" d="M300 1090 C 100 1260, 920 1240, 760 1450" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="5" stroke-dasharray="2 16" stroke-linecap="round"/></svg>
+        <div id="${e.id}-pl" style="position:absolute;left:0;top:0">${plane("#c7d2fe")}</div>
+        <div class="ev win" id="${e.id}-b" style="top:1480px"><span class="ic" style="background:#059669">✉</span><div>${e.b[0]}<small>${e.b[1]}</small></div>${e.b[2] ? `<span class="amt">${e.b[2]}</span>` : ""}</div>
+      </div>`).join("");
+    $("zzz").innerHTML = ["z", "z", "Z"].map((z, i) => `<div class="abs" id="zz${i}" style="font-size:${60 + i * 26}px;font-weight:800;color:rgba(199,210,254,.8)">${z}</div>`).join("");
+    const ntfs = [["New order", "Linen Shirt · recovered cart", "+$89"], ["New order", "Ceramic Set", "+$62"], ["New order", "Candle Trio · came back", "+$45"], ["3 emails sent", "welcome · reminder · thank you", ""]];
+    $("ntfs").innerHTML = ntfs.map(([a, b, amt], i) => `<div class="ntf" id="nt${i}" style="top:${560 + i * 190}px"><span class="ic">T</span><div><b>${a}</b><small>${b}</small></div>${amt ? `<span class="amt">${amt}</span>` : ""}</div>`).join("");
+    $("endWord").innerHTML = [..."Tescommerce"].map((c, i) => `<span id="ew${i}" style="display:inline-block">${c}</span>`).join("");
+
+    // ---------- scenes ----------
+    function eventScene(e) {
+      return (t) => {
+        const tm = E.expo(seg(t, 0.0, 0.6));
+        fx($(e.id + "-tm"), { s: lerp(1.3, 1, tm), o: tm });
+        titleIn(t, e.id + "-T", 0.2);
+        pop($(e.id + "-a"), t, 0.8);
+        // a paper-plane email flies from the event to the result along the dotted trail
+        const path = $(e.id + "-path"), L = path.getTotalLength();
+        const p = E.inOut(seg(t, 1.6, 2.8));
+        const pt = path.getPointAtLength(L * p), pt2 = path.getPointAtLength(Math.min(L, L * p + 3));
+        const ang = (Math.atan2(pt2.y - pt.y, pt2.x - pt.x) * 180) / Math.PI;
+        set($(e.id + "-pl"), { transform: `translate(${pt.x - 55}px, ${pt.y - 55}px) rotate(${ang + 20}deg)`, opacity: p > 0 && p < 1 ? 1 : 0 });
+        path.style.strokeDashoffset = -t * 40;
+        path.style.opacity = seg(t, 1.4, 1.7) * (1 - seg(t, 3.0, 3.4));
+        pop($(e.id + "-b"), t, 2.8);
+      };
+    }
+    const scenes = {
+      hook(t) {
+        titleIn(t, "hookT", 0.2);
+        [0, 1, 2].forEach((i) => {
+          const p = ((t * 0.5 + i / 3) % 1);
+          set($("zz" + i), { left: 240 + i * 50 + Math.sin(t * 2 + i) * 16 + "px", top: 260 - p * 200 + "px", opacity: Math.sin(p * Math.PI) * seg(t, 0.6, 1.2) });
+        });
+      },
+      setup(t) {
+        titleIn(t, "suT");
+        const pc = E.expo(seg(t, 0.15, 0.8));
+        fx($("suCard"), { y: (1 - pc) * 140, o: pc });
+        [0, 1, 2, 3].forEach((i) => {
+          const q = E.back(seg(t, 1.1 + i * 0.4, 1.45 + i * 0.4));
+          $("tg" + i).style.background = q > 0.5 ? "#10b981" : "";
+          $("tg" + i).firstElementChild.style.transform = `translateX(${46 * q}px)`;
+        });
+        rise($("suNote"), t, 3.2, 40);
+      },
+      ...Object.fromEntries(EVENTS.map((e) => [e.id, eventScene(e)])),
+      morning(t) {
+        titleIn(t, "mnT", 1.1);
+        let total = 0;
+        ntfs.forEach(([, , amt], i) => {
+          const at = 1.1 + i * 0.4;
+          const q = E.back(seg(t, at, at + 0.45));
+          fx($("nt" + i), { y: (1 - q) * -120, o: clamp(q * 1.6) });
+          if (amt && t > at) total += parseInt(amt.slice(2), 10) * E.out(seg(t, at, at + 0.4));
+        });
+        rise($("mnTot"), t, 2.6, 50);
+        $("mnV").textContent = "$" + Math.round(total);
+      },
+      recap(t) {
+        titleIn(t, "rcT");
+        const pc = E.expo(seg(t, 0.15, 0.8));
+        fx($("rcCard"), { y: (1 - pc) * 140, o: pc });
+        [412, 236, 198, 87].forEach((n, i) => ($("rc" + i).textContent = Math.round(n * E.out(seg(t, 0.8 + i * 0.15, 2.6 + i * 0.15))) + " sent"));
+        rise($("rcNote"), t, 1.6, 30);
+      },
+      end(t) {
+        const pm = E.back(seg(t, 0.05, 0.6));
+        fx($("endMark"), { s: 0.3 + 0.7 * pm, r: (1 - pm) * -25, o: clamp(pm * 2) });
+        for (let i = 0; i < 11; i += 1) {
+          const p = E.expo(seg(t, 0.3 + i * 0.035, 0.75 + i * 0.035));
+          fx($("ew" + i), { y: (1 - p) * 80, o: p, b: (1 - p) * 10 });
+        }
+        rise($("endTag"), t, 0.85, 50, 0.6);
+        const pc = E.back(seg(t, 1.25, 1.75));
+        fx($("endCta"), { s: (0.7 + 0.3 * pc) * (1 + 0.025 * Math.sin(Math.max(0, t - 1.8) * 5)), o: clamp(pc * 2) });
+      }
+    };
+
+    // night → dawn → day, driven by absolute time so every scene shares one sky
+    function drawSky(time) {
+      const mStart = plan.scenes.find((s) => s.id === "morning").start;
+      const dawn = E.inOut(seg(time, mStart - 0.6, mStart + 1.4));
+      const day = E.inOut(seg(time, mStart + 0.3, mStart + 1.6));
+      const nightTop = [8, 12, 34], nightBot = [28, 22, 70];
+      const dawnTop = [76, 60, 140], dawnBot = [251, 146, 120];
+      const dayTop = [255, 247, 237], dayBot = [254, 226, 205];
+      const top = mix(mix(nightTop, dawnTop, dawn), dayTop, day), bot = mix(mix(nightBot, dawnBot, dawn), dayBot, day);
+      $("sky").style.background = `linear-gradient(${rgb(top)}, ${rgb(bot)})`;
+      $("stars").style.opacity = 1 - dawn;
+      for (let i = 0; i < 140; i += 7) $("st" + i).setAttribute("opacity", 0.4 + 0.6 * Math.abs(Math.sin(time * 1.3 + i)));
+      set($("moon"), { opacity: 1 - dawn, transform: `translateY(${dawn * 300}px)` });
+      set($("sun"), { top: lerp(1900, 1100, dawn) + "px", opacity: dawn * (1 - day) });
+      document.body.style.color = day > 0.5 ? "#1c1917" : "#fff";
+      const clock = $("clock");
+      clock.style.background = day > 0.5 ? "rgba(28,25,23,.08)" : "rgba(255,255,255,.1)";
+      clock.style.borderColor = day > 0.5 ? "rgba(28,25,23,.12)" : "rgba(255,255,255,.18)";
+    }
+    function drawClock(time) {
+      const i = plan.scenes.findIndex((s) => time >= s.start && time < s.start + s.dur);
+      const S = SCENES[i < 0 ? SCENES.length - 1 : i];
+      $("clock").style.opacity = S.clock ? 1 : 1 - seg(time, plan.scenes[SCENES.findIndex((x) => x.id === "recap")].start, plan.scenes[SCENES.findIndex((x) => x.id === "recap")].start + 0.4);
+      if (!S.clock) return;
+      const t = time - plan.scenes[i].start;
+      $("clockV").textContent = hhmm(lerp(S.clock[0], S.clock[1], seg(t, 0, S.dur)));
+      $("clockIc").textContent = S.id === "morning" ? "☀️" : "🌙";
+    }
+
+    // ---------- frame ----------
+    const ENTER = 0.45, EXIT = 0.3;
+    function renderAt(time) {
+      drawSky(time);
+      for (const s of plan.scenes) {
+        const layer = $("s-" + s.id);
+        const t = time - s.start;
+        const last = s === plan.scenes[plan.scenes.length - 1];
+        if (t < -0.001 || (!last && t > s.dur)) { layer.style.visibility = "hidden"; continue; }
+        layer.style.visibility = "visible";
+        const pin = s.start === 0 ? 1 : E.expo(seg(t, 0, ENTER));
+        const pout = last ? 0 : E.in(seg(t, s.dur - EXIT, s.dur));
+        fx(layer, { s: lerp(0.94, 1, pin) * (1 + pout * 0.14), o: pin * (1 - pout), b: (1 - pin) * 16 + pout * 18 });
+        scenes[s.id](t, s.dur);
+      }
+      drawClock(time);
+    }
+    window.renderAt = renderAt;
+    document.fonts.ready.then(() => {
+      renderAt(0);
+      window.__ready = true;
+    });
+  </script>
+</body>
+</html>

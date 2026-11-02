@@ -140,6 +140,79 @@ const PACKS: Partial<Record<Locale, ThemeLocalePack>> = {
       },
     },
   },
+  tr: {
+    defaultAnnouncement: "75 $ üzeri siparişlerde ücretsiz kargo — ödemede SHIP75 kodunu kullan",
+    announcementByExact: {
+      "Free shipping on orders over $75 — use code SHIP75 at checkout":
+        "75 $ üzeri siparişlerde ücretsiz kargo — ödemede SHIP75 kodunu kullan",
+    },
+    navLabels: {
+      Shop: "Mağaza",
+      "New arrivals": "Yeni gelenler",
+      Sale: "İndirim",
+      Contact: "İletişim",
+    },
+    blocksById: {
+      blk_tes_hero: {
+        title: "Tescommerce ile akıllı alışveriş",
+        subtitle: "Seçili ürünler, hızlı kargo ve güvenli ödeme.",
+        ctaLabel: "Mağazaya git",
+      },
+      blk_tes_features: {
+        title: "Neden bizi seçiyorlar",
+        features: [
+          { title: "Hızlı kargo", text: "Siparişlerin çoğu 24 saat içinde yola çıkar." },
+          { title: "Güvenli ödeme", text: "Korumalı ödeme (Stripe / GoPay)." },
+          { title: "Kolay iade", text: "30 gün içinde zahmetsiz iade." },
+        ],
+      },
+      blk_tes_products: { title: "Çok satanlar" },
+      blk_tes_banner: {
+        title: "Bahar koleksiyonu yayında — seçili ürünlerde %25'e varan indirim",
+        ctaLabel: "İndirimleri gör",
+      },
+      blk_tes_reviews: { title: "Müşteri yorumları" },
+      blk_tes_newsletter: {
+        title: "Tescommerce bültenine katıl",
+        subtitle: "Yenilikler ve kampanyalar — spam yok.",
+      },
+      blk_tes_contact: {
+        title: "Bize ulaş",
+        subtitle: "Bir iş günü içinde yanıt veriyoruz.",
+        body: "Sipariş, ürün ve iş birliği soruları için.",
+      },
+    },
+    blocksByTitle: {
+      "Shop smarter with Tescommerce": {
+        title: "Tescommerce ile akıllı alışveriş",
+        subtitle: "Seçili ürünler, hızlı kargo ve güvenli ödeme.",
+        ctaLabel: "Mağazaya git",
+      },
+      "Why shoppers choose us": {
+        title: "Neden bizi seçiyorlar",
+        features: [
+          { title: "Hızlı kargo", text: "Siparişlerin çoğu 24 saat içinde yola çıkar." },
+          { title: "Güvenli ödeme", text: "Korumalı ödeme (Stripe / GoPay)." },
+          { title: "Kolay iade", text: "30 gün içinde zahmetsiz iade." },
+        ],
+      },
+      Bestsellers: { title: "Çok satanlar" },
+      "Spring collection is live — up to 25% off selected items": {
+        title: "Bahar koleksiyonu yayında — seçili ürünlerde %25'e varan indirim",
+        ctaLabel: "İndirimleri gör",
+      },
+      "What customers say": { title: "Müşteri yorumları" },
+      "Join the Tescommerce list": {
+        title: "Tescommerce bültenine katıl",
+        subtitle: "Yenilikler ve kampanyalar — spam yok.",
+      },
+      "Contact us": {
+        title: "Bize ulaş",
+        subtitle: "Bir iş günü içinde yanıt veriyoruz.",
+        body: "Sipariş, ürün ve iş birliği soruları için.",
+      },
+    },
+  },
   uz: {
     defaultAnnouncement: "$75 dan yuqori buyurtmalarga bepul yetkazish — SHIP75",
     navLabels: {

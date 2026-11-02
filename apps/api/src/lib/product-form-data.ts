@@ -1,5 +1,5 @@
 import { prisma } from "@ugclab/database";
-import { parseCountryPrices } from "./country-price.js";
+import { parseCountryPrices, parseCurrencyPrices } from "./country-price.js";
 
 export function parseCollectionIds(
   body: Record<string, unknown>
@@ -60,6 +60,12 @@ export function mergeTranslationsWithSeo(
     const parsed = parseCountryPrices(String(body.countryPrices ?? ""));
     if (parsed) translations._countryPrices = parsed;
     else delete translations._countryPrices;
+  }
+
+  if (body.currencyPrices !== undefined) {
+    const parsed = parseCurrencyPrices(String(body.currencyPrices ?? ""));
+    if (parsed) translations._currencyPrices = parsed;
+    else delete translations._currencyPrices;
   }
 
   if (body.sizeChart !== undefined) {

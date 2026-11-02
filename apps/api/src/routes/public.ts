@@ -16,14 +16,46 @@ const schema = z.object({
     .optional()
     .default("US"),
   ref: z.string().max(40).optional(),
+  turnstileToken: z.string().max(4096).optional(),
 });
 
 export const publicRoutes = new Hono();
 registerPublicPartnerRoutes(publicRoutes);
 
+publicRoutes.get("/status", async (c) => {
+  const { prisma } = await import("@ugclab/database");
+  const { isStripeConfigured } = await import("../lib/stripe.js");
+  const { emailConfigured } = await import("../lib/platform-mailbox.js");
+  let database: "up" | "down" = "down";
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    database = "up";
+  } catch {
+    database = "down";
+  }
+  return c.json({
+    ok: database === "up",
+    services: {
+      api: "up",
+      database,
+      email: emailConfigured() ? "configured" : "not_configured",
+      stripe: isStripeConfigured() ? "configured" : "not_configured",
+    },
+    updatedAt: new Date().toISOString(),
+  });
+});
+
+publicRoutes.get("/captcha", async (c) => {
+  const { platformTurnstileSiteKey } = await import("../lib/turnstile.js");
+  return c.json({ turnstileSiteKey: platformTurnstileSiteKey() });
+});
+
 publicRoutes.post("/signup", async (c) => {
   try {
     const body = schema.parse(await c.req.json());
+    const { requirePlatformTurnstile } = await import("../lib/turnstile.js");
+    const captcha = await requirePlatformTurnstile(c, body);
+    if (captcha) return captcha;
     const result = await registerMerchantStore({
       name: body.name,
       email: body.email,

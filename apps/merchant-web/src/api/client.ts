@@ -61,6 +61,103 @@ export type StoreListItem = {
   displayHost: string;
 };
 
+export type StoreImportKind = "products" | "customers" | "orders";
+
+export type StoreImportPreview = {
+  source: string;
+  kind: StoreImportKind;
+  count: number;
+  warnings: string[];
+  sample: Record<string, unknown>[];
+};
+
+export type StoreImportResult = {
+  created: number;
+  skipped: number;
+  errors: string[];
+  warnings?: string[];
+};
+
+/** Subset of `GET /merchant/growth` → `settings` that has a stable shape. */
+export type GrowthSettingsDto = Record<string, unknown> & {
+  invoicePrefix?: string;
+  invoiceNextNumber?: number;
+  turnstileSiteKey?: string;
+  turnstileSecretSet?: boolean;
+};
+
+/** Typed keys accepted by `PATCH /merchant/growth/settings` (others pass through untyped). */
+export type GrowthSettingsPatch = {
+  invoicePrefix: string;
+  invoiceNextNumber: number;
+  turnstileSiteKey: string;
+  /** Only send when the user typed a new key; `""` clears it. */
+  turnstileSecretKey: string;
+};
+
+export type WebhookTestResult = {
+  ok: boolean;
+  status: "PENDING" | "SUCCESS" | "FAILED" | null;
+  statusCode: number | null;
+  error: string | null;
+};
+
+export type WebhookDeliveryDto = {
+  id: string;
+  event: string;
+  status: "PENDING" | "SUCCESS" | "FAILED";
+  attempts: number;
+  lastStatusCode: number | null;
+  lastError: string | null;
+  nextAttemptAt: string | null;
+  deliveredAt: string | null;
+  createdAt: string;
+  payload: unknown;
+};
+
+export type InventoryForecastLevel = "out" | "critical" | "warning" | "ok" | "unknown";
+
+export type InventoryForecastProduct = {
+  productId: string;
+  title: string;
+  sku: string | null;
+  slug: string;
+  inventory: number;
+  unitsSold: number;
+  dailyRate: number;
+  daysLeft: number | null;
+  runOutAt: string | null;
+  level: InventoryForecastLevel;
+  suggestedReorder: number;
+};
+
+export type InventoryForecastDto = {
+  windowDays: number;
+  generatedAt: string;
+  summary: { out: number; critical: number; warning: number; tracked: number };
+  products: InventoryForecastProduct[];
+};
+
+export class ApiError extends Error {
+  status: number;
+  /** True when the server rejected the request because of a missing/invalid captcha. */
+  captcha: boolean;
+  constructor(message: string, status: number, captcha = false) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.captcha = captcha;
+  }
+}
+
+function apiError(data: unknown, status: number, fallback: string): ApiError {
+  return new ApiError(
+    apiErrorMessage(data, status, fallback),
+    status,
+    (data as { captcha?: boolean } | null)?.captcha === true
+  );
+}
+
 function apiErrorMessage(data: unknown, status: number, fallback: string): string {
   if (status === 503) {
     const err = (data as { error?: string })?.error;
@@ -85,7 +182,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(apiErrorMessage(data, res.status, `Request failed (${res.status})`));
+    throw apiError(data, res.status, `Request failed (${res.status})`);
   }
   return data as T;
 }
@@ -102,10 +199,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ token }),
     }),
-  forgotPassword: (email: string) =>
+  forgotPassword: (email: string, turnstileToken?: string | null) =>
     request<{ ok: boolean; message?: string }>("/auth/forgot-password", {
       method: "POST",
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email, ...(turnstileToken ? { turnstileToken } : {}) }),
     }),
   platformPartner: () =>
     request<{
@@ -149,13 +246,20 @@ export const api = {
     email: string,
     password: string,
     totpCode?: string,
-    rememberMe?: boolean
+    rememberMe?: boolean,
+    turnstileToken?: string | null
   ) => {
     let res: Response;
     try {
       res = await fetchApi("/auth/login", {
         method: "POST",
-        body: JSON.stringify({ email, password, totpCode, rememberMe }),
+        body: JSON.stringify({
+          email,
+          password,
+          totpCode,
+          rememberMe,
+          ...(turnstileToken ? { turnstileToken } : {}),
+        }),
       });
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") {
@@ -168,14 +272,14 @@ export const api = {
       return data as { requires2fa: true; email: string };
     }
     if (!res.ok) {
-      throw new Error(apiErrorMessage(data, res.status, `Request failed (${res.status})`));
+      throw apiError(data, res.status, `Request failed (${res.status})`);
     }
     return data as { user: UserDto; tenant: TenantDto | null };
   },
-  requestMagicLink: (email: string) =>
+  requestMagicLink: (email: string, turnstileToken?: string | null) =>
     request<{ ok: boolean; message?: string }>("/auth/magic-link", {
       method: "POST",
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email, ...(turnstileToken ? { turnstileToken } : {}) }),
     }),
   completeMagicLink: (token: string, totpCode?: string, rememberMe?: boolean) =>
     request<{ user: UserDto; tenant: TenantDto | null } | { requires2fa: true; email: string }>(
@@ -361,6 +465,7 @@ export const api = {
       orders: {
         id: string;
         orderNumber: string;
+        invoiceNumber?: string | null;
         status: string;
         totalAmount: number;
         platformFeeAmount: number;
@@ -480,10 +585,28 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  updateCustomer: (id: string, body: { marketingOptOut?: boolean }) =>
+  updateCustomer: (
+    id: string,
+    body: {
+      marketingOptOut?: boolean;
+      storeCreditDeltaCents?: number;
+      loyaltyPointsDelta?: number;
+    }
+  ) =>
     request(`/merchant/customers/${id}`, {
       method: "PATCH",
       body: JSON.stringify(body),
+    }),
+  customerExportUrl: (id: string) => `${API}/merchant/customers/${id}/export?download=1`,
+  anonymizeCustomer: (id: string) =>
+    request<{
+      ok: boolean;
+      email: string;
+      alreadyDone: boolean;
+      hadStripeCustomer: boolean;
+    }>(`/merchant/customers/${id}/anonymize`, {
+      method: "POST",
+      body: JSON.stringify({ confirm: "ERASE" }),
     }),
   themeCatalog: () =>
     request<{ themes: unknown[] }>("/merchant/theme-catalog"),
@@ -493,6 +616,14 @@ export const api = {
     request<{ sectionIds: string[] }>("/merchant/section-catalog"),
   settings: () =>
     request<{ tenant: unknown; emailConfigured: boolean }>("/merchant/settings"),
+  fxRates: () =>
+    request<{
+      baseCurrency: string;
+      rates: Record<string, number>;
+      live: boolean;
+      fetchedAt: string | null;
+      source: string | null;
+    }>("/merchant/fx-rates"),
   updateSettings: (body: Record<string, unknown>) =>
     request("/merchant/settings", {
       method: "PATCH",
@@ -537,6 +668,79 @@ export const api = {
     request("/merchant/settings/theme-versions/" + encodeURIComponent(id) + "/restore", {
       method: "POST",
     }),
+  suppliers: () =>
+    request<{
+      currency: string;
+      catalog: { provider: string; available: boolean; note: string }[];
+      accounts: { provider: string; connected: boolean; keyLast4: string; shopId: string | null; markupPercent: number | null }[];
+    }>("/merchant/suppliers"),
+  connectSupplier: (provider: string, apiKey: string) =>
+    request("/merchant/suppliers/" + provider + "/connect", {
+      method: "POST",
+      body: JSON.stringify({ apiKey }),
+    }),
+  disconnectSupplier: (provider: string) =>
+    request("/merchant/suppliers/" + provider, { method: "DELETE" }),
+  setSupplierMarkup: (provider: string, percent: number | null) =>
+    request("/merchant/suppliers/" + provider + "/markup", {
+      method: "POST",
+      body: JSON.stringify({ percent }),
+    }),
+  syncSupplierStock: () =>
+    request<{ updated: number }>("/merchant/suppliers/stock", { method: "POST" }),
+  searchSupplier: (provider: string, q: string) =>
+    request<{
+      products: {
+        externalProductId: string;
+        externalVariantId: string;
+        title: string;
+        sku: string | null;
+        imageUrl: string | null;
+        costCents: number | null;
+        costCurrency: string;
+        source: "shop" | "catalog";
+        suggestedPriceCents: number | null;
+      }[];
+    }>(`/merchant/suppliers/${provider}/search?q=${encodeURIComponent(q)}`),
+  supplierVariants: (provider: string, productId: string) =>
+    request<{
+      variants: {
+        externalVariantId: string;
+        title: string;
+        sku: string | null;
+        costCents: number | null;
+        inventory: number | null;
+      }[];
+    }>(`/merchant/suppliers/${provider}/variants?productId=${encodeURIComponent(productId)}`),
+  importSupplierProduct: (
+    provider: string,
+    body: {
+      externalProductId: string;
+      externalVariantId?: string;
+      title: string;
+      imageUrl?: string | null;
+      sku?: string | null;
+      costCents?: number | null;
+      price: number;
+      variantIds?: string[];
+    }
+  ) =>
+    request<{ product: { productId: string; slug: string; title: string } }>(
+      `/merchant/suppliers/${provider}/import`,
+      { method: "POST", body: JSON.stringify(body) }
+    ),
+  syncSupplierTracking: () =>
+    request<{ updated: number }>("/merchant/suppliers/sync", { method: "POST" }),
+  pushSupplierOrder: (orderId: string) =>
+    request<{
+      supplierOrders: {
+        id: string;
+        provider: string;
+        externalOrderId: string | null;
+        status: string;
+        error: string | null;
+      }[];
+    }>(`/merchant/suppliers/orders/${orderId}/push`, { method: "POST" }),
   stripeStatus: () =>
     request<{
       configured: boolean;
@@ -558,6 +762,32 @@ export const api = {
         storeCurrency: string;
       };
     }>("/merchant/stripe/status"),
+  merchantKyc: () =>
+    request<{
+      kyc: {
+        status: "PENDING" | "APPROVED" | "REJECTED";
+        legalName: string;
+        country: string;
+        passportLast4: string;
+        rejectReason: string | null;
+        hasSelfie: boolean;
+        submittedAt: string;
+        reviewedAt: string | null;
+      } | null;
+    }>("/merchant/kyc"),
+  submitMerchantKyc: (body: FormData) =>
+    request<{
+      kyc: {
+        status: "PENDING" | "APPROVED" | "REJECTED";
+        legalName: string;
+        country: string;
+        passportLast4: string;
+        rejectReason: string | null;
+        hasSelfie: boolean;
+        submittedAt: string;
+        reviewedAt: string | null;
+      };
+    }>("/merchant/kyc", { method: "POST", body }),
   payoutProfile: () =>
     request<{
       paymentModel: string;
@@ -583,6 +813,7 @@ export const api = {
   morBalance: () =>
     request<{
       paymentModel: string;
+      kycStatus?: "PENDING" | "APPROVED" | "REJECTED" | null;
       currency: string;
       storefrontCurrency?: string;
       payoutCurrency?: string;
@@ -784,6 +1015,25 @@ export const api = {
       registrars: Array<{ id: string; label: string; description: string; url: string }>;
       note?: string;
     }>(`/merchant/domains/purchase-links?domain=${encodeURIComponent(domain)}`),
+  entriPurchaseSession: (domain: string) =>
+    request<{
+      applicationId: string;
+      token: string;
+      userId: string;
+      domain: string;
+      dnsRecords: Array<{ type: string; host: string; value: string; ttl: number }>;
+    }>("/merchant/domains/entri-session", {
+      method: "POST",
+      body: JSON.stringify({ domain }),
+    }),
+  completeEntriPurchase: (domain: string) =>
+    request<{ ok: boolean; domains: string[]; pending?: boolean }>(
+      "/merchant/domains/entri-complete",
+      {
+        method: "POST",
+        body: JSON.stringify({ domain }),
+      }
+    ),
   addDomain: (domain: string) =>
     request("/merchant/domains", {
       method: "POST",
@@ -865,6 +1115,7 @@ export const api = {
       reason?: string;
       amountCents?: number;
       lineItems?: { lineId: string; quantity: number }[];
+      toStoreCredit?: boolean;
     }
   ) =>
     request(`/merchant/orders/${id}/refund`, {
@@ -914,6 +1165,23 @@ export const api = {
       body: fd,
     });
   },
+  previewStoreImport: (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return request<StoreImportPreview>("/merchant/import/store?dry=1", {
+      method: "POST",
+      body: fd,
+    });
+  },
+  importStoreFile: (file: File, opts?: { images?: boolean }) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    if (opts?.images === false) fd.append("images", "0");
+    return request<StoreImportResult>("/merchant/import/store", {
+      method: "POST",
+      body: fd,
+    });
+  },
   createDraftPaymentLink: (id: string) =>
     request<{ checkoutUrl: string; orderUrl: string; accessToken: string }>(
       `/merchant/orders/${id}/payment-link`,
@@ -924,7 +1192,8 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ token }),
     }),
-  oauthProviders: () => request<{ google: boolean }>("/auth/oauth/providers"),
+  oauthProviders: () =>
+    request<{ google: boolean; turnstileSiteKey?: string | null }>("/auth/oauth/providers"),
   updateCollectionRules: (id: string, body: Record<string, unknown>) =>
     request(`/merchant/collections/${id}/rules`, {
       method: "PATCH",
@@ -1264,7 +1533,8 @@ export const api = {
   deleteMarketingAutomation: (id: string) =>
     request(`/merchant/marketing/automations/id/${id}`, { method: "DELETE" }),
 
-  growth: () => request<Record<string, unknown>>("/merchant/growth"),
+  growth: () =>
+    request<Record<string, unknown> & { settings?: GrowthSettingsDto }>("/merchant/growth"),
 
   marketplace: () =>
     request<{
@@ -1406,7 +1676,7 @@ export const api = {
   exportAffiliateCommissionsCsv: () =>
     requestBlob("/merchant/affiliates/export.csv"),
 
-  patchGrowthSettings: (body: Record<string, unknown>) =>
+  patchGrowthSettings: (body: Record<string, unknown> & Partial<GrowthSettingsPatch>) =>
     request("/merchant/growth/settings", {
       method: "PATCH",
       body: JSON.stringify(body),
@@ -1498,8 +1768,25 @@ export const api = {
   deleteMerchantWebhook: (id: string) =>
     request(`/merchant/growth/webhooks/${id}`, { method: "DELETE" }),
 
+  patchMerchantWebhook: (id: string, body: { active: boolean }) =>
+    request(`/merchant/growth/webhooks/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+
   testMerchantWebhook: (id: string) =>
-    request(`/merchant/growth/webhooks/${id}/test`, { method: "POST" }),
+    request<WebhookTestResult>(`/merchant/growth/webhooks/${id}/test`, { method: "POST" }),
+
+  webhookDeliveries: (id: string) =>
+    request<{ deliveries: WebhookDeliveryDto[] }>(
+      `/merchant/growth/webhooks/${id}/deliveries`
+    ),
+
+  redeliverWebhookDelivery: (deliveryId: string) =>
+    request<{
+      ok: boolean;
+      delivery: Pick<WebhookDeliveryDto, "status" | "lastStatusCode" | "lastError" | "attempts">;
+    }>(`/merchant/growth/webhook-deliveries/${deliveryId}/redeliver`, { method: "POST" }),
 
   createMerchantApiKey: (name: string) =>
     request<{ secret: string }>("/merchant/growth/api-keys", {
@@ -1549,6 +1836,9 @@ export const api = {
   orderTagsList: () => request<{ tags: string[] }>("/merchant/orders/tags"),
 
   inventory: () => request<Record<string, unknown>>("/merchant/inventory"),
+
+  inventoryForecast: (days: number) =>
+    request<InventoryForecastDto>(`/merchant/inventory/forecast?days=${days}`),
 
   inventoryLookup: (code: string) =>
     request<{ product: unknown }>(

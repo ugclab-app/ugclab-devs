@@ -2,6 +2,7 @@ import { prisma } from "@ugclab/database";
 import { formatMoney } from "@ugclab/i18n";
 import { sendStoreEmail } from "./tenant-email.js";
 import { getStorefrontUrl } from "./storefront.js";
+import { DEFAULTS_TR } from "./email-defaults-tr.js";
 
 export type EmailTemplate = { subject: string; html: string };
 
@@ -102,9 +103,18 @@ function fill(template: string, vars: Record<string, string>) {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => vars[key] ?? "");
 }
 
-export function defaultEmailTemplates(): Record<EmailTemplateKey, EmailTemplate> {
+function defaultsForLocale(locale: string | null | undefined): Record<string, EmailTemplate> {
+  const lang = (locale ?? "en").split("-")[0]?.toLowerCase();
+  if (lang === "tr") return { ...DEFAULTS, ...DEFAULTS_TR };
+  return DEFAULTS;
+}
+
+export function defaultEmailTemplates(
+  locale: string = "en"
+): Record<EmailTemplateKey, EmailTemplate> {
+  const pack = defaultsForLocale(locale);
   const out = {} as Record<EmailTemplateKey, EmailTemplate>;
-  for (const key of EMAIL_TEMPLATE_KEYS) out[key] = DEFAULTS[key];
+  for (const key of EMAIL_TEMPLATE_KEYS) out[key] = pack[key] ?? DEFAULTS[key];
   return out;
 }
 
@@ -126,15 +136,23 @@ export function sanitizeEmailTemplates(raw: unknown): Record<string, EmailTempla
 async function resolveTemplate(tenantId: string, key: string): Promise<EmailTemplate> {
   const settings = await prisma.storeSettings.findUnique({
     where: { tenantId },
-    select: { emailTemplates: true, emailOrderSubject: true, emailOrderBody: true },
+    select: {
+      emailTemplates: true,
+      emailOrderSubject: true,
+      emailOrderBody: true,
+      defaultLocale: true,
+    },
   });
-  const base = DEFAULTS[key as keyof typeof DEFAULTS] ?? { subject: key, html: "" };
+  const pack = defaultsForLocale(settings?.defaultLocale);
+  const base = pack[key] ?? DEFAULTS[key as keyof typeof DEFAULTS] ?? { subject: key, html: "" };
   if (key === "receipt") {
+    const receipt = pack.receipt ?? {
+      subject: "Receipt for order #{{orderNumber}} — {{storeName}}",
+      html: `<h2>Thank you for your order</h2><p><strong>Store:</strong> {{storeName}}</p><p><strong>Order:</strong> #{{orderNumber}}</p><p><strong>Status:</strong> {{status}}</p><p><strong>Items:</strong><br/>{{items}}</p><p><strong>Total:</strong> {{total}}</p>{{downloads}}`,
+    };
     return {
-      subject: settings?.emailOrderSubject?.trim() || "Receipt for order #{{orderNumber}} — {{storeName}}",
-      html:
-        settings?.emailOrderBody?.trim() ||
-        `<h2>Thank you for your order</h2><p><strong>Store:</strong> {{storeName}}</p><p><strong>Order:</strong> #{{orderNumber}}</p><p><strong>Status:</strong> {{status}}</p><p><strong>Items:</strong><br/>{{items}}</p><p><strong>Total:</strong> {{total}}</p>{{downloads}}`,
+      subject: settings?.emailOrderSubject?.trim() || receipt.subject,
+      html: settings?.emailOrderBody?.trim() || receipt.html,
     };
   }
   const saved = (settings?.emailTemplates ?? null) as Record<string, EmailTemplate> | null;

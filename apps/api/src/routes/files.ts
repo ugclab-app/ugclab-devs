@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { readFile } from "fs/promises";
 import path from "path";
-import { getUploadRoot } from "../lib/uploads.js";
+import { getUploadRoot, isKycStorageKey } from "../lib/uploads.js";
 
 const files = new Hono();
 
@@ -21,7 +21,7 @@ function storageKeyFromRequest(c: { req: { url: string; path: string; param: (k:
 
 files.get("/*", async (c) => {
   const key = storageKeyFromRequest(c);
-  if (!key || key.includes("..")) return c.text("Not found", 404);
+  if (!key || key.includes("..") || isKycStorageKey(key)) return c.text("Not found", 404);
 
   const filePath = path.join(getUploadRoot(), ...key.split("/"));
   const root = path.resolve(getUploadRoot());

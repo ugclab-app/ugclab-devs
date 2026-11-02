@@ -59,6 +59,9 @@ import {
   mapThemeCatalogRow,
 } from "../lib/theme-catalog.js";
 import { ensureBlockCatalog, getPublishedBlockIds } from "../lib/block-catalog.js";
+import { formatCurrencyPrices } from "../lib/country-price.js";
+import { ensureFxRates, getFxSnapshot } from "../lib/fx-rates.js";
+import { getFxRates } from "@ugclab/i18n/store-currency";
 import { ensureSectionCatalog, getPublishedSectionIds } from "../lib/section-catalog.js";
 
 function parseProductType(raw: unknown): ProductType {
@@ -367,6 +370,7 @@ merchant.get("/products/:id", async (c) => {
             )
           : "",
       countryPrices: formatCountryPrices(product.translations),
+      currencyPrices: formatCurrencyPrices(product.translations),
     },
     currency: tenant.settings?.currency ?? "USD",
   });
@@ -477,6 +481,8 @@ merchant.post("/products", async (c) => {
       publishAt: publishAt && !Number.isNaN(publishAt.getTime()) ? publishAt : null,
       costAmountCents:
         costAmountCents != null && costAmountCents > 0 ? costAmountCents : null,
+      payWhatYouWant: body.payWhatYouWant === true || body.payWhatYouWant === "true" || body.payWhatYouWant === "on",
+      minPriceAmount: parseOptionalMoney(body.minPrice),
     },
   });
 
@@ -508,6 +514,12 @@ merchant.post("/products", async (c) => {
     const downloadLimit = downloadLimitRaw
       ? parseInt(downloadLimitRaw, 10)
       : 5;
+    const licenseKeysPool =
+      body.licenseKeysPool != null ? String(body.licenseKeysPool) : undefined;
+    const lessons =
+      body.lessons != null
+        ? (await import("../lib/courses.js")).parseLessons(body.lessons)
+        : undefined;
     await prisma.digitalAsset.create({
       data: {
         tenantId: tenant.id,
@@ -517,6 +529,8 @@ merchant.post("/products", async (c) => {
           Number.isFinite(downloadLimit) && downloadLimit > 0
             ? downloadLimit
             : 5,
+        ...(licenseKeysPool !== undefined ? { licenseKeysPool } : {}),
+        ...(lessons !== undefined ? { lessons } : {}),
       },
     });
   }
@@ -631,6 +645,13 @@ merchant.patch("/products/:id", async (c) => {
       status,
       priceAmount: parseMoney(body.price ?? product.priceAmount / 100),
       compareAt: parseOptionalMoney(body.compareAt),
+      ...(body.quantityOffers !== undefined
+        ? {
+            quantityOffers: (await import("../lib/quantity-offers.js")).parseQuantityOffers(
+              body.quantityOffers
+            ),
+          }
+        : {}),
       inventory:
         type === ProductType.PHYSICAL
           ? parseInt(String(body.inventory ?? product.inventory ?? 0), 10)
@@ -654,11 +675,27 @@ merchant.patch("/products/:id", async (c) => {
           : costAmountCents === null
             ? null
             : product.costAmountCents,
+      ...(body.payWhatYouWant !== undefined
+        ? {
+            payWhatYouWant:
+              body.payWhatYouWant === true ||
+              body.payWhatYouWant === "true" ||
+              body.payWhatYouWant === "on",
+          }
+        : {}),
+      ...(body.minPrice !== undefined
+        ? { minPriceAmount: parseOptionalMoney(body.minPrice) }
+        : {}),
     },
   });
 
   const collectionIds = parseCollectionIds(body);
   if (collectionIds) await syncProductCollections(product.id, collectionIds);
+
+  const lessonsPatch =
+    body.lessons !== undefined
+      ? (await import("../lib/courses.js")).parseLessons(body.lessons)
+      : undefined;
 
   if (type === ProductType.DIGITAL && file) {
     const buffer = Buffer.from(await file.arrayBuffer());
@@ -673,6 +710,8 @@ merchant.patch("/products/:id", async (c) => {
       ? parseInt(downloadLimitRaw, 10)
       : undefined;
 
+    const licenseKeysPool =
+      body.licenseKeysPool != null ? String(body.licenseKeysPool) : undefined;
     if (product.digitalAsset) {
       await prisma.digitalAsset.update({
         where: { id: product.digitalAsset.id },
@@ -681,6 +720,8 @@ merchant.patch("/products/:id", async (c) => {
           ...(downloadLimit != null && Number.isFinite(downloadLimit)
             ? { downloadLimit }
             : {}),
+          ...(licenseKeysPool !== undefined ? { licenseKeysPool } : {}),
+          ...(lessonsPatch !== undefined ? { lessons: lessonsPatch } : {}),
         },
       });
     } else {
@@ -693,25 +734,49 @@ merchant.patch("/products/:id", async (c) => {
             downloadLimit != null && Number.isFinite(downloadLimit)
               ? downloadLimit
               : 5,
+          ...(licenseKeysPool !== undefined ? { licenseKeysPool } : {}),
+          ...(lessonsPatch !== undefined ? { lessons: lessonsPatch } : {}),
         },
       });
     }
   } else if (
     type === ProductType.DIGITAL &&
     product.digitalAsset &&
-    body.downloadLimit != null
+    (body.downloadLimit != null || body.licenseKeysPool != null || lessonsPatch !== undefined)
   ) {
-    const downloadLimit = parseInt(String(body.downloadLimit), 10);
-    if (Number.isFinite(downloadLimit) && downloadLimit > 0) {
-      await prisma.digitalAsset.update({
-        where: { id: product.digitalAsset.id },
-        data: { downloadLimit },
-      });
-    }
+    const downloadLimit = parseInt(String(body.downloadLimit ?? ""), 10);
+    const licenseKeysPool =
+      body.licenseKeysPool != null ? String(body.licenseKeysPool) : undefined;
+    await prisma.digitalAsset.update({
+      where: { id: product.digitalAsset.id },
+      data: {
+        ...(Number.isFinite(downloadLimit) && downloadLimit > 0
+          ? { downloadLimit }
+          : {}),
+        ...(licenseKeysPool !== undefined ? { licenseKeysPool } : {}),
+        ...(lessonsPatch !== undefined ? { lessons: lessonsPatch } : {}),
+      },
+    });
+  } else if (type === ProductType.DIGITAL && !product.digitalAsset && lessonsPatch?.length) {
+    // Course without a downloadable file: create a placeholder asset so lessons have a home.
+    await prisma.digitalAsset.create({
+      data: {
+        tenantId: tenant.id,
+        productId: product.id,
+        storageKey: "",
+        fileName: "",
+        mimeType: "application/octet-stream",
+        sizeBytes: 0,
+        downloadLimit: 0,
+        lessons: lessonsPatch,
+      },
+    });
   }
 
-  const variants = parseVariantsJson(body.variants);
-  await syncProductVariants(tenant.id, product.id, variants);
+  if (body.variants !== undefined) {
+    const variants = parseVariantsJson(body.variants);
+    await syncProductVariants(tenant.id, product.id, variants);
+  }
 
   const translationsPatch = mergeTranslationsWithSeo(body, product.translations);
   if (translationsPatch !== undefined) {
@@ -737,7 +802,11 @@ merchant.patch("/products/:id", async (c) => {
   });
 
   if (type === ProductType.PHYSICAL) {
-    checkLowStockAfterInventoryChange(tenant.id, product.id).catch(() => {});
+    checkLowStockAfterInventoryChange(
+      tenant.id,
+      product.id,
+      product.inventory
+    ).catch(() => {});
   }
   const user = await prisma.user.findUnique({
     where: { id: session.sub },
@@ -1035,6 +1104,13 @@ merchant.get("/orders/:id", async (c) => {
     include: {
       customer: true,
       items: true,
+      digitalDownloads: {
+        select: {
+          id: true,
+          licenseKey: true,
+          product: { select: { title: true } },
+        },
+      },
       events: { orderBy: { createdAt: "desc" } },
       affiliatePartner: {
         select: { id: true, code: true, displayName: true, email: true },
@@ -1052,9 +1128,20 @@ merchant.get("/orders/:id", async (c) => {
     },
   });
   if (!order) return c.json({ error: "Not found" }, 404);
+  const supplierOrders = await prisma.supplierOrder.findMany({
+    where: { orderId: order.id, tenantId: tenant.id },
+    select: {
+      id: true,
+      provider: true,
+      externalOrderId: true,
+      status: true,
+      error: true,
+    },
+    orderBy: { createdAt: "asc" },
+  });
   const { getPaymentModel } = await import("../lib/payment-model.js");
   return c.json({
-    order,
+    order: { ...order, supplierOrders },
     currency: order.currency,
     paymentModel: getPaymentModel(),
   });
@@ -1093,6 +1180,8 @@ merchant.patch("/orders/:id/status", async (c) => {
   if (status === OrderStatus.CANCELLED && order.status !== OrderStatus.CANCELLED) {
     const { emailCustomerAboutOrder } = await import("../lib/transactional-email.js");
     emailCustomerAboutOrder(order.id, "orderCancelled").catch(console.error);
+    const { notifyOwnerOrderCancelled } = await import("../lib/owner-alerts.js");
+    notifyOwnerOrderCancelled(order.id).catch(console.error);
   }
   if (status === OrderStatus.FULFILLED && order.status !== OrderStatus.FULFILLED) {
     const { sendReviewRequestOnce } = await import("../lib/transactional-email.js");
@@ -1437,7 +1526,9 @@ merchant.get("/customers/export.csv", async (c) => {
   });
 });
 
-merchant.get("/customers/:id", async (c) => {
+merchant.get("/customers/:id", async (c, next) => {
+  // Static sub-routes registered in later routers (e.g. /customers/segments) must not be shadowed.
+  if (c.req.param("id") === "segments") return next();
   const { tenant } = await requireTenant(c.get("session"));
   const customer = await prisma.customer.findFirst({
     where: { id: c.req.param("id"), tenantId: tenant.id },
@@ -1496,6 +1587,7 @@ merchant.get("/customers/:id", async (c) => {
       createdAt: customer.createdAt.toISOString(),
       marketingOptOut: customer.marketingOptOut,
       emailBounced: customer.emailBounced,
+      anonymizedAt: customer.anonymizedAt?.toISOString() ?? null,
       orders: customer.orders.map((o) => ({
         ...o,
         createdAt: o.createdAt.toISOString(),
@@ -1524,13 +1616,62 @@ merchant.get("/customers/:id", async (c) => {
   });
 });
 
+/** GDPR / CCPA data access request: everything stored about this shopper. */
+merchant.get("/customers/:id/export", async (c) => {
+  const { tenant } = await requireTenant(c.get("session"));
+  const { exportCustomerData } = await import("../lib/customer-gdpr.js");
+  const data = await exportCustomerData(tenant.id, c.req.param("id"));
+  if (!data) return c.json({ error: "Not found" }, 404);
+  const asFile = c.req.query("download") === "1";
+  if (asFile) {
+    return new Response(JSON.stringify(data, null, 2), {
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Disposition": `attachment; filename="customer-${c.req.param("id")}.json"`,
+      },
+    });
+  }
+  return c.json(data);
+});
+
+/** GDPR erasure: blank personal data, keep orders for accounting. Irreversible. */
+merchant.post("/customers/:id/anonymize", async (c) => {
+  const { tenant, session } = await requireTenant(c.get("session"));
+  const body = await c.req.json<{ confirm?: string }>().catch(() => ({}) as { confirm?: string });
+  if (body.confirm !== "ERASE") {
+    return c.json({ error: 'Type "ERASE" to confirm' }, 400);
+  }
+  const { anonymizeCustomer } = await import("../lib/customer-gdpr.js");
+  const result = await anonymizeCustomer(tenant.id, c.req.param("id"), session.email);
+  if (!result) return c.json({ error: "Not found" }, 404);
+  const { logActivity } = await import("../lib/activity-log.js");
+  logActivity({
+    tenantId: tenant.id,
+    userId: session.sub,
+    userEmail: session.email,
+    action: "customer.anonymize",
+    entityType: "customer",
+    entityId: c.req.param("id"),
+    summary: "Erased customer personal data (GDPR)",
+  }).catch(() => {});
+  return c.json({ ok: true, ...result });
+});
+
 merchant.patch("/customers/:id", async (c) => {
   const { tenant } = await requireTenant(c.get("session"));
-  const body = await c.req.json<{ marketingOptOut?: boolean }>();
+  const body = await c.req.json<{
+    marketingOptOut?: boolean;
+    /** Signed delta in cents applied to store credit. */
+    storeCreditDeltaCents?: number;
+    loyaltyPointsDelta?: number;
+  }>();
   const existing = await prisma.customer.findFirst({
     where: { id: c.req.param("id"), tenantId: tenant.id },
   });
   if (!existing) return c.json({ error: "Not found" }, 404);
+
+  const creditDelta = Math.trunc(Number(body.storeCreditDeltaCents ?? 0)) || 0;
+  const pointsDelta = Math.trunc(Number(body.loyaltyPointsDelta ?? 0)) || 0;
 
   const customer = await prisma.customer.update({
     where: { id: existing.id },
@@ -1538,12 +1679,20 @@ merchant.patch("/customers/:id", async (c) => {
       ...(typeof body.marketingOptOut === "boolean"
         ? { marketingOptOut: body.marketingOptOut }
         : {}),
+      ...(creditDelta
+        ? { storeCreditCents: Math.max(0, existing.storeCreditCents + creditDelta) }
+        : {}),
+      ...(pointsDelta
+        ? { loyaltyPoints: Math.max(0, existing.loyaltyPoints + pointsDelta) }
+        : {}),
     },
     select: {
       id: true,
       email: true,
       marketingOptOut: true,
       emailBounced: true,
+      storeCreditCents: true,
+      loyaltyPoints: true,
     },
   });
 
@@ -1555,6 +1704,27 @@ merchant.patch("/customers/:id", async (c) => {
   }
 
   return c.json({ customer });
+});
+
+/** Exchange rates currently used for display and market checkout, relative to the store currency. */
+merchant.get("/fx-rates", async (c) => {
+  const { tenant } = await requireTenant(c.get("session"));
+  await ensureFxRates();
+  const snap = await getFxSnapshot();
+  const base = (tenant.settings?.currency ?? "USD").toUpperCase();
+  const usd = getFxRates();
+  const perBase = usd[base] ?? 1;
+  const rates: Record<string, number> = {};
+  for (const [code, r] of Object.entries(usd)) {
+    if (code !== base) rates[code] = r / perBase;
+  }
+  return c.json({
+    baseCurrency: base,
+    rates,
+    live: Boolean(snap),
+    fetchedAt: snap?.fetchedAt ?? null,
+    source: snap?.source ?? null,
+  });
 });
 
 merchant.get("/settings", async (c) => {

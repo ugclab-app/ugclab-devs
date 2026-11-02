@@ -159,6 +159,33 @@ model User {
   platformPartner PlatformPartner?
   accounts      Account[]
   sessions      Session[]
+  knownDevices  UserKnownDevice[]
+}
+
+model UserKnownDevice {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fingerprint String
+  userAgent   String?
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([userId, fingerprint])
+  @@index([userId])
+}
+
+model OutreachProspect {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String?
+  templateKey  String    @default("outreach_welcome")
+  status       String    @default("PENDING")
+  sentAt       DateTime? @db.Timestamptz(6)
+  registeredAt DateTime? @db.Timestamptz(6)
+  createdAt    DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @db.Timestamptz(6)
+
+  @@index([status, createdAt])
 }
 
 model PlatformAuditLog {
@@ -173,6 +200,19 @@ model PlatformAuditLog {
 
   @@index([createdAt])
   @@index([targetUserId])
+}
+
+model PlatformInstagramPost {
+  id        String   @id @default(cuid())
+  title     String
+  caption   String   @db.Text
+  hashtags  String   @default("") @db.Text
+  imageUrl  String?
+  format    String   @default("square")
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  @@index([updatedAt])
 }
 
 model PlatformSetting {
@@ -380,6 +420,72 @@ model PlatformEmailLog {
   @@index([createdAt])
 }
 
+/** One conversation in the platform mailbox (support@ / EMAIL_FROM). */
+model PlatformMailboxThread {
+  id                 String   @id @default(cuid())
+  subject            String
+  correspondentEmail String
+  correspondentName  String?
+  /// open, waiting, or closed
+  status             String   @default("open")
+  unread             Boolean  @default(false)
+  lastMessageAt      DateTime @default(now()) @db.Timestamptz(6)
+  createdAt          DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime @updatedAt @db.Timestamptz(6)
+
+  messages PlatformMailboxMessage[]
+  notes    PlatformMailboxNote[]
+
+  @@index([lastMessageAt])
+  @@index([correspondentEmail])
+  @@index([unread])
+  @@index([status, lastMessageAt])
+}
+
+/** Who on the platform team owns an inbox action item. */
+model PlatformInboxAssignment {
+  itemId          String   @id
+  assigneeUserId  String
+  assigneeEmail   String
+  updatedAt       DateTime @updatedAt @db.Timestamptz(6)
+}
+
+model PlatformMailboxNote {
+  id          String   @id @default(cuid())
+  threadId    String
+  body        String   @db.Text
+  actorUserId String
+  actorEmail  String
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+
+  thread PlatformMailboxThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
+}
+
+model PlatformMailboxMessage {
+  id            String   @id @default(cuid())
+  threadId      String
+  direction     String
+  fromEmail     String
+  toEmail       String
+  subject       String
+  textBody      String   @db.Text
+  htmlBody      String?  @db.Text
+  attachments   String?
+  /// [{ id, filename, contentType, size }] for Resend receiving downloads
+  attachmentMeta Json?
+  resendEmailId String?  @unique
+  rfcMessageId  String?  @unique
+  actorUserId   String?
+  actorEmail    String?
+  createdAt     DateTime @default(now()) @db.Timestamptz(6)
+
+  thread PlatformMailboxThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
+}
+
 model StoreThemeCatalog {
   id          String  @id
   label       String
@@ -510,6 +616,9 @@ model Tenant {
   platformPartnerId        String?
   /// Fee-share rate locked when the store was referred.
   platformPartnerFeeBps    Int?
+  /// outreach, partner, or direct. Empty on stores opened before this field.
+  acquisitionSource        String?
+  activationNudgeSentAt    DateTime? @db.Timestamptz(6)
   createdAt              DateTime  @default(now()) @db.Timestamptz(6)
   updatedAt              DateTime  @updatedAt @db.Timestamptz(6)
 
@@ -540,6 +649,7 @@ model Tenant {
   productBundles   ProductBundle[]
   warehouses       Warehouse[]
   merchantWebhooks MerchantWebhook[]
+  merchantWebhookDeliveries MerchantWebhookDelivery[]
   merchantApiKeys  MerchantApiKey[]
   inventoryTransfers InventoryTransfer[]
   purchaseOrders     PurchaseOrder[]
@@ -560,6 +670,97 @@ model Tenant {
   b2bQuotes                B2bQuote[]
   digitalEntitlements      DigitalEntitlement[]
   addons                   TenantAddon[]
+  merchantKyc              MerchantKyc?
+  supplierAccounts         SupplierAccount[]
+}
+
+enum SupplierProvider {
+  CJ
+  PRINTFUL
+  PRINTIFY
+}
+
+/// Merchant's own supplier account. The platform does not pay the supplier.
+model SupplierAccount {
+  id             String           @id @default(cuid())
+  tenantId       String
+  tenant         Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  provider       SupplierProvider
+  apiKey         String
+  accessToken    String?
+  refreshToken   String?
+  tokenExpiresAt DateTime?
+  externalShopId String?
+  /// Selling price = supplier cost × (1 + markupPercent/100). Empty means no rule.
+  markupPercent  Int?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  links          SupplierProductLink[]
+  orders         SupplierOrder[]
+
+  @@unique([tenantId, provider])
+  @@index([tenantId])
+}
+
+model SupplierProductLink {
+  id                String          @id @default(cuid())
+  tenantId          String
+  productId         String          @unique
+  product           Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  accountId         String
+  account           SupplierAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  externalProductId String
+  externalVariantId String
+  externalSku       String?
+  costCents         Int?
+  costCurrency      String          @default("USD")
+  createdAt         DateTime        @default(now())
+
+  @@index([tenantId])
+  @@index([accountId])
+}
+
+model SupplierOrder {
+  id              String          @id @default(cuid())
+  tenantId        String
+  orderId         String
+  accountId       String
+  account         SupplierAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  provider        SupplierProvider
+  externalOrderId String?
+  status          String
+  error           String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@unique([orderId, accountId])
+  @@index([tenantId, status])
+}
+
+enum MerchantKycStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// Passport check reviewed by platform staff. Finik has no passport API.
+model MerchantKyc {
+  id               String            @id @default(cuid())
+  tenantId         String            @unique
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  status           MerchantKycStatus @default(PENDING)
+  legalName        String
+  country          String            @db.Char(2)
+  passportNumber   String
+  passportFile     String
+  selfieFile       String?
+  rejectReason     String?
+  reviewedByEmail  String?
+  reviewedAt       DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@index([status, createdAt])
 }
 
 model MerchantPayout {
@@ -725,6 +926,26 @@ model StoreSettings {
   localeCurrencies    Json?
   /// Markets: country groups with optional tax override
   markets             Json?
+  loyaltyEnabled           Boolean @default(false)
+  /// Points earned per 1.00 of paid order total (major units).
+  loyaltyEarnPerMajor      Int     @default(1)
+  /// How many cents one redeemed point is worth at checkout.
+  loyaltyRedeemCentsPerPoint Int   @default(1)
+  /// ISO-2 countries that cannot check out.
+  blockedCountries    String[] @default([])
+  tipsEnabled         Boolean  @default(false)
+  /// Tip presets in percent of subtotal.
+  tipPresets          Int[]    @default([5, 10, 15])
+  /// Custom checkout fields: [{ key, label, type: "text"|"date"|"textarea", required }]
+  checkoutFields      Json?
+  /// Buy now, pay later via Stripe (Klarna / Afterpay / Affirm when currency allows).
+  bnplEnabled         Boolean  @default(false)
+  /// Sequential invoice numbering, e.g. "INV-" + 000123. Empty prefix = order number is used.
+  invoicePrefix       String?
+  invoiceNextNumber   Int      @default(1)
+  /// Cloudflare Turnstile site key shown on storefront checkout / account forms.
+  turnstileSiteKey    String?
+  turnstileSecretKey  String?
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
@@ -813,6 +1034,8 @@ model DigitalDownload {
   orderId    String
   productId  String
   token      String   @unique
+  /// License / serial key assigned from the product pool at fulfill time.
+  licenseKey String?
   downloads  Int      @default(0)
   expiresAt  DateTime? @db.Timestamptz(6)
   createdAt  DateTime @default(now()) @db.Timestamptz(6)
@@ -853,6 +1076,11 @@ model Product {
   tryBeforeYouBuyEnabled  Boolean   @default(false)
   tryBeforeYouBuyDays     Int?      @default(30)
   sellAsGiftCard          Boolean   @default(false)
+  /// Bundle offers: [{ qty, label, priceCents }]
+  quantityOffers          Json?
+  /// Buyer chooses the price (>= minPriceAmount, or priceAmount when null).
+  payWhatYouWant          Boolean   @default(false)
+  minPriceAmount          Int?
   createdAt    DateTime      @default(now()) @db.Timestamptz(6)
   updatedAt    DateTime      @updatedAt @db.Timestamptz(6)
 
@@ -874,6 +1102,7 @@ model Product {
   b2bPriceListItems    B2bPriceListItem[]
   wishlistItems        WishlistItem[]
   stockAlerts          StockAlert[]
+  supplierLink         SupplierProductLink?
 
   @@unique([tenantId, slug])
   @@index([tenantId, status])
@@ -888,6 +1117,7 @@ model ProductVariant {
   priceAmount Int
   inventory   Int?
   weightGrams Int?
+  supplierVariantId String?
 
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
@@ -921,6 +1151,10 @@ model DigitalAsset {
   mimeType      String
   sizeBytes     Int
   downloadLimit Int    @default(5)
+  /// One unused license key per line; consumed on digital fulfill.
+  licenseKeysPool String? @db.Text
+  /// Gated course content: [{ title, body, videoUrl }] shown to buyers in their library.
+  lessons         Json?
 
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
@@ -1044,6 +1278,11 @@ model Customer {
   emailBounced     Boolean  @default(false)
   stripeCustomerId String?
   b2bCompanyId     String?
+  loyaltyPoints    Int      @default(0)
+  /// Store credit balance (cents, store base currency). Refunds can land here.
+  storeCreditCents Int      @default(0)
+  /// Set when personal data was erased on a GDPR request; orders stay for accounting.
+  anonymizedAt     DateTime? @db.Timestamptz(6)
   createdAt        DateTime @default(now()) @db.Timestamptz(6)
 
   tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -1135,13 +1374,23 @@ model Order {
   shippingAddress1 String?
   shippingAddress2 String?
   shippingCity    String?
+  shippingRegion  String?
   shippingPostal  String?
+  shippingPhone   String?
   trackingNumber  String?
   shippedAt       DateTime?   @db.Timestamptz(6)
   discountCodeId  String?
   discountAmount  Int         @default(0)
   giftCardId      String?
   giftCardAmount  Int         @default(0)
+  loyaltyPointsSpent    Int   @default(0)
+  loyaltyDiscountAmount Int   @default(0)
+  storeCreditAmount     Int   @default(0)
+  tipAmount             Int   @default(0)
+  /// Answers to merchant-defined checkout fields: { key: value }
+  customFields          Json?
+  /// Sequential accounting number assigned when the order is paid (see StoreSettings.invoicePrefix).
+  invoiceNumber         String?
   tags            String[]    @default([])
   accessToken     String?     @unique
   guestEmail      String?
@@ -1193,6 +1442,7 @@ model Order {
 
   @@unique([tenantId, orderNumber])
   @@index([tenantId, status])
+  @@index([tenantId, invoiceNumber])
 }
 
 model OrderLineItem {
@@ -1602,9 +1852,39 @@ model MerchantWebhook {
   active    Boolean  @default(true)
   createdAt DateTime @default(now()) @db.Timestamptz(6)
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant     Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  deliveries MerchantWebhookDelivery[]
 
   @@index([tenantId, active])
+}
+
+enum WebhookDeliveryStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+/// One outbound webhook attempt log. Retried by cron with exponential backoff.
+model MerchantWebhookDelivery {
+  id             String                @id @default(cuid())
+  tenantId       String
+  webhookId      String
+  event          String
+  payload        Json
+  status         WebhookDeliveryStatus @default(PENDING)
+  attempts       Int                   @default(0)
+  nextAttemptAt  DateTime?             @db.Timestamptz(6)
+  lastStatusCode Int?
+  lastError      String?
+  deliveredAt    DateTime?             @db.Timestamptz(6)
+  createdAt      DateTime              @default(now()) @db.Timestamptz(6)
+
+  tenant  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  webhook MerchantWebhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@index([webhookId, createdAt])
+  @@index([status, nextAttemptAt])
 }
 
 model MerchantApiKey {

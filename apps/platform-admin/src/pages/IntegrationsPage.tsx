@@ -93,6 +93,7 @@ export default function IntegrationsPage() {
                     <th className="px-4 py-2">Type</th>
                     <th className="px-4 py-2">Status</th>
                     <th className="px-4 py-2">Error</th>
+                    <th className="px-4 py-2" />
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -126,6 +127,23 @@ export default function IntegrationsPage() {
                         {e.processed ? "OK" : <span className="text-red-600">Pending</span>}
                       </td>
                       <td className="px-4 py-2 text-xs text-red-600">{e.error ?? "—"}</td>
+                      <td className="px-4 py-2 text-right">
+                        {e.id.startsWith("evt_") && (!e.processed || e.error) ? (
+                          <button
+                            type="button"
+                            className="text-sky-600"
+                            disabled={pending}
+                            onClick={() =>
+                              void run(
+                                () => api.replayStripeEvent(e.id).then(() => qc.invalidateQueries({ queryKey: ["stripe-events"] })),
+                                "Event replayed"
+                              )
+                            }
+                          >
+                            Replay
+                          </button>
+                        ) : null}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

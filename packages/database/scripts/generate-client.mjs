@@ -9,8 +9,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
-config({ path: path.join(root, ".env"), override: true });
-config({ path: path.join(root, ".env.local"), override: true });
+if (!process.env.VERCEL) {
+  config({ path: path.join(root, ".env"), override: true });
+  config({ path: path.join(root, ".env.local"), override: true });
+}
 
 function isPostgres(url) {
   return Boolean(

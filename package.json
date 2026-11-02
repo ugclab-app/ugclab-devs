@@ -14,6 +14,7 @@
     "dev:platform": "turbo run dev --filter=@ugclab/api --filter=@ugclab/platform",
     "build": "turbo build",
     "lint": "turbo lint",
+    "test": "npm run test -w @ugclab/api",
     "db:generate": "npm run db:generate -w @ugclab/database",
     "db:generate:safe": "node scripts/db-generate-safe.mjs",
     "db:migrate": "npm run db:migrate -w @ugclab/database",

@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <title>Tescommerce — Reel: Your store, now at the market (POS)</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 1080px;
+      height: 1920px;
+      overflow: hidden;
+      background: #fbf8ec;
+      font-family: "Segoe UI Variable Display", "Segoe UI", sans-serif;
+      color: #13261f;
+      -webkit-font-smoothing: antialiased;
+    }
+    /* sunny market palette: leaf green + mustard, unlike the other reels */
+    :root { --ink: #13261f; --muted: #66756c; --line: #e6e8da; --leaf: #15803d; --mustard: #eab308; --red: #dc2626; }
+    #stage { position: relative; width: 1080px; height: 1920px; overflow: hidden; }
+    .abs { position: absolute; }
+    .layer { position: absolute; inset: 0; will-change: transform, filter, opacity; }
+    .gtext { background: linear-gradient(90deg, #15803d, #65a30d); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    #bg { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 30%, #fffef6 0%, #fbf6e3 55%, #f1ead0 100%); }
+    .blob { position: absolute; border-radius: 50%; }
+    #blobA { width: 1000px; height: 1000px; background: radial-gradient(circle, rgba(234, 179, 8, 0.16), transparent 65%); }
+    #blobB { width: 900px; height: 900px; background: radial-gradient(circle, rgba(21, 128, 61, 0.12), transparent 65%); }
+
+    .title { position: absolute; left: 0; right: 0; text-align: center; font-size: 100px; font-weight: 750; letter-spacing: -0.045em; line-height: 1.04; }
+    .title > div { display: block; }
+    .card { position: absolute; left: 90px; width: 900px; border-radius: 40px; background: #fff; box-shadow: 0 50px 120px rgba(40, 60, 20, 0.14), 0 0 0 1px rgba(40, 60, 20, 0.05); padding: 44px; }
+    .btn { height: 104px; border-radius: 28px; display: grid; place-items: center; font-size: 36px; font-weight: 750; color: #fff; background: var(--leaf); position: relative; }
+    .phone { position: absolute; left: 250px; top: 560px; width: 580px; height: 1180px; border-radius: 80px; background: #13261f; padding: 16px; box-shadow: 0 60px 140px rgba(40, 60, 20, 0.28); }
+    .screen { width: 100%; height: 100%; border-radius: 66px; background: #fff; overflow: hidden; position: relative; padding: 70px 28px 0; }
+    .pgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 22px; }
+    .pt { height: 200px; border-radius: 28px; padding: 18px; display: flex; flex-direction: column; justify-content: flex-end; color: #fff; position: relative; }
+    .pt b { font-size: 28px; }
+    .pt small { font-size: 26px; font-weight: 700; opacity: 0.9; }
+    .pt .q { position: absolute; right: 14px; top: 14px; min-width: 50px; height: 50px; border-radius: 999px; background: #fff; color: var(--ink); display: grid; place-items: center; font-size: 26px; font-weight: 800; padding: 0 12px; }
+    .cart { position: absolute; left: 28px; right: 28px; bottom: 30px; border-radius: 34px; background: #f6f7ef; padding: 24px 26px; }
+    .note { position: absolute; left: 140px; width: 800px; height: 760px; background: #fffdf2; border-radius: 16px; box-shadow: 0 40px 90px rgba(40, 60, 20, 0.18);
+      background-image: repeating-linear-gradient(#fffdf2 0 78px, #c7d7ee 78px 81px); padding: 60px 70px 0 120px; font-family: "Segoe Print", "Ink Free", "Comic Sans MS", cursive; font-size: 44px; color: #334155; }
+    .note::before { content: ""; position: absolute; left: 90px; top: 0; bottom: 0; width: 3px; background: #f87171; }
+    .note div { height: 81px; line-height: 81px; white-space: nowrap; }
+    .bubble { position: absolute; left: 120px; width: 840px; padding: 30px 40px; border-radius: 36px; background: #fff; box-shadow: 0 30px 70px rgba(40, 60, 20, 0.2); font-size: 38px; font-weight: 700; display: flex; align-items: center; gap: 24px; }
+    .bubble i { width: 78px; height: 78px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-style: normal; font-size: 40px; font-weight: 800; flex: none; }
+    .bubble small { display: block; font-size: 28px; font-weight: 600; color: var(--muted); }
+    .opt { display: flex; align-items: center; gap: 26px; padding: 30px 32px; border-radius: 30px; border: 3px solid var(--line); font-size: 38px; font-weight: 700; margin-top: 22px; }
+    .opt:first-of-type { margin-top: 0; }
+    .opt .ic { width: 84px; height: 84px; border-radius: 24px; display: grid; place-items: center; font-size: 40px; flex: none; }
+    .opt small { display: block; font-size: 27px; font-weight: 600; color: var(--muted); margin-top: 2px; }
+    .side { position: absolute; width: 400px; border-radius: 40px; background: #fff; box-shadow: 0 30px 80px rgba(40, 60, 20, 0.14); padding: 34px; text-align: center; }
+    .side .big { font-size: 130px; font-weight: 800; letter-spacing: -0.05em; font-variant-numeric: tabular-nums; line-height: 1.05; }
+    .side small { font-size: 28px; font-weight: 650; color: var(--muted); }
+    .ol { position: absolute; left: 90px; width: 900px; display: flex; align-items: center; gap: 24px; padding: 26px 34px; border-radius: 30px; background: #fff; box-shadow: 0 18px 44px rgba(40, 60, 20, 0.1); font-size: 34px; font-weight: 700; }
+    .ol .tag { padding: 8px 18px; border-radius: 999px; font-size: 24px; font-weight: 800; letter-spacing: 0.04em; }
+    .ol .amt { margin-left: auto; font-size: 40px; font-weight: 800; }
+    .ol small { display: block; font-size: 26px; color: var(--muted); font-weight: 600; }
+    .person { position: absolute; width: 150px; height: 300px; }
+    .coin { position: absolute; width: 70px; height: 70px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fde68a, #eab308 60%, #a16207); box-shadow: 0 6px 14px rgba(0, 0, 0, 0.18); display: grid; place-items: center; color: #713f12; font-weight: 900; font-size: 34px; }
+    .mark { display: grid; place-items: center; color: #fff; font-weight: 700; background: linear-gradient(135deg, #1f3fe8, #5b78ff); box-shadow: 0 24px 60px rgba(37, 70, 240, 0.35); }
+    .hand { position: absolute; width: 64px; height: 64px; filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.25)); }
+    .ring { position: absolute; width: 110px; height: 110px; margin: -55px 0 0 -55px; border-radius: 50%; background: rgba(21, 128, 61, 0.3); }
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <div id="bg"></div>
+    <div class="blob" id="blobA"></div>
+    <div class="blob" id="blobB"></div>
+
+    <div class="layer" id="s-hook">
+      <div class="title" id="hookT" style="top:210px;font-size:112px"><div>Mağazan artık</div><div><span class="gtext">pazar yerinde.</span></div></div>
+      <svg class="abs" id="stall" style="left:90px;top:620px" width="900" height="1000" viewBox="0 0 900 1000"></svg>
+    </div>
+
+    <div class="layer" id="s-chaos">
+      <div class="title" id="chT" style="top:200px"><div>Pazar yerinde,</div><div><span class="gtext">eski usul:</span></div></div>
+      <div class="note" id="note" style="top:560px">
+        <div id="nl0">çanta ×3 — $72</div><div id="nl1">kupa ×2 — $36 (ya da 38?)</div><div id="nl2">baskı ×1 — nakit</div><div id="nl3">mum… bitti mi??</div><div id="nl4">siteyi sonra güncelle</div>
+      </div>
+      <div class="bubble" id="oops" style="top:1420px"><i style="background:var(--red)">!</i><div>Siten hâlâ “stokta” diyor<small>…ve biri az önce online satın aldı</small></div></div>
+    </div>
+
+    <div class="layer" id="s-pos">
+      <div class="title" id="posT" style="top:200px"><div>Telefonunda</div><div><span class="gtext">POS'u aç.</span></div></div>
+      <div class="phone" id="posPhone"><div class="screen">
+        <div style="font-size:26px;font-weight:750;letter-spacing:.08em;color:var(--muted)">SATIŞ NOKTASI</div>
+        <div class="pgrid" id="pgrid"></div>
+        <div class="cart" id="cart">
+          <div style="display:flex;justify-content:space-between;font-size:30px;font-weight:650;color:var(--muted)"><span id="cartN">0 ürün</span><span>Toplam</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px"><span style="font-size:30px;font-weight:700">Tezgâh</span><b id="cartT" style="font-size:64px;letter-spacing:-.03em;font-variant-numeric:tabular-nums">$0</b></div>
+          <div class="btn" id="chargeBtn" style="margin-top:18px;height:96px"><span id="chargeTxt">Tahsil et / Ödendi</span></div>
+        </div>
+      </div></div>
+    </div>
+
+    <div class="layer" id="s-pay">
+      <div class="title" id="payT" style="top:240px"><div>Ödeme</div><div><span class="gtext">senin tercihin.</span></div></div>
+      <div class="card" id="payCard" style="top:680px;padding:36px">
+        <div class="opt" id="op0"><span class="ic" style="background:#dcfce7">💵</span><div>Nakit<small>say, “Ödendi” işaretle</small></div></div>
+        <div class="opt" id="op1"><span class="ic" style="background:#fef9c3">💳</span><div>Kendi kart okuyucun<small>kartı çek, “Ödendi” işaretle</small></div></div>
+        <div class="opt" id="op2"><span class="ic" style="background:#e0e7ff">📱</span><div>Alıcının telefonundan<small>ödeme linki gönder</small></div></div>
+      </div>
+      <div class="bubble" id="sold" style="top:1420px;left:170px;width:740px"><i style="background:var(--leaf)">✓</i><div>Satış #1088 · $66.00<small>ödendi işaretlendi · siparişlere kaydedildi</small></div></div>
+      <div id="coins"></div>
+    </div>
+
+    <div class="layer" id="s-rush">
+      <div class="title" id="ruT" style="top:220px"><div>Yoğun saat mi?</div><div><span class="gtext">Dokun, sat.</span></div></div>
+      <div id="queue"></div>
+      <div class="abs" style="left:90px;top:1560px;width:900px;height:16px;border-radius:999px;background:#e9e3c9"></div>
+      <div class="abs" id="ruTot" style="left:0;right:0;top:640px;text-align:center">
+        <div style="font-size:36px;font-weight:650;color:var(--muted)">Bugün tezgâhta satılan</div>
+        <div id="ruV" style="font-size:150px;font-weight:800;letter-spacing:-.05em;line-height:1.05;font-variant-numeric:tabular-nums" class="gtext">$0</div>
+      </div>
+      <div id="pops"></div>
+    </div>
+
+    <div class="layer" id="s-sync">
+      <div class="title" id="syT" style="top:220px"><div>Tek stok.</div><div><span class="gtext">Hep senkronize.</span></div></div>
+      <div class="side" id="syL" style="left:70px;top:720px"><div style="font-size:60px">⛺</div><div style="font-size:36px;font-weight:750;margin-top:6px">Pazar tezgâhı</div><small>1 çanta satar</small></div>
+      <div class="side" id="syR" style="left:610px;top:720px"><div style="font-size:60px">🌐</div><div style="font-size:36px;font-weight:750;margin-top:6px">Online mağaza</div><small id="syRs">gösteriyor</small></div>
+      <svg class="abs" style="left:0;top:0" width="1080" height="1920"><path id="syPath" d="M270 1010 C 270 1180, 810 1180, 810 1010" fill="none" stroke="#15803d" stroke-width="6" stroke-dasharray="4 16" stroke-linecap="round" /></svg>
+      <div class="side" id="syC" style="left:340px;top:1230px">
+        <small>Kanvas Çanta · stokta</small>
+        <div class="big" id="syV">12</div>
+      </div>
+      <div class="abs" id="syNote" style="left:0;right:0;top:1620px;text-align:center;font-size:36px;font-weight:650;color:var(--muted)">Fazla satış yok. Siteyi elle güncellemek yok.</div>
+    </div>
+
+    <div class="layer" id="s-day">
+      <div class="title" id="dyT" style="top:220px;font-size:92px"><div>Gün sonunda:</div><div><span class="gtext">tek sipariş listesi.</span></div></div>
+      <div id="olist"></div>
+    </div>
+
+    <div class="layer" id="s-end">
+      <div class="abs" style="left:0;right:0;top:600px;display:flex;flex-direction:column;align-items:center">
+        <div class="mark" id="endMark" style="width:200px;height:200px;border-radius:60px;font-size:116px">T</div>
+        <div id="endWord" style="margin-top:36px;font-size:120px;font-weight:700;letter-spacing:-0.05em"></div>
+        <div id="endTag" style="margin-top:10px;font-size:56px;font-weight:650;letter-spacing:-0.02em"><span class="gtext">Tek mağaza. Online ve yüz yüze.</span></div>
+        <div id="endCta" style="margin-top:70px;padding:30px 52px;border-radius:999px;background:#13261f;color:#fff;font-size:42px;font-weight:700;box-shadow:0 24px 60px rgba(19,38,31,.3)">Ücretsiz başla → link bio'da</div>
+      </div>
+    </div>
+
+    <div class="hand" id="hand"><svg width="64" height="64" viewBox="0 0 24 24"><path d="M4 2l15 11.5-6.6 1 3.8 7.4-2.9 1.4-3.8-7.5L4 20z" fill="#13261f" stroke="#fff" stroke-width="1.4" stroke-linejoin="round" /></svg></div>
+    <div class="ring" id="ring"></div>
+  </div>
+
+  <script>
+    const SCENES = [
+      { id: "hook", dur: 5.0 }, { id: "chaos", dur: 5.4 }, { id: "pos", dur: 6.6 }, { id: "pay", dur: 5.6 },
+      { id: "rush", dur: 5.4 }, { id: "sync", dur: 6.4 }, { id: "day", dur: 5.4 }, { id: "end", dur: 5.0 }
+    ];
+    const plan = { scenes: [], duration: 0 };
+    {
+      let t = 0;
+      for (const s of SCENES) {
+        plan.scenes.push({ id: s.id, start: t, dur: s.dur, vo: null, voOffset: 0 });
+        t += s.dur;
+      }
+      plan.duration = t;
+    }
+    window.__plan = plan;
+
+    // ---------- helpers (same engine as reel-payments.html) ----------
+    const $ = (id) => document.getElementById(id);
+    const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+    const seg = (t, a, b) => clamp((t - a) / (b - a));
+    const lerp = (a, b, p) => a + (b - a) * p;
+    const E = {
+      out: (x) => 1 - Math.pow(1 - x, 3),
+      expo: (x) => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * x)),
+      inOut: (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2),
+      in: (x) => x * x * x,
+      back: (x) => { const c1 = 1.6, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); }
+    };
+    const set = (el, o) => { for (const k in o) el.style[k] = o[k]; };
+    const fx = (el, { x = 0, y = 0, s = 1, r = 0, o = 1, b = 0, extra = "" }) =>
+      set(el, { transform: `${extra} translate(${x}px, ${y}px) scale(${s}) rotate(${r}deg)`, opacity: o, filter: b > 0.05 ? `blur(${b}px)` : "none" });
+    const rise = (el, t, at, dist = 70, dur = 0.5) => {
+      const p = E.expo(seg(t, at, at + dur));
+      fx(el, { y: (1 - p) * dist, o: p, b: (1 - p) * 14 });
+      return p;
+    };
+    const pop = (el, t, at, extra = "") => {
+      const q = E.back(seg(t, at, at + 0.45));
+      fx(el, { extra, s: 0.5 + 0.5 * q, o: clamp(q * 1.6) });
+    };
+    const tap = (t, at, x, y) => {
+      const hand = $("hand"), ring = $("ring");
+      const pin = seg(t, at - 0.45, at - 0.05), pout = seg(t, at + 0.3, at + 0.5);
+      set(hand, { left: lerp(x + 260, x, E.inOut(pin)) + "px", top: lerp(y + 260, y, E.inOut(pin)) + "px", opacity: pin > 0 && pout < 1 ? (1 - pout) * clamp(pin * 3) : 0, transform: `scale(${t > at && t < at + 0.15 ? 0.86 : 1})` });
+      const pr = seg(t, at, at + 0.5);
+      set(ring, { left: x + 10 + "px", top: y + 10 + "px", opacity: pr > 0 && pr < 1 ? 1 - pr : 0, transform: `scale(${0.3 + pr * 1.6})` });
+    };
+    const centerOf = (id) => { const r = $(id).getBoundingClientRect(); return [r.left + r.width * 0.55, r.top + r.height * 0.55]; };
+    const titleIn = (t, id, at = 0.08) => [...$(id).children].forEach((c, i) => rise(c, t, at + i * 0.12));
+
+    // ---------- dynamic DOM ----------
+    // market stall: striped scalloped awning, string lights, counter with goods
+    {
+      let awn = "";
+      for (let i = 0; i < 8; i += 1) {
+        const x = 40 + i * 102.5, c = i % 2 ? "#fff" : "#15803d";
+        awn += `<rect x="${x}" y="120" width="102.5" height="150" fill="${c}"/><path d="M${x} 270 a51.25 40 0 0 0 102.5 0" fill="${c}"/>`;
+      }
+      let bulbs = "";
+      for (let i = 0; i < 11; i += 1) {
+        const x = 50 + i * 80, y = 40 + Math.sin((i / 10) * Math.PI) * 50;
+        bulbs += `<circle class="bulb" cx="${x}" cy="${y + 14}" r="14" fill="#fde047"/>`;
+      }
+      const goods = [["#f59e0b", 150], ["#15803d", 290], ["#7c3aed", 430], ["#dc2626", 570], ["#0ea5e9", 700]];
+      $("stall").innerHTML = `
+        <path d="M30 40 Q 450 140 870 40" fill="none" stroke="#475569" stroke-width="3"/>${bulbs}
+        <rect x="60" y="120" width="22" height="840" rx="8" fill="#92400e"/><rect x="818" y="120" width="22" height="840" rx="8" fill="#92400e"/>
+        <rect x="30" y="100" width="840" height="34" rx="12" fill="#14532d"/>${awn}
+        <rect x="200" y="380" width="500" height="120" rx="24" fill="#fff" stroke="#14532d" stroke-width="6"/>
+        <text x="450" y="460" text-anchor="middle" font-size="64" font-weight="800" fill="#14532d" font-family="Segoe UI" letter-spacing="6">LUMEN</text>
+        ${goods.map(([c, x], i) => `<rect class="good" x="${x}" y="${640 - (i % 2) * 30}" width="${100}" height="${120 + (i % 2) * 30}" rx="18" fill="${c}"/>`).join("")}
+        <rect x="40" y="760" width="820" height="200" rx="26" fill="#b45309"/><rect x="40" y="760" width="820" height="40" rx="18" fill="#d97706"/>`;
+    }
+    const prods = [["Kanvas Çanta", 24, "#15803d"], ["Seramik Kupa", 18, "#f59e0b"], ["Sanat Baskısı", 30, "#7c3aed"], ["Soya Mumu", 22, "#dc2626"], ["Çıkartmalar", 6, "#0ea5e9"], ["Foto Fanzin", 15, "#db2777"]];
+    $("pgrid").innerHTML = prods.map(([n, p, c], i) => `<div class="pt" id="pt${i}" style="background:${c}"><span class="q" id="pq${i}"></span><b>${n}</b><small>$${p}</small></div>`).join("");
+    // taps: tote, mug, tote = $66 (24 + 18 + 24), the sale used in the next scene
+    const TAPS = [[0, 1.4], [1, 2.0], [0, 2.6]];
+    $("coins").innerHTML = Array.from({ length: 6 }, (_, i) => `<div class="coin" id="cn${i}">$</div>`).join("");
+    const people = ["#f59e0b", "#0ea5e9", "#db2777", "#7c3aed", "#15803d", "#f97316"];
+    $("queue").innerHTML = people.map((c, i) => `<svg class="person" id="pp${i}" viewBox="0 0 150 300"><circle cx="75" cy="70" r="52" fill="#f2d3b3"/><path d="M20 300 v-90 a55 55 0 0 1 110 0 v90z" fill="${c}"/><circle cx="58" cy="66" r="6" fill="#13261f"/><circle cx="92" cy="66" r="6" fill="#13261f"/><path d="M60 92 q15 12 30 0" stroke="#13261f" stroke-width="5" fill="none" stroke-linecap="round"/></svg>`).join("");
+    const amounts = [24, 18, 30, 42, 22, 48];
+    $("pops").innerHTML = amounts.map((a, i) => `<div class="abs" id="po${i}" style="font-size:56px;font-weight:800;color:#15803d">+$${a}</div>`).join("");
+    const olist = [["POS", "#dcfce7", "#166534", "Satış #1088", "Tezgâh · 3 ürün", "$66"], ["Online", "#e0e7ff", "#3730a3", "Sipariş #1089", "Web sitesi · Sanat Baskısı", "$30"], ["POS", "#dcfce7", "#166534", "Satış #1090", "Tezgâh · nakit", "$42"],
+      ["Link", "#fef9c3", "#854d0e", "Sipariş #1091", "Tezgâhta linkle ödendi", "$48"], ["Online", "#e0e7ff", "#3730a3", "Sipariş #1092", "Web sitesi · Kanvas Çanta", "$24"]];
+    $("olist").innerHTML = olist.map(([tg, bg, fg, a, b, amt], i) => `<div class="ol" id="ol${i}" style="top:${620 + i * 170}px"><span class="tag" style="background:${bg};color:${fg}">${tg}</span><div>${a}<small>${b}</small></div><span class="amt">${amt}</span></div>`).join("");
+    $("endWord").innerHTML = [..."Tescommerce"].map((c, i) => `<span id="ew${i}" style="display:inline-block">${c}</span>`).join("");
+
+    // ---------- scenes ----------
+    const scenes = {
+      hook(t) {
+        titleIn(t, "hookT", 0);
+        const p = E.expo(seg(t, 0.3, 1.1));
+        fx($("stall"), { y: (1 - p) * 300, o: p });
+        // string lights twinkle in a chase
+        [...document.querySelectorAll("#stall .bulb")].forEach((b, i) => b.setAttribute("opacity", 0.45 + 0.55 * Math.max(0, Math.sin(t * 5 - i * 0.8))));
+        [...document.querySelectorAll("#stall .good")].forEach((g, i) => {
+          const q = E.back(seg(t, 1.2 + i * 0.12, 1.6 + i * 0.12));
+          g.setAttribute("transform", `translate(0 ${(1 - q) * 60})`);
+          g.setAttribute("opacity", clamp(q * 1.6));
+        });
+      },
+      chaos(t) {
+        titleIn(t, "chT");
+        const n = E.expo(seg(t, 0.2, 0.8));
+        fx($("note"), { y: (1 - n) * 140, r: -2, o: n });
+        // lines are "handwritten" left to right
+        [0, 1, 2, 3, 4].forEach((i) => {
+          const p = seg(t, 0.7 + i * 0.4, 1.1 + i * 0.4);
+          $("nl" + i).style.clipPath = `inset(0 ${100 - p * 100}% 0 0)`;
+        });
+        const q = E.back(seg(t, 3.3, 3.75));
+        fx($("oops"), { s: 0.5 + 0.5 * q, o: clamp(q * 1.6), x: t > 3.75 && t < 4.2 ? Math.sin(t * 50) * 8 : 0 });
+      },
+      pos(t) {
+        titleIn(t, "posT");
+        const pp = E.expo(seg(t, 0.15, 0.8));
+        fx($("posPhone"), { y: (1 - pp) * 240, o: pp });
+        const qty = prods.map(() => 0);
+        let total = 0;
+        TAPS.forEach(([i, at]) => { if (t > at) { qty[i] += 1; total += prods[i][1]; } });
+        qty.forEach((q, i) => {
+          $("pq" + i).textContent = q || "";
+          $("pq" + i).style.opacity = q ? 1 : 0;
+        });
+        const cur = TAPS.reduce((best, tp) => (Math.abs(t - tp[1]) < Math.abs(t - best[1]) ? tp : best));
+        if (t < 3.2) { const [x, y] = centerOf("pt" + cur[0]); tap(t, cur[1], x, y); }
+        TAPS.forEach(([i, at]) => { if (t > at && t < at + 0.25) fx($("pt" + i), { s: 0.94 }); else if (t > at + 0.25 && t < at + 0.3) fx($("pt" + i), {}); });
+        const items = qty.reduce((a, b) => a + b, 0);
+        $("cartN").textContent = `${items} ürün`;
+        $("cartT").textContent = "$" + total;
+        const at = 4.2;
+        if (t >= 3.2) { const [x, y] = centerOf("chargeBtn"); tap(t, at, x, y); }
+        const done = t > at + 0.08;
+        $("chargeTxt").textContent = done ? "✓ Satış kaydedildi" : "Tahsil et / Ödendi";
+        $("chargeBtn").style.background = done ? "#166534" : "";
+      },
+      pay(t) {
+        titleIn(t, "payT");
+        const pc = E.expo(seg(t, 0.15, 0.8));
+        fx($("payCard"), { y: (1 - pc) * 140, o: pc });
+        [0, 1, 2].forEach((i) => {
+          const p = E.expo(seg(t, 0.5 + i * 0.25, 1.0 + i * 0.25));
+          fx($("op" + i), { x: (1 - p) * 120, o: p });
+          $("op" + i).style.borderColor = t > 1.9 && t < 3.2 && i === 0 ? "#15803d" : "";
+        });
+        pop($("sold"), t, 3.0);
+        // coins pop out of the sale and drop
+        for (let i = 0; i < 6; i += 1) {
+          const p = seg(t, 3.1 + i * 0.05, 4.4 + i * 0.05);
+          const vx = (i - 2.5) * 110, vy = -900;
+          set($("cn" + i), { left: 505 + vx * p + "px", top: 1440 + vy * p + 1500 * p * p + "px", opacity: p > 0 && p < 1 ? 1 : 0, transform: `rotate(${p * 540}deg)` });
+        }
+      },
+      rush(t) {
+        titleIn(t, "ruT");
+        rise($("ruTot"), t, 0.3, 40);
+        // the queue shuffles left; each customer that reaches the stall pops a sale
+        let sold = 0;
+        people.forEach((_, i) => {
+          const x = 1100 + i * 190 - t * 380;
+          const hop = Math.abs(Math.sin(t * 9 + i)) * 14;
+          set($("pp" + i), { left: x + "px", top: 1270 - hop + "px", opacity: x < -160 ? 0 : 1 });
+          const at = (1100 + i * 190 - 470) / 380;
+          const p = seg(t, at, at + 0.9);
+          set($("po" + i), { left: 470 + "px", top: 1180 - p * 220 + "px", opacity: p > 0 && p < 1 ? 1 - p * p : 0 });
+          if (t > at) sold += amounts[i];
+        });
+        $("ruV").textContent = "$" + (66 + sold);
+      },
+      sync(t) {
+        titleIn(t, "syT");
+        pop($("syL"), t, 0.4);
+        pop($("syR"), t, 0.6);
+        pop($("syC"), t, 0.9);
+        $("syPath").style.strokeDashoffset = -t * 60;
+        const sale = t > 2.2;
+        $("syV").textContent = sale ? 11 : 12;
+        fx($("syV"), { s: 1 + Math.sin(seg(t, 2.2, 2.6) * Math.PI) * 0.25 });
+        $("syV").style.color = sale && t < 3.0 ? "#15803d" : "";
+        $("syRs").textContent = sale ? "artık 11 kaldı" : "12 adet var";
+        $("syR").style.boxShadow = t > 2.4 && t < 3.4 ? "0 0 0 8px rgba(21,128,61,.35), 0 30px 80px rgba(40,60,20,.14)" : "";
+        rise($("syNote"), t, 3.2, 30);
+      },
+      day(t) {
+        titleIn(t, "dyT");
+        olist.forEach((_, i) => {
+          const at = 0.5 + i * 0.3;
+          const p = E.expo(seg(t, at, at + 0.5));
+          fx($("ol" + i), { x: (1 - p) * (i % 2 ? 160 : -160), o: p, b: (1 - p) * 10 });
+        });
+      },
+      end(t) {
+        const pm = E.back(seg(t, 0.05, 0.6));
+        fx($("endMark"), { s: 0.3 + 0.7 * pm, r: (1 - pm) * -25, o: clamp(pm * 2) });
+        for (let i = 0; i < 11; i += 1) {
+          const p = E.expo(seg(t, 0.3 + i * 0.035, 0.75 + i * 0.035));
+          fx($("ew" + i), { y: (1 - p) * 80, o: p, b: (1 - p) * 10 });
+        }
+        rise($("endTag"), t, 0.85, 50, 0.6);
+        const pc = E.back(seg(t, 1.25, 1.75));
+        fx($("endCta"), { s: (0.7 + 0.3 * pc) * (1 + 0.025 * Math.sin(Math.max(0, t - 1.8) * 5)), o: clamp(pc * 2) });
+      }
+    };
+
+    // ---------- frame ----------
+    const ENTER = 0.45, EXIT = 0.3;
+    function renderAt(time) {
+      set($("blobA"), { left: 300 + Math.sin(time * 0.3) * 160 + "px", top: -380 + Math.cos(time * 0.25) * 100 + "px" });
+      set($("blobB"), { left: -420 + Math.cos(time * 0.27) * 120 + "px", top: 1200 + Math.sin(time * 0.33) * 120 + "px" });
+      set($("hand"), { opacity: 0 });
+      set($("ring"), { opacity: 0 });
+      for (const s of plan.scenes) {
+        const layer = $("s-" + s.id);
+        const t = time - s.start;
+        const last = s === plan.scenes[plan.scenes.length - 1];
+        if (t < -0.001 || (!last && t > s.dur)) { layer.style.visibility = "hidden"; continue; }
+        layer.style.visibility = "visible";
+        const pin = s.start === 0 ? 1 : E.expo(seg(t, 0, ENTER));
+        const pout = last ? 0 : E.in(seg(t, s.dur - EXIT, s.dur));
+        fx(layer, { s: lerp(0.94, 1, pin) * (1 + pout * 0.14), o: pin * (1 - pout), b: (1 - pin) * 16 + pout * 18 });
+        scenes[s.id](t, s.dur);
+      }
+    }
+    window.renderAt = renderAt;
+    document.fonts.ready.then(() => {
+      renderAt(0);
+      window.__ready = true;
+    });
+  </script>
+</body>
+</html>

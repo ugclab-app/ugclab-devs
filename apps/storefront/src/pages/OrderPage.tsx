@@ -81,6 +81,8 @@ export function OrderPage() {
     taxAmount: number;
     discountAmount: number;
     totalAmount: number;
+    tipAmount?: number;
+    storeCreditAmount?: number;
     paymentProvider?: string | null;
     paymentCaptureStatus?: string | null;
     buyerProtection?: boolean;
@@ -118,6 +120,7 @@ export function OrderPage() {
       token: string;
       downloads: number;
       expiresAt: string | null;
+      licenseKey?: string | null;
       product: { digitalAsset: { fileName: string; downloadLimit: number } | null };
     }>;
   };
@@ -388,6 +391,18 @@ export function OrderPage() {
             <dt className="text-zinc-500">Tax</dt>
             <dd>{formatMoney(order.taxAmount, order.currency)}</dd>
           </div>
+          {(order.tipAmount ?? 0) > 0 ? (
+            <div className="flex justify-between">
+              <dt className="text-zinc-500">Tip</dt>
+              <dd>{formatMoney(order.tipAmount!, order.currency)}</dd>
+            </div>
+          ) : null}
+          {(order.storeCreditAmount ?? 0) > 0 ? (
+            <div className="flex justify-between text-emerald-700">
+              <dt>Store credit</dt>
+              <dd>−{formatMoney(order.storeCreditAmount!, order.currency)}</dd>
+            </div>
+          ) : null}
           <div className="flex justify-between border-t pt-3 text-lg font-bold">
             <dt>Total</dt>
             <dd>{formatMoney(order.totalAmount, order.currency)}</dd>
@@ -423,16 +438,30 @@ export function OrderPage() {
           <h2 className="font-semibold text-violet-900">Your downloads</h2>
           <ul className="mt-4 space-y-3">
             {order.digitalDownloads.map((d) => (
-              <li key={d.id}>
+              <li key={d.id} className="space-y-1">
                 <a
                   href={`/api/store/download/${d.token}?tenant=${tenant}`}
                   className="font-medium text-violet-700 hover:underline"
                 >
                   ↓ {d.product.digitalAsset?.fileName ?? "Download file"}
                 </a>
+                {d.licenseKey ? (
+                  <p className="text-sm text-violet-800">
+                    License key:{" "}
+                    <code className="rounded bg-white/80 px-1.5 py-0.5 font-mono text-xs">
+                      {d.licenseKey}
+                    </code>
+                  </p>
+                ) : null}
               </li>
             ))}
           </ul>
+          <Link
+            to={storeHref("/library", nav)}
+            className="mt-4 inline-block text-sm font-medium text-violet-700 hover:underline"
+          >
+            Open in Library →
+          </Link>
         </section>
       ) : null}
 

@@ -112,6 +112,7 @@ export default function StorefrontPage() {
   const [shellRevision, setShellRevision] = useState(0);
   const [builderPrimary, setBuilderPrimary] = useState<string | null>(null);
   const [appliedThemeId, setAppliedThemeId] = useState<string | undefined>();
+  const [libraryOverride, setLibraryOverride] = useState<CustomThemePreset[] | null>(null);
   const [previewRevision, setPreviewRevision] = useState(0);
 
   const { data } = useQuery({ queryKey: ["settings"], queryFn: () => api.settings() });
@@ -392,10 +393,107 @@ export default function StorefrontPage() {
       homeBlocksRef.current = blocks;
     },
     onThemePresetApply: (preset: StoreThemePreset) => {
-      themeExtrasRef.current = { ...themeExtrasRef.current, ...preset.theme };
+      const productPageBlocks = cloneBlocks(preset.productPageBlocks ?? []);
+      const collectionBlocks = cloneBlocks(preset.collectionBlocks ?? []);
+      const cartBlocks = cloneBlocks(preset.cartBlocks ?? []);
+      const notFoundBlocks = cloneBlocks(preset.notFoundBlocks ?? []);
+      const catalogId =
+        preset.catalogId ??
+        (preset.id.startsWith("installed_")
+          ? preset.id.slice("installed_".length)
+          : preset.id.startsWith("custom_")
+            ? undefined
+            : preset.id);
+      const existing = libraryOverride ?? draftTheme.customThemePresets ?? [];
+      const now = new Date().toISOString();
+          const { customThemePresets: _ignored, ...shell } = {
+            ...themeExtrasRef.current,
+            ...pageStyleRef.current,
+          };
+          const previous: CustomThemePreset | null =
+            homeBlocksRef.current.length > 0 && appliedThemeId !== catalogId
+              ? {
+                  id: appliedThemeId
+                    ? `installed_${appliedThemeId}`
+                    : `installed_draft_${Date.now().toString(36)}`,
+                  label: appliedThemeId ? `Previous · ${appliedThemeId}` : "Previous design",
+                  catalogId: appliedThemeId,
+                  savedAt: now,
+                  primaryColor,
+                  homeBlocks: cloneBlocks(homeBlocksRef.current),
+                  productPageBlocks: cloneBlocks(productBlocksRef.current),
+                  collectionBlocks: cloneBlocks(collectionDefaultBlocksRef.current),
+                  cartBlocks: cloneBlocks(cartBlocksRef.current),
+                  notFoundBlocks: cloneBlocks(notFoundBlocksRef.current),
+                  theme: shell,
+                }
+              : null;
+      const incoming: CustomThemePreset = {
+        id:
+          preset.id.startsWith("custom_") || preset.id.startsWith("installed_")
+            ? preset.id
+            : `installed_${preset.id}`,
+        label: preset.label,
+        catalogId,
+        savedAt: now,
+        primaryColor: preset.primaryColor,
+        homeBlocks: cloneBlocks(preset.homeBlocks),
+        productPageBlocks,
+        collectionBlocks,
+        cartBlocks,
+        notFoundBlocks,
+        theme: { ...preset.theme },
+      };
+      const next = [
+        ...existing.filter(
+          (p) => p.id !== incoming.id && p.id !== previous?.id && p.catalogId !== incoming.catalogId
+        ),
+        ...(previous ? [previous] : []),
+        incoming,
+      ].slice(-16);
+
+      homeBlocksRef.current = cloneBlocks(preset.homeBlocks);
+      productBlocksRef.current = productPageBlocks;
+      collectionDefaultBlocksRef.current = collectionBlocks;
+      cartBlocksRef.current = cartBlocks;
+      notFoundBlocksRef.current = notFoundBlocks;
+      themeExtrasRef.current = {
+        ...themeExtrasRef.current,
+        ...preset.theme,
+        customThemePresets: next,
+      };
+      setLibraryOverride(next);
       setBuilderPrimary(preset.primaryColor);
-      setAppliedThemeId(preset.id);
+      setAppliedThemeId(catalogId);
       setShellRevision((n) => n + 1);
+      void api
+        .updateThemeDraft({
+          themeDraft: {
+            ...draftTheme,
+            ...themeExtrasRef.current,
+            ...pageStyleRef.current,
+            homeBlocks: homeBlocksRef.current,
+            homeSections: homeBlocksRef.current.map((b) => b.type),
+            globalBlocks: globalBlocksRef.current,
+            productPageBlocks,
+            cartBlocks,
+            notFoundBlocks,
+            collectionPageBlocks: {
+              ...(draftTheme.collectionPageBlocks ?? {}),
+              _default: collectionBlocks,
+            },
+            customThemePresets: next,
+            ...(catalogId ? { catalogThemeId: catalogId } : {}),
+          } as StoreTheme & { catalogThemeId?: string },
+          ...(preset.primaryColor ? { primaryColor: preset.primaryColor } : {}),
+        })
+        .then(() => {
+          qc.invalidateQueries({ queryKey: ["settings"] });
+          setAlert({
+            ok: true,
+            message: `${preset.label} is on the draft, including the product, collection, cart, and 404 pages. The previous design is under Themes → My themes. Publish to live store when buyers should see it.`,
+          });
+        });
     },
     onSaveThemePreset: () => {
       const label = window.prompt("Name for this theme preset?", "My theme");
@@ -406,16 +504,28 @@ export default function StorefrontPage() {
         savedAt: new Date().toISOString(),
         primaryColor,
         homeBlocks: cloneBlocks(homeBlocksRef.current),
+        productPageBlocks: cloneBlocks(productBlocksRef.current),
+        collectionBlocks: cloneBlocks(collectionDefaultBlocksRef.current),
+        cartBlocks: cloneBlocks(cartBlocksRef.current),
+        notFoundBlocks: cloneBlocks(notFoundBlocksRef.current),
         theme: { ...themeExtrasRef.current, ...pageStyleRef.current },
       };
-      const next = [...(draftTheme.customThemePresets ?? []), preset];
+      const next = [...(libraryOverride ?? draftTheme.customThemePresets ?? []), preset];
       themeExtrasRef.current = { ...themeExtrasRef.current, customThemePresets: next };
+      setLibraryOverride(next);
       void api.updateThemeDraft({
         themeDraft: {
           ...draftTheme,
           ...themeExtrasRef.current,
           ...pageStyleRef.current,
           homeBlocks: homeBlocksRef.current,
+          productPageBlocks: productBlocksRef.current,
+          cartBlocks: cartBlocksRef.current,
+          notFoundBlocks: notFoundBlocksRef.current,
+          collectionPageBlocks: {
+            ...(draftTheme.collectionPageBlocks ?? {}),
+            _default: collectionDefaultBlocksRef.current,
+          },
           customThemePresets: next,
         } as StoreTheme,
       }).then(() => {
@@ -423,7 +533,7 @@ export default function StorefrontPage() {
         qc.invalidateQueries({ queryKey: ["settings"] });
       });
     },
-    customThemePresets: draftTheme.customThemePresets,
+    customThemePresets: libraryOverride ?? draftTheme.customThemePresets,
     appliedThemeId,
     fullscreen: builderFullscreen,
     onToggleFullscreen: () => setBuilderFullscreen((f) => !f),

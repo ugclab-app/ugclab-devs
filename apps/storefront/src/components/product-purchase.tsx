@@ -32,6 +32,9 @@ export function ProductPurchase({
   type,
   subscriptionEnabled,
   subscriptionInterval,
+  reviewSummary,
+  payWhatYouWant,
+  minPriceAmount,
 }: {
   productId: string;
   productTitle?: string;
@@ -43,6 +46,10 @@ export function ProductPurchase({
   type: string;
   subscriptionEnabled?: boolean;
   subscriptionInterval?: string | null;
+  reviewSummary?: { average: number; count: number } | null;
+  payWhatYouWant?: boolean;
+  /** Minimum price in cents (base currency) for pay-what-you-want products. */
+  minPriceAmount?: number | null;
 }) {
   const { tenant } = useStoreParams();
   const ctx = useStore();
@@ -65,11 +72,22 @@ export function ProductPurchase({
   const [qty, setQty] = useState(1);
   const [subscribe, setSubscribe] = useState(false);
   const [pending, setPending] = useState(false);
+  const [customPrice, setCustomPrice] = useState(() =>
+    ((priceAmount ?? 0) / 100).toFixed(2)
+  );
 
   const isPhysical = type === "PHYSICAL";
   const stock = matched ? matched.inventory : productInventory;
   const soldOut = isPhysical && stock != null && stock <= 0;
-  const unit = matched?.priceAmount ?? priceAmount ?? 0;
+  const pwywMinMajor = payWhatYouWant ? (minPriceAmount ?? 0) / 100 : 0;
+  const pwywValue = payWhatYouWant
+    ? Number.parseFloat(customPrice.replace(",", "."))
+    : NaN;
+  const pwywValid =
+    !payWhatYouWant || (Number.isFinite(pwywValue) && pwywValue >= pwywMinMajor);
+  const pwywCents =
+    payWhatYouWant && pwywValid ? Math.round(pwywValue * 100) : undefined;
+  const unit = pwywCents ?? matched?.priceAmount ?? priceAmount ?? 0;
   const priceLabel = formatMoney(unit, currency, moneyLocaleFor(currency, locale));
 
   const add = useMutation({
@@ -79,6 +97,7 @@ export function ProductPurchase({
         variantId: matched?.id || undefined,
         quantity: qty,
         subscribe: subscriptionEnabled ? subscribe : undefined,
+        ...(pwywCents != null ? { priceCents: pwywCents, currency } : {}),
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["store-context"] });
@@ -95,6 +114,14 @@ export function ProductPurchase({
 
   return (
     <div className="mt-8 space-y-4">
+      {reviewSummary && reviewSummary.count > 0 ? (
+        <p className="text-sm font-medium text-zinc-700">
+          {reviewSummary.average.toFixed(1)}/5 from{" "}
+          {reviewSummary.count === 1
+            ? "1 review"
+            : `${reviewSummary.count >= 100 ? `${reviewSummary.count}+` : reviewSummary.count} reviews`}
+        </p>
+      ) : null}
       <p className="text-2xl font-bold">{priceLabel}</p>
       {subscriptionEnabled ? (
         <div className="flex gap-2 text-sm">
@@ -180,6 +207,26 @@ export function ProductPurchase({
           </select>
         </label>
       ) : null}
+      {payWhatYouWant && !soldOut ? (
+        <label className="block text-sm">
+          <span className="mb-1 block font-medium text-zinc-700">Name your price</span>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              inputMode="decimal"
+              min={pwywMinMajor}
+              step="0.01"
+              value={customPrice}
+              onChange={(e) => setCustomPrice(e.target.value)}
+              className="w-36 rounded-lg border border-zinc-200 px-3 py-2 text-sm"
+            />
+            <span className="text-zinc-500">{currency}</span>
+          </div>
+          <span className={`mt-1 block text-xs ${pwywValid ? "text-zinc-500" : "text-red-600"}`}>
+            Minimum {pwywMinMajor.toFixed(2)} {currency}
+          </span>
+        </label>
+      ) : null}
       {soldOut ? (
         <StockAlertForm
           tenant={tenant}
@@ -201,7 +248,7 @@ export function ProductPurchase({
           </label>
           <button
             type="button"
-            disabled={pending}
+            disabled={pending || !pwywValid}
             className="store-btn-primary mt-6 flex-1 disabled:opacity-50"
             onClick={async () => {
               setPending(true);

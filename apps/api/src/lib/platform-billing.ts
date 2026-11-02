@@ -93,6 +93,13 @@ export async function syncTenantSubscription(
   const trialEnd = subscription.trial_end
     ? new Date(subscription.trial_end * 1000)
     : null;
+  const willSuspend = status === "past_due" || status === "unpaid";
+  const before = willSuspend
+    ? await prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { status: true },
+      })
+    : null;
 
   await prisma.tenant.update({
     where: { id: tenantId },
@@ -108,6 +115,13 @@ export async function syncTenantSubscription(
           : {}),
     },
   });
+
+  if (willSuspend && before && before.status !== TenantStatus.SUSPENDED) {
+    const { notifyStoreSuspended } = await import("./owner-alerts.js");
+    notifyStoreSuspended(tenantId).catch((err) =>
+      console.error("[email] store suspended", err)
+    );
+  }
 }
 
 export async function clearTenantSubscription(tenantId: string): Promise<void> {

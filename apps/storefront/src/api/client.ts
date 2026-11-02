@@ -1,5 +1,17 @@
 const API = "/api/store";
 
+export class ApiError extends Error {
+  status: number;
+  /** True when the server rejected the request because of a missing/invalid captcha. */
+  captcha: boolean;
+  constructor(message: string, status: number, captcha = false) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.captcha = captcha;
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API}${path}`, {
     ...init,
@@ -18,7 +30,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error((data as { error?: string }).error ?? res.statusText);
+    throw new ApiError(
+      (data as { error?: string }).error ?? res.statusText,
+      res.status,
+      (data as { captcha?: boolean }).captcha === true
+    );
   }
   return data as T;
 }
@@ -45,6 +61,55 @@ export type CustomerAddress = {
   postal: string | null;
   country: string;
   isDefault: boolean;
+};
+
+export type CheckoutCustomField = {
+  key: string;
+  label: string;
+  type: "text" | "date" | "textarea";
+  required: boolean;
+};
+
+export type CheckoutExtras = {
+  tipsEnabled: boolean;
+  tipPresets: number[];
+  customFields: CheckoutCustomField[];
+  blockedCountries: string[];
+  /** Cloudflare Turnstile site key; null when captcha is not configured for the store. */
+  turnstileSiteKey?: string | null;
+};
+
+/** Product shape shared by the catalog list and recommendation endpoints. */
+export type StoreListProduct = {
+  id: string;
+  slug: string;
+  title: string;
+  description: string | null;
+  type: string;
+  priceAmount: number;
+  compareAt: number | null;
+  imageKey: string | null;
+  variantCount?: number;
+  defaultVariantId?: string | null;
+  inventory?: number | null;
+  quickAdd?: boolean;
+};
+
+export type LibraryItem = {
+  productId: string;
+  slug: string;
+  title: string;
+  imageKey: string | null;
+  orderNumber: string;
+  purchasedAt: string;
+  download: { token: string; fileName: string; remaining: number } | null;
+  licenseKey: string | null;
+  lessons: {
+    title: string;
+    body: string | null;
+    videoUrl: string | null;
+    embedUrl: string | null;
+  }[];
 };
 
 export type StoreContextDto = {
@@ -109,6 +174,7 @@ export type StoreContextDto = {
     tiktokPixelId?: string;
     gtmId?: string;
     aiCatalogEnabled?: boolean;
+    productFeedsEnabled?: boolean;
   };
   addons?: string[];
   giftWrap?: { priceCents: number; label: string; cardEnabled: boolean } | null;
@@ -118,6 +184,7 @@ export type StoreContextDto = {
     headline?: string;
     productIds?: string[];
   };
+  checkoutExtras?: CheckoutExtras;
 };
 
 export const storeApi = {
@@ -204,6 +271,18 @@ export const storeApi = {
       }>;
     }>(`/products/${slug}${qs({ tenant, locale, currency, country })}`),
 
+  getRecommendations: (
+    tenant: string,
+    slug: string,
+    params: { locale?: string; currency?: string; country?: string; limit?: string }
+  ) =>
+    request<{
+      currency: string;
+      baseCurrency: string;
+      similar: StoreListProduct[];
+      boughtTogether: StoreListProduct[];
+    }>(`/products/${slug}/recommendations${qs({ tenant, ...params })}`),
+
   bundles: (tenant: string) =>
     request<{
       bundles: Array<{
@@ -274,6 +353,7 @@ export const storeApi = {
         variantId?: string;
         title: string;
         unit: number;
+        unitAmountCents?: number;
         lineTotal: number;
         quantity: number;
         imageKey: string | null;
@@ -283,7 +363,24 @@ export const storeApi = {
 
   addToCart: (
     tenant: string,
-    body: { productId: string; variantId?: string; quantity?: number; subscribe?: boolean }
+    body: {
+      productId: string;
+      variantId?: string;
+      quantity?: number;
+      subscribe?: boolean;
+      /** Pay-what-you-want: chosen unit price in cents of `currency` (display currency). */
+      priceCents?: number;
+      currency?: string;
+    }
+  ) =>
+    request<{ ok: boolean }>(`/cart/add${qs({ tenant })}`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  addOffer: (
+    tenant: string,
+    body: { productId: string; offerQty: number; picks: string[] }
   ) =>
     request<{ ok: boolean }>(`/cart/add${qs({ tenant })}`, {
       method: "POST",
@@ -298,14 +395,14 @@ export const storeApi = {
 
   updateCart: (
     tenant: string,
-    body: { productId: string; variantId?: string; quantity: number }
+    body: { productId: string; variantId?: string; quantity: number; unitAmountCents?: number }
   ) =>
     request<{ ok: boolean }>(`/cart${qs({ tenant })}`, {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
 
-  removeFromCart: (tenant: string, body: { productId: string; variantId?: string }) =>
+  removeFromCart: (tenant: string, body: { productId: string; variantId?: string; unitAmountCents?: number }) =>
     request<{ ok: boolean }>(`/cart${qs({ tenant })}`, {
       method: "DELETE",
       body: JSON.stringify(body),
@@ -333,6 +430,20 @@ export const storeApi = {
       `/checkout/validate-gift-card${qs({ tenant })}`,
       { method: "POST", body: JSON.stringify({ code, orderTotal }) }
     ),
+
+  loyalty: (tenant: string) =>
+    request<{
+      enabled: boolean;
+      points: number;
+      earnPerMajor: number;
+      redeemCentsPerPoint: number;
+    }>(`/loyalty${qs({ tenant })}`),
+
+  storeCredit: (tenant: string) =>
+    request<{ balanceCents: number; currency: string }>(`/store-credit${qs({ tenant })}`),
+
+  library: (tenant: string) =>
+    request<{ items: LibraryItem[] }>(`/account/library${qs({ tenant })}`),
 
   unlockStore: (tenant: string, password: string) =>
     request<{ ok: boolean }>(`/unlock${qs({ tenant })}`, {
@@ -375,7 +486,10 @@ export const storeApi = {
       `/affiliate/resolve${qs({ tenant, code })}`
     ),
 
-  placeOrder: (tenant: string, body: Record<string, unknown>) =>
+  placeOrder: (
+    tenant: string,
+    body: Record<string, unknown> & { turnstileToken?: string | null }
+  ) =>
     request<
       | { mode: "stripe"; orderId: string; orderNumber: string; checkoutUrl: string }
       | { mode: "gopay"; orderId: string; orderNumber: string; checkoutUrl: string }
@@ -431,10 +545,19 @@ export const storeApi = {
       body: JSON.stringify({ email }),
     }),
 
-  accountLogin: (tenant: string, email: string, password: string) =>
+  accountLogin: (
+    tenant: string,
+    email: string,
+    password: string,
+    turnstileToken?: string | null
+  ) =>
     request<{ ok: boolean }>(`/account/login${qs({ tenant })}`, {
       method: "POST",
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({
+        email,
+        password,
+        ...(turnstileToken ? { turnstileToken } : {}),
+      }),
     }),
 
   accountRegister: (
@@ -630,7 +753,7 @@ export const storeApi = {
     }),
 
   newsletterSubscribe: (tenant: string, email: string) =>
-    request<{ ok: boolean }>(`/newsletter/subscribe${qs({ tenant })}`, {
+    request<{ ok: boolean; pendingConfirm?: boolean }>(`/newsletter/subscribe${qs({ tenant })}`, {
       method: "POST",
       body: JSON.stringify({ email }),
     }),

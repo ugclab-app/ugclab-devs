@@ -1,14 +1,27 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Input } from "@ugclab/ui";
-import { storeApi } from "@/api/client";
+import { ApiError, storeApi } from "@/api/client";
+import { TurnstileWidget, type TurnstileWidgetHandle } from "@/components/turnstile-widget";
 import { useStore } from "@/context/store";
 import { useStoreParams } from "@/hooks/use-store-params";
 import { storeHref } from "@/lib/store-href";
 import { ExpressPayHint } from "@/components/express-pay-hint";
 import { StoreTrustStrip } from "@/components/store-trust-strip";
 import { getStoredAttribution } from "@/hooks/use-live-presence";
+
+const COUNTRY_OPTIONS: { code: string; label: string }[] = [
+  { code: "US", label: "United States" },
+  { code: "CA", label: "Canada" },
+  { code: "GB", label: "United Kingdom" },
+  { code: "DE", label: "Germany" },
+  { code: "FR", label: "France" },
+  { code: "NL", label: "Netherlands" },
+  { code: "PL", label: "Poland" },
+];
+
+type TipChoice = { kind: "none" } | { kind: "percent"; value: number } | { kind: "custom" };
 
 export function CheckoutForm({
   subtotalAmount,
@@ -24,7 +37,20 @@ export function CheckoutForm({
   productIds?: string[];
 }) {
   const { tenant, locale } = useStoreParams();
-  const { currency, settings, checkoutFooterText, payments, theme, addons, giftWrap: giftWrapOffer, baseCurrency } = useStore();
+  const {
+    currency,
+    settings,
+    checkoutFooterText,
+    payments,
+    theme,
+    addons,
+    giftWrap: giftWrapOffer,
+    baseCurrency,
+    checkoutExtras,
+  } = useStore();
+  const blockedCountries = checkoutExtras.blockedCountries.map((c) => c.toUpperCase());
+  const turnstileSiteKey = checkoutExtras.turnstileSiteKey ?? null;
+  const countryOptions = COUNTRY_OPTIONS.filter((c) => !blockedCountries.includes(c.code));
   const stripeLive = payments?.stripeLive ?? false;
   const finikLive = payments?.finikLive ?? false;
   const gopayLive = payments?.gopayLive ?? false;
@@ -39,6 +65,11 @@ export function CheckoutForm({
   const [giftMessage, setGiftMessage] = useState("");
   const [giftCardCode, setGiftCardCode] = useState("");
   const [giftCardPreview, setGiftCardPreview] = useState<number | null>(null);
+  const [useLoyalty, setUseLoyalty] = useState(false);
+  const [useStoreCredit, setUseStoreCredit] = useState(false);
+  const [tip, setTip] = useState<TipChoice>({ kind: "none" });
+  const [tipCustom, setTipCustom] = useState("");
+  const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
   const [shippingRates, setShippingRates] = useState<
     { id: string; label: string; amountCents: number }[]
   >([]);
@@ -49,11 +80,24 @@ export function CheckoutForm({
     "SHIP"
   );
   const [pickupWarehouseId, setPickupWarehouseId] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const turnstileRef = useRef<TurnstileWidgetHandle>(null);
 
   const { data: accountSession } = useQuery({
     queryKey: ["account-session", tenant],
     queryFn: () => storeApi.accountSession(tenant),
   });
+  const { data: loyaltyData } = useQuery({
+    queryKey: ["loyalty", tenant],
+    queryFn: () => storeApi.loyalty(tenant),
+    enabled: !!accountSession?.customer,
+  });
+  const { data: storeCreditData } = useQuery({
+    queryKey: ["store-credit", tenant],
+    queryFn: () => storeApi.storeCredit(tenant),
+    enabled: !!accountSession?.customer,
+  });
+  const storeCreditBalance = storeCreditData?.balanceCents ?? 0;
   const { data: savedAddresses } = useQuery({
     queryKey: ["account-addresses", tenant],
     queryFn: () => storeApi.addresses(tenant),
@@ -62,6 +106,8 @@ export function CheckoutForm({
   const [addressKey, setAddressKey] = useState("new");
   const saved = savedAddresses?.addresses ?? [];
   const chosen = saved.find((a) => a.id === addressKey);
+  const chosenCountryBlocked =
+    !!chosen?.country && blockedCountries.includes(chosen.country.toUpperCase());
 
   const { data: pickupData } = useQuery({
     queryKey: ["pickup-locations", tenant, productIds?.join(",") ?? ""],
@@ -125,6 +171,12 @@ export function CheckoutForm({
     },
     onError: (e) => {
       setError(e instanceof Error ? e.message : "Checkout failed");
+      // Turnstile tokens are single-use: always ask for a fresh challenge after a
+      // failed attempt, and especially when the server flagged the captcha itself.
+      if (turnstileSiteKey || (e instanceof ApiError && e.captcha)) {
+        turnstileRef.current?.reset();
+        setTurnstileToken(null);
+      }
     },
   });
 
@@ -162,14 +214,47 @@ export function CheckoutForm({
           body.shippingAddress1 = fd.get("shippingAddress1");
           body.shippingAddress2 = fd.get("shippingAddress2");
           body.shippingCity = fd.get("shippingCity");
+          body.shippingRegion = fd.get("shippingRegion");
           body.shippingPostal = fd.get("shippingPostal");
+          body.shippingPhone = fd.get("shippingPhone") || fd.get("phone");
           body.country = fd.get("country");
           const rate = shippingRates.find((r) => r.id === selectedRateId);
           if (rate) body.shippingAmountCents = rate.amountCents;
         }
         if (discountCode) body.discountCode = discountCode;
         if (giftCardCode) body.giftCardCode = giftCardCode;
+        if (useLoyalty) body.useLoyaltyPoints = true;
+        if (useStoreCredit && storeCreditBalance > 0) body.useStoreCredit = true;
         if (createAccount) body.password = fd.get("password");
+        if (checkoutExtras.tipsEnabled) {
+          if (tip.kind === "percent") {
+            body.tipPercent = tip.value;
+          } else if (tip.kind === "custom") {
+            const amount = Number.parseFloat(tipCustom.replace(",", "."));
+            if (Number.isFinite(amount) && amount > 0) {
+              body.tipCents = Math.round(amount * 100);
+            }
+          }
+        }
+        if (checkoutExtras.customFields.length > 0) {
+          const values: Record<string, string> = {};
+          for (const field of checkoutExtras.customFields) {
+            const v = (customFieldValues[field.key] ?? "").trim();
+            if (field.required && !v) {
+              setError(`${field.label} is required`);
+              return;
+            }
+            if (v) values[field.key] = v;
+          }
+          body.customFields = values;
+        }
+        if (turnstileSiteKey) {
+          if (!turnstileToken) {
+            setError("Please complete the security check");
+            return;
+          }
+          body.turnstileToken = turnstileToken;
+        }
         place.mutate(body);
       }}
       className="mt-8 space-y-5"
@@ -307,13 +392,29 @@ export function CheckoutForm({
                 name="shippingCity"
                 label="City"
                 type="text"
+                required
                 defaultValue={chosen?.city ?? ""}
               />
+              <Input
+                name="shippingRegion"
+                label="State / region"
+                type="text"
+                required
+              />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
               <Input
                 name="shippingPostal"
                 label="Postal code"
                 type="text"
+                required
                 defaultValue={chosen?.postal ?? ""}
+              />
+              <Input
+                name="shippingPhone"
+                label="Phone"
+                type="tel"
+                required
               />
             </div>
             <div>
@@ -350,17 +451,21 @@ export function CheckoutForm({
                 }}
               >
                 {chosen?.country &&
-                !["US", "CA", "GB", "DE", "FR", "NL", "PL"].includes(chosen.country) ? (
+                !chosenCountryBlocked &&
+                !countryOptions.some((c) => c.code === chosen.country) ? (
                   <option value={chosen.country}>{chosen.country}</option>
                 ) : null}
-                <option value="US">United States</option>
-                <option value="CA">Canada</option>
-                <option value="GB">United Kingdom</option>
-                <option value="DE">Germany</option>
-                <option value="FR">France</option>
-                <option value="NL">Netherlands</option>
-                <option value="PL">Poland</option>
+                {countryOptions.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.label}
+                  </option>
+                ))}
               </select>
+              {chosenCountryBlocked ? (
+                <p className="mt-1.5 text-xs text-amber-700">
+                  This store does not ship to {chosen!.country}
+                </p>
+              ) : null}
             </div>
           </fieldset>
 
@@ -435,6 +540,145 @@ export function CheckoutForm({
           </p>
         ) : null}
       </div>
+
+      {checkoutExtras.customFields.length > 0 ? (
+        <fieldset className="space-y-4 rounded-xl border border-zinc-100 p-4">
+          <legend className="px-1 text-sm font-semibold text-zinc-800">
+            Additional information
+          </legend>
+          {checkoutExtras.customFields.map((field) => {
+            const value = customFieldValues[field.key] ?? "";
+            const onChange = (v: string) =>
+              setCustomFieldValues((prev) => ({ ...prev, [field.key]: v }));
+            if (field.type === "textarea") {
+              return (
+                <label key={field.key} className="block text-sm">
+                  <span className="mb-1 block font-medium text-zinc-700">
+                    {field.label}
+                    {field.required ? " *" : ""}
+                  </span>
+                  <textarea
+                    name={`custom_${field.key}`}
+                    value={value}
+                    onChange={(e) => onChange(e.target.value)}
+                    required={field.required}
+                    rows={3}
+                    className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
+                  />
+                </label>
+              );
+            }
+            return (
+              <Input
+                key={field.key}
+                name={`custom_${field.key}`}
+                label={field.required ? `${field.label} *` : field.label}
+                type={field.type === "date" ? "date" : "text"}
+                required={field.required}
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+              />
+            );
+          })}
+        </fieldset>
+      ) : null}
+
+      {checkoutExtras.tipsEnabled ? (
+        <div className="space-y-3 rounded-lg border border-zinc-200 p-4">
+          <p className="text-sm font-medium">Add a tip</p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setTip({ kind: "none" })}
+              className={`rounded-lg border px-3 py-2 text-sm ${
+                tip.kind === "none"
+                  ? "border-[var(--store-primary)] bg-violet-50"
+                  : "border-zinc-200 bg-white"
+              }`}
+            >
+              No tip
+            </button>
+            {checkoutExtras.tipPresets.map((pct) => (
+              <button
+                key={pct}
+                type="button"
+                onClick={() => setTip({ kind: "percent", value: pct })}
+                className={`rounded-lg border px-3 py-2 text-sm ${
+                  tip.kind === "percent" && tip.value === pct
+                    ? "border-[var(--store-primary)] bg-violet-50"
+                    : "border-zinc-200 bg-white"
+                }`}
+              >
+                {pct}%
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setTip({ kind: "custom" })}
+              className={`rounded-lg border px-3 py-2 text-sm ${
+                tip.kind === "custom"
+                  ? "border-[var(--store-primary)] bg-violet-50"
+                  : "border-zinc-200 bg-white"
+              }`}
+            >
+              Custom
+            </button>
+          </div>
+          {tip.kind === "percent" ? (
+            <p className="text-xs text-zinc-500">
+              Tip: {((subtotalAmount * tip.value) / 100 / 100).toFixed(2)} {currency}
+            </p>
+          ) : null}
+          {tip.kind === "custom" ? (
+            <label className="block text-sm">
+              <span className="mb-1 block text-zinc-600">Tip amount ({currency})</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step="0.01"
+                value={tipCustom}
+                onChange={(e) => setTipCustom(e.target.value)}
+                placeholder="0.00"
+                className="ugclab-input w-40"
+              />
+            </label>
+          ) : null}
+        </div>
+      ) : null}
+
+      {storeCreditBalance > 0 ? (
+        <label className="flex items-start gap-2 rounded-lg border border-zinc-200 p-4 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={useStoreCredit}
+            onChange={(e) => setUseStoreCredit(e.target.checked)}
+          />
+          <span>
+            Use store credit ({(storeCreditBalance / 100).toFixed(2)}{" "}
+            {storeCreditData?.currency || currency} available)
+          </span>
+        </label>
+      ) : null}
+
+      {loyaltyData?.enabled && (loyaltyData.points ?? 0) > 0 ? (
+        <label className="flex items-start gap-2 rounded-lg border border-zinc-200 p-4 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={useLoyalty}
+            onChange={(e) => setUseLoyalty(e.target.checked)}
+          />
+          <span>
+            Use loyalty points ({loyaltyData.points} pts
+            {loyaltyData.redeemCentsPerPoint
+              ? ` · ~${((loyaltyData.points * loyaltyData.redeemCentsPerPoint) / 100).toFixed(2)} ${currency}`
+              : ""}
+            )
+          </span>
+        </label>
+      ) : null}
 
       <label className="flex items-center gap-2 text-sm">
         <input
@@ -536,10 +780,19 @@ export function CheckoutForm({
       />
       <StoreTrustStrip />
 
+      {turnstileSiteKey ? (
+        <TurnstileWidget
+          ref={turnstileRef}
+          siteKey={turnstileSiteKey}
+          onToken={setTurnstileToken}
+          className="flex justify-center"
+        />
+      ) : null}
+
       <button
         type="submit"
         className="store-btn-primary w-full disabled:opacity-50"
-        disabled={place.isPending}
+        disabled={place.isPending || (!!turnstileSiteKey && !turnstileToken)}
       >
         {place.isPending
           ? "Processing…"

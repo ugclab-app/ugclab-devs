@@ -1,4 +1,4 @@
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatMoney } from "@ugclab/i18n";
@@ -13,8 +13,56 @@ import { TenantProductsPanel } from "@/components/tenant-products-panel";
 import { TenantMessagesPanel } from "@/components/tenant-messages-panel";
 import { PermissionGate } from "@/components/permission-gate";
 
+function foldName(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\u0400-\u04ff]+/gi, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function StorePassportStatus({
+  kyc,
+  payoutName,
+}: {
+  kyc: {
+    status: string;
+    legalName: string;
+    country: string;
+    rejectReason: string | null;
+  } | null;
+  payoutName: string | null;
+}) {
+  const passportName = kyc?.legalName?.trim() || "";
+  const payout = payoutName?.trim() || "";
+  const namesDiffer =
+    passportName.length > 0 && payout.length > 0 && foldName(passportName) !== foldName(payout);
+
+  return (
+    <div className="mt-3 max-w-xl rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+      <p>
+        Passport{" "}
+        <span className="font-semibold">{kyc?.status ?? "not submitted"}</span>
+        {kyc ? ` · ${kyc.country}` : ""}
+      </p>
+      <p className="mt-1">Passport name: {passportName || "—"}</p>
+      <p>Payout profile name: {payout || "—"}</p>
+      {namesDiffer ? (
+        <p className="mt-1 font-medium text-amber-800">
+          Names differ. Review the passport before approving.
+        </p>
+      ) : null}
+      {kyc?.rejectReason ? <p className="mt-1 text-red-700">{kyc.rejectReason}</p> : null}
+      <Link to="/kyc" className="mt-1 inline-block font-medium text-sky-700">
+        Open KYC queue
+      </Link>
+    </div>
+  );
+}
+
 export default function TenantDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   const query = useQuery({
@@ -74,13 +122,20 @@ function TenantDetailContent({
     subscriptionPlanId: string | null;
     platformFeeBpsOverride: number | null;
     storefrontUrl: string;
+    acquisitionSource?: string | null;
     owner: { id: string; email: string; name: string | null };
     subscriptionPlan: {
       id: string;
       name: string;
       platformFeeBps?: number;
     } | null;
-    settings: { currency: string } | null;
+    settings: { currency: string; taxFormLegalName?: string | null } | null;
+    merchantKyc?: {
+      status: string;
+      legalName: string;
+      country: string;
+      rejectReason: string | null;
+    } | null;
     customDomains: { domain: string; verified: boolean }[];
     _count: { products: number; orders: number; customers: number };
     stats: { orders30d: number; gmv30d: number; pendingPayouts?: number };
@@ -129,6 +184,23 @@ function TenantDetailContent({
     await queryClient.invalidateQueries({ queryKey: ["tenants"] });
   }
 
+  async function deleteStore() {
+    const ok = confirm(
+      `Delete "${t.name}" permanently?\n\nThe storefront, products, and orders will be removed. The owner will receive an email that Tescommerce administration made this decision. This cannot be undone.`
+    );
+    if (!ok) return;
+    try {
+      const result = await api.deleteTenant(t.id);
+      await queryClient.invalidateQueries({ queryKey: ["tenants"] });
+      if (!result.emailSent) {
+        alert("The store was deleted, but the email to the owner could not be sent.");
+      }
+      navigate("/tenants");
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Could not delete store");
+    }
+  }
+
   return (
     <div className="space-y-6">
       <Link to="/tenants" className="text-sm text-slate-500 hover:text-sky-600">
@@ -142,6 +214,10 @@ function TenantDetailContent({
             Owner: {t.owner.email}
             {t.owner.name ? ` (${t.owner.name})` : ""}
           </p>
+          <StorePassportStatus
+            kyc={t.merchantKyc ?? null}
+            payoutName={t.settings?.taxFormLegalName ?? null}
+          />
           {riskBadges.length > 0 ? (
             <div className="mt-2 flex flex-wrap gap-2">
               {riskBadges.map((b) => (
@@ -207,6 +283,9 @@ function TenantDetailContent({
                 Suspend
               </button>
             ) : null}
+            <button type="button" onClick={() => void deleteStore()} className="platform-btn-danger">
+              Delete store
+            </button>
           </PermissionGate>
         </div>
       </div>
@@ -216,6 +295,7 @@ function TenantDetailContent({
         <Stat label="Plan" value={t.subscriptionPlan?.name ?? "—"} />
         <Stat label="GMV (30d)" value={formatMoney(t.stats.gmv30d, currency)} />
         <Stat label="Orders (30d)" value={String(t.stats.orders30d)} />
+        <Stat label="Came from" value={t.acquisitionSource ?? "Earlier"} />
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <a href="#store-products" className="platform-stat block transition hover:border-sky-300">

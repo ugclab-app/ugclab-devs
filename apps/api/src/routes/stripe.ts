@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { OrderStatus, prisma } from "@ugclab/database";
+import { MerchantKycStatus, OrderStatus, prisma } from "@ugclab/database";
 import type Stripe from "stripe";
 import { fulfillPaidOrder } from "../lib/fulfill-order.js";
 import { requireTenant } from "../lib/merchant.js";
@@ -89,11 +89,30 @@ stripeRoutes.post("/webhook", async (c) => {
       where: { id: event.id },
       data: { processed: false, error: msg.slice(0, 2000) },
     });
+    const { notifyPlatformOps } = await import("../lib/platform-ops-notify.js");
+    notifyPlatformOps({
+      subject: `[Tescommerce] Stripe webhook failed — ${event.type}`,
+      html: `<p>Event <code>${event.id}</code> (${event.type}) failed: ${msg.slice(0, 500)}</p>`,
+      text: `${event.type} ${event.id}: ${msg.slice(0, 300)}`,
+      dedupeKey: `stripe-${event.id}`,
+    }).catch(() => {});
     return c.text("Handler error", 500);
   }
 
   return c.json({ received: true });
 });
+
+export async function replayStripeWebhook(eventId: string) {
+  if (!isStripeConfigured()) throw new Error("Stripe not configured");
+  const event = await getStripe().events.retrieve(eventId);
+  await handleStripeEvent(event);
+  await prisma.stripeWebhookEvent.upsert({
+    where: { id: event.id },
+    create: { id: event.id, type: event.type, processed: true },
+    update: { processed: true, error: null },
+  });
+  return { id: event.id, type: event.type };
+}
 
 async function handleStripeEvent(event: Stripe.Event) {
   if (event.type === "checkout.session.completed") {
@@ -574,8 +593,13 @@ merchantStripe.get("/mor-balance", async (c) => {
   }
   const { tenant } = await requireTenant(c.get("session"));
   const balance = await getMerchantBalance(tenant.id);
+  const kyc = await prisma.merchantKyc.findUnique({
+    where: { tenantId: tenant.id },
+    select: { status: true },
+  });
   return c.json({
     paymentModel: "mor",
+    kycStatus: kyc?.status ?? null,
     currency: balance.currency,
     storefrontCurrency: balance.storefrontCurrency,
     payoutCurrency: balance.payoutCurrency,
@@ -606,6 +630,16 @@ merchantStripe.post("/mor-payout-request", async (c) => {
     return c.json({ error: "Not available in Connect mode" }, 404);
   }
   const { tenant } = await requireTenant(c.get("session"));
+  const kyc = await prisma.merchantKyc.findUnique({
+    where: { tenantId: tenant.id },
+    select: { status: true },
+  });
+  if (kyc?.status !== MerchantKycStatus.APPROVED) {
+    return c.json(
+      { error: "Payout opens after Tescommerce approves your passport check." },
+      403
+    );
+  }
   const body = (await c.req.json<{ amountCents?: number; note?: string }>()) as {
     amountCents?: number;
     note?: string;

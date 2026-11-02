@@ -1,5 +1,5 @@
 import { Link, useSearchParams } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { formatMoney } from "@ugclab/i18n";
 import { api } from "@/api/client";
@@ -25,6 +25,20 @@ export default function TenantsPage() {
   const q = params.get("q") ?? "";
   const status = params.get("status") ?? "";
 
+  useEffect(() => {
+    if (params.toString()) return;
+    const saved = localStorage.getItem("platform-tenants-filter");
+    if (saved) setParams(new URLSearchParams(saved), { replace: true });
+    // Restore once when the page opens with no query.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const value = params.toString();
+    if (value) localStorage.setItem("platform-tenants-filter", value);
+    else localStorage.removeItem("platform-tenants-filter");
+  }, [params]);
+
   const { data, isLoading } = useQuery({
     queryKey: ["tenants", params.toString()],
     queryFn: () => {
@@ -48,6 +62,8 @@ export default function TenantsPage() {
     orders30d: number;
     currency: string;
     storefrontUrl: string;
+    kycStatus?: "PENDING" | "APPROVED" | "REJECTED" | null;
+    acquisitionSource?: string | null;
   }[];
 
   return (
@@ -173,6 +189,10 @@ export default function TenantsPage() {
                   <td className="px-6 py-4">
                     <p className="font-medium">{t.name}</p>
                     <p className="font-mono text-xs text-slate-400">{t.slug}</p>
+                    <p className="mt-1 text-xs font-semibold text-slate-500">
+                      Passport {t.kycStatus ?? "not submitted"}
+                      {t.acquisitionSource ? ` · ${t.acquisitionSource}` : ""}
+                    </p>
                   </td>
                   <td className="px-6 py-4">{t.owner.email}</td>
                   <td className="px-6 py-4 text-slate-600">{t.plan?.name ?? "—"}</td>

@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import type { HomeBlock } from "@ugclab/tenant/store-theme";
+import { storeApi } from "@/api/client";
 import { storeHref } from "@/lib/store-href";
 
 function dismissKey(tenantId: string) {
@@ -41,6 +42,10 @@ export function DiscountPopup({
   nav: { locale: string; tenant: string };
 }) {
   const [visible, setVisible] = useState(false);
+  const [email, setEmail] = useState("");
+  const [pending, setPending] = useState(false);
+  const [done, setDone] = useState<"in" | "confirm" | null>(null);
+  const [err, setErr] = useState<string | null>(null);
   const delayMs = (block.popupDelaySec ?? 3) * 1000;
 
   useEffect(() => {
@@ -51,9 +56,72 @@ export function DiscountPopup({
 
   if (!visible) return null;
 
+  async function subscribe(e: FormEvent) {
+    e.preventDefault();
+    setPending(true);
+    setErr(null);
+    try {
+      const res = await storeApi.newsletterSubscribe(nav.tenant, email);
+      setDone(res.pendingConfirm ? "confirm" : "in");
+      localStorage.setItem(dismissKey(tenantId), "1");
+    } catch (ex) {
+      setErr(ex instanceof Error ? ex.message : "Could not sign up");
+    } finally {
+      setPending(false);
+    }
+  }
+
   function dismiss() {
     localStorage.setItem(dismissKey(tenantId), "1");
     setVisible(false);
+  }
+
+  if (block.collectEmail) {
+    return (
+      <div className="store-discount-popup-overlay" role="presentation" onClick={dismiss}>
+        <div
+          className="store-signup-popup"
+          role="dialog"
+          aria-modal="true"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button type="button" className="store-signup-popup-close" onClick={dismiss} aria-label="Close">
+            ✕
+          </button>
+          <div className="store-signup-popup-media">
+            {block.imageUrl ? <img src={block.imageUrl} alt="" /> : null}
+          </div>
+          <form className="store-signup-popup-form" onSubmit={(e) => void subscribe(e)}>
+            {block.title ? <h2>{block.title}</h2> : null}
+            {done ? (
+              <p className="mt-4 text-sm text-zinc-700">
+                {done === "confirm"
+                  ? "Check your inbox to confirm."
+                  : block.discountCode
+                    ? `You're in. Your code is ${block.discountCode}.`
+                    : "You're on the list."}
+              </p>
+            ) : (
+              <>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Enter your Email"
+                  aria-label="Email"
+                />
+                <button type="submit" disabled={pending}>
+                  {pending ? "…" : block.ctaLabel || "Sign up"}
+                </button>
+                {block.body ? <p className="store-signup-popup-fine">{block.body}</p> : null}
+                {err ? <p className="mt-2 text-xs text-red-600">{err}</p> : null}
+              </>
+            )}
+          </form>
+        </div>
+      </div>
+    );
   }
 
   return (

@@ -31,7 +31,8 @@ export type PlatformPermission =
   | "blacklist:write"
   | "announcements:write"
   | "staff:invite"
-  | "outreach:send";
+  | "outreach:send"
+  | "mailbox:write";
 
 const ROLE_PERMISSIONS: Record<string, PlatformPermission[] | "*"> = {
   SUPER_ADMIN: "*",
@@ -54,6 +55,7 @@ const ROLE_PERMISSIONS: Record<string, PlatformPermission[] | "*"> = {
     "blacklist:write",
     "announcements:write",
     "staff:invite",
+    "mailbox:write",
   ],
   PLATFORM_SUPPORT: [
     "dashboard:read",
@@ -66,6 +68,7 @@ const ROLE_PERMISSIONS: Record<string, PlatformPermission[] | "*"> = {
     "users:impersonate",
     "moderation:write",
     "audit:read",
+    "mailbox:write",
   ],
   PLATFORM_FINANCE: [
     "dashboard:read",

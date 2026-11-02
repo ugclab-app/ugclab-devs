@@ -8,6 +8,7 @@ export const storeLocaleLabels: Record<string, string> = {
   ky: "Кыргызча",
   kk: "Қазақша",
   uz: "Oʻzbekcha",
+  tr: "Türkçe",
 };
 
 export function localeLabel(code: string): string {

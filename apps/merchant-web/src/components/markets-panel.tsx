@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import { useAuth } from "@/context/auth";
 import { FormAlert } from "@/components/form-alert";
@@ -76,6 +77,7 @@ export function MarketsPanel() {
     return next;
   });
   const [markets, setMarkets] = useState<MarketRow[]>(() => parseMarkets(s?.markets));
+  const { data: fx } = useQuery({ queryKey: ["fx-rates"], queryFn: () => api.fxRates() });
   const [pending, setPending] = useState(false);
   const [alert, setAlert] = useState<{ ok?: boolean; message?: string }>({});
 
@@ -153,6 +155,35 @@ export function MarketsPanel() {
             </label>
           ))}
         </div>
+      </SettingsPanelShell>
+
+      <SettingsPanelShell title={ta("settingsPage.fxRatesTitle")}>
+        {fx ? (
+          <>
+            <p className="mb-3 text-xs text-zinc-500">
+              {fx.live && fx.fetchedAt
+                ? ta("settingsPage.fxRatesUpdated", {
+                    date: new Date(fx.fetchedAt).toLocaleString(),
+                    source: fx.source ?? "",
+                  })
+                : ta("settingsPage.fxRatesFallback")}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <span className="py-1.5 text-sm font-medium text-zinc-600">
+                {ta("settingsPage.fxRatesPer", { base: fx.baseCurrency })}
+              </span>
+              {Object.entries(fx.rates).map(([code, rate]) => (
+                <span
+                  key={code}
+                  className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 font-mono text-sm"
+                >
+                  {rate >= 100 ? rate.toFixed(0) : rate.toFixed(4)} {code}
+                </span>
+              ))}
+            </div>
+            <p className="mt-3 text-xs text-zinc-500">{ta("settingsPage.fxFixedPricesHint")}</p>
+          </>
+        ) : null}
       </SettingsPanelShell>
 
       <SettingsPanelShell

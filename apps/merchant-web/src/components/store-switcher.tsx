@@ -120,6 +120,11 @@ export function StoreSwitcher() {
 
       {open ? (
         <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg shadow-zinc-900/10">
+          {stores.length > 1 ? (
+            <p className="border-b border-zinc-100 px-3 py-2 text-[11px] text-zinc-500">
+              Agency mode: switch between {stores.length} stores on this account.
+            </p>
+          ) : null}
           <div className="max-h-64 overflow-y-auto p-1.5">
             {stores.map((s) => {
               const active = s.id === activeId;

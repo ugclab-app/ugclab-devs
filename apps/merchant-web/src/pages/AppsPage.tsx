@@ -247,6 +247,18 @@ export default function AppsPage() {
     >
       <FormAlert ok={alert.ok} message={alert.message} />
       {q.isLoading ? <p className="text-sm text-zinc-500">Loading…</p> : null}
+      {q.isError ? (
+        <div className="mt-2 flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <span>Could not load apps: {q.error instanceof Error ? q.error.message : "request failed"}</span>
+          <button
+            type="button"
+            onClick={() => q.refetch()}
+            className="rounded-md border border-red-300 bg-white px-2 py-0.5 text-xs font-medium hover:bg-red-100"
+          >
+            Retry
+          </button>
+        </div>
+      ) : null}
 
       {purchases.length ? (
         <section className="mt-4 space-y-3">
@@ -321,6 +333,7 @@ export default function AppsPage() {
                           primary={preset.preview.primary}
                           secondary={preset.preview.secondary}
                           background={preset.preview.background}
+                          themeId={theme.id}
                         />
                       ) : null}
                       <span className="theme-gallery-card-badge">
@@ -379,6 +392,7 @@ export default function AppsPage() {
                     secondary={selectedPreset.preview.secondary}
                     background={selectedPreset.preview.background}
                     size="detail"
+                    themeId={selectedTheme.id}
                   />
                 </div>
               )}

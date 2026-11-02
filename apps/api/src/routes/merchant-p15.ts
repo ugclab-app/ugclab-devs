@@ -10,11 +10,17 @@ import {
 } from "../lib/custom-domain.js";
 import { dnsInstructions } from "../lib/custom-domain-dns.js";
 import {
+  createEntriPurchaseSession,
+  entriSoldDomainToUser,
   getDomainShopConfig,
   getPurchaseLinksForDomain,
+  isEntriSellConfigured,
   searchDomains,
 } from "../lib/domain-shop.js";
-import { verifyMerchantDomainDns } from "../lib/merchant-domain-verify.js";
+import {
+  attachEntriPurchasedDomain,
+  verifyMerchantDomainDns,
+} from "../lib/merchant-domain-verify.js";
 import { assertTenantCanAddDomain } from "../lib/platform-domain-policy.js";
 
 import { useOwnerOnlyDomainGuards } from "../middleware/merchant-guards.js";
@@ -150,6 +156,65 @@ p15.get("/domains/purchase-links", async (c) => {
   await requireTenant(c.get("session"));
   const domain = String(c.req.query("domain") ?? "");
   return c.json(getPurchaseLinksForDomain(domain));
+});
+
+p15.post("/domains/entri-session", async (c) => {
+  const { tenant } = await requireTenant(c.get("session"));
+  if (!isEntriSellConfigured()) {
+    return c.json(
+      {
+        error:
+          "In-app domain purchase needs ENTRI_APPLICATION_ID and ENTRI_CLIENT_SECRET on the server.",
+      },
+      503
+    );
+  }
+  const body = await c.req.json<{ domain?: string }>().catch(() => ({ domain: "" }));
+  try {
+    const session = await createEntriPurchaseSession({
+      userId: tenant.id,
+      domain: String(body.domain ?? ""),
+    });
+    return c.json(session);
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : "Entri session failed" }, 400);
+  }
+});
+
+p15.post("/domains/entri-complete", async (c) => {
+  const { tenant, session } = await requireTenant(c.get("session"));
+  const body = await c.req.json<{ domain?: string }>().catch(() => ({ domain: "" }));
+  const domain = String(body.domain ?? "");
+  const sold = await entriSoldDomainToUser(tenant.id, domain);
+  if (sold.free) {
+    return c.json(
+      { error: "Tescommerce does not pay for domains. Buy it with your own card." },
+      400
+    );
+  }
+  if (!sold.sold) {
+    return c.json(
+      {
+        pending: true,
+        error: "Entri has not confirmed this purchase yet. Try again in a minute.",
+      },
+      409
+    );
+  }
+  const user = await prisma.user.findUnique({
+    where: { id: session.sub },
+    select: { email: true },
+  });
+  try {
+    const attached = await attachEntriPurchasedDomain(
+      tenant.id,
+      domain,
+      user?.email ?? session.sub
+    );
+    return c.json({ ok: true, ...attached });
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : "Could not attach domain" }, 400);
+  }
 });
 
 const RESERVED_HANDLES = new Set([

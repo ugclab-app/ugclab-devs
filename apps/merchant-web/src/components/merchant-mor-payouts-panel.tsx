@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { formatMoney } from "@ugclab/i18n";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
@@ -14,13 +15,51 @@ export function MerchantMorPayoutsPanel() {
   const [alert, setAlert] = useState<{ ok?: boolean; message?: string }>({});
   const [pending, setPending] = useState(false);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ["mor-balance"],
     queryFn: () => api.morBalance(),
+    retry: false,
+  });
+  const kycQ = useQuery({
+    queryKey: ["merchant-kyc"],
+    queryFn: () => api.merchantKyc(),
+    retry: false,
   });
 
-  if (isLoading || !data) {
+  const kycStatus = kycQ.data?.kyc?.status ?? data?.kycStatus ?? null;
+  const kycApproved = kycStatus === "APPROVED";
+  const kycMessage =
+    kycStatus === "PENDING"
+      ? ta("morPayouts.kycPending")
+      : kycStatus === "REJECTED"
+        ? ta("morPayouts.kycRejected")
+        : kycStatus === "APPROVED"
+          ? null
+          : kycQ.isSuccess
+            ? ta("morPayouts.kycMissing")
+            : null;
+
+  if (isLoading) {
     return <p className="text-sm text-zinc-500">{ta("morPayouts.loading")}</p>;
+  }
+
+  if (isError || !data) {
+    return (
+      <section className="mt-6 space-y-3 rounded-xl border border-violet-100 bg-violet-50/40 p-5">
+        <h3 className="text-sm font-semibold text-zinc-900">{ta("morPayouts.title")}</h3>
+        <FormAlert
+          message={error instanceof Error ? error.message : ta("morPayouts.requestFail")}
+        />
+        {kycMessage ? (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+            {kycMessage}{" "}
+            <Link to="/payments#passport-kyc" className="font-semibold underline">
+              {ta("dashboard.kycCta")}
+            </Link>
+          </p>
+        ) : null}
+      </section>
+    );
   }
 
   const currency = data.currency;
@@ -81,6 +120,15 @@ export function MerchantMorPayoutsPanel() {
         </ul>
         <p className="mt-2 text-xs text-zinc-500">{ta("morPayouts.methodSla")}</p>
       </div>
+
+      {kycMessage ? (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+          {kycMessage}{" "}
+          <Link to="/payments#passport-kyc" className="font-semibold underline">
+            {ta("dashboard.kycCta")}
+          </Link>
+        </p>
+      ) : null}
 
       <FormAlert ok={alert.ok} message={alert.message} />
 
@@ -155,6 +203,7 @@ export function MerchantMorPayoutsPanel() {
           type="button"
           disabled={
             pending ||
+            !kycApproved ||
             data.availableCents <= 0 ||
             (data.payoutMinCents != null && data.availableCents < data.payoutMinCents)
           }

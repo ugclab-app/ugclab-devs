@@ -8,7 +8,9 @@ export async function sendCustomerOrderReceipt(orderId: string) {
     include: {
       customer: true,
       items: true,
-      digitalDownloads: true,
+      digitalDownloads: {
+        include: { product: { select: { digitalAsset: { select: { lessons: true } } } } },
+      },
       tenant: { include: { settings: true } },
     },
   });
@@ -25,11 +27,28 @@ export async function sendCustomerOrderReceipt(orderId: string) {
 
   const base = process.env.STOREFRONT_URL ?? "http://localhost:3002";
   const downloadLinks = order.digitalDownloads
-    .map(
-      (d) =>
-        `<a href="${base}/api/store/download/${d.token}?tenant=${order.tenant.slug}">Download</a>`
-    )
+    .map((d) => {
+      const link = `<a href="${base}/api/store/download/${d.token}?tenant=${order.tenant.slug}">Download</a>`;
+      const key = d.licenseKey
+        ? ` — License key: <code>${d.licenseKey.replace(/</g, "&lt;")}</code>`
+        : "";
+      return `${link}${key}`;
+    })
     .join("<br/>");
+  const licenseKeys = order.digitalDownloads
+    .filter((d) => d.licenseKey)
+    .map((d) => d.licenseKey!)
+    .join(", ");
+  const hasLessons = order.digitalDownloads.some((d) => {
+    const raw = d.product.digitalAsset?.lessons;
+    return Array.isArray(raw) && raw.length > 0;
+  });
+  const libraryLink = hasLessons
+    ? `<a href="${base}/library?tenant=${order.tenant.slug}">Open your Library</a>`
+    : "";
+  const tip = order.tipAmount > 0 ? formatMoney(order.tipAmount, order.currency) : "";
+  const storeCredit =
+    order.storeCreditAmount > 0 ? formatMoney(order.storeCreditAmount, order.currency) : "";
 
   const vars: Record<string, string> = {
     orderNumber: order.orderNumber,
@@ -38,6 +57,10 @@ export async function sendCustomerOrderReceipt(orderId: string) {
     total,
     items: itemsList,
     downloads: downloadLinks,
+    licenseKeys,
+    library: libraryLink,
+    tip,
+    storeCredit,
   };
 
   const defaultSubject = `Receipt for order #${order.orderNumber} — ${order.tenant.name}`;
@@ -47,8 +70,12 @@ export async function sendCustomerOrderReceipt(orderId: string) {
       <p><strong>Order:</strong> #${order.orderNumber}</p>
       <p><strong>Status:</strong> ${order.status}</p>
       <p><strong>Items:</strong><br/>${itemsList}</p>
+      ${tip ? `<p><strong>Tip:</strong> ${tip}</p>` : ""}
+      ${storeCredit ? `<p><strong>Store credit applied:</strong> −${storeCredit}</p>` : ""}
       <p><strong>Total:</strong> ${total}</p>
       ${downloadLinks ? `<p><strong>Downloads:</strong><br/>${downloadLinks}</p>` : ""}
+      ${licenseKeys ? `<p><strong>License keys:</strong> ${licenseKeys.replace(/</g, "&lt;")}</p>` : ""}
+      ${libraryLink ? `<p><strong>Course access:</strong> ${libraryLink}</p>` : ""}
     `;
 
   const subjectTemplate =

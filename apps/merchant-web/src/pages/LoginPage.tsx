@@ -1,15 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api, type TenantDto, type UserDto } from "@/api/client";
 import { useAuth } from "@/context/auth";
 import { Button, Input } from "@ugclab/ui";
 import { useAdminT } from "@/hooks/use-admin-t";
+import { TurnstileWidget, type TurnstileWidgetHandle } from "@/components/turnstile-widget";
 
 const platformUrl =
   import.meta.env.VITE_PLATFORM_URL ?? "http://localhost:3000";
 const API = (import.meta.env.VITE_API_URL ?? "/api").replace(/\/$/, "");
 const supportEmail =
   import.meta.env.VITE_SUPPORT_EMAIL ?? "info@tescommerce.com";
+const CAPTCHA_REQUIRED = "Please complete the security check";
 
 export default function LoginPage() {
   const { ta } = useAdminT();
@@ -28,12 +30,30 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(true);
   const [googleEnabled, setGoogleEnabled] = useState(false);
   const [magicToken, setMagicToken] = useState<string | null>(null);
+  const [turnstileSiteKey, setTurnstileSiteKey] = useState<string | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const turnstileRef = useRef<TurnstileWidgetHandle>(null);
+  // Only password/magic-link requests are captcha-gated; completing a magic link is not.
+  const captchaRequired = !!turnstileSiteKey && !(magicToken && needs2fa);
+  const captchaMissing = captchaRequired && !turnstileToken;
+
+  function resetTurnstile() {
+    if (!turnstileSiteKey) return;
+    turnstileRef.current?.reset();
+    setTurnstileToken(null);
+  }
 
   useEffect(() => {
     api
       .oauthProviders()
-      .then((r) => setGoogleEnabled(r.google === true))
-      .catch(() => setGoogleEnabled(false));
+      .then((r) => {
+        setGoogleEnabled(r.google === true);
+        setTurnstileSiteKey(r.turnstileSiteKey ?? null);
+      })
+      .catch(() => {
+        setGoogleEnabled(false);
+        setTurnstileSiteKey(null);
+      });
   }, []);
 
   useEffect(() => {
@@ -166,6 +186,10 @@ export default function LoginPage() {
       setError(ta("auth.enterEmailPassword"));
       return;
     }
+    if (captchaMissing) {
+      setError(CAPTCHA_REQUIRED);
+      return;
+    }
     setEmail(emailVal);
     setPassword(passwordVal);
     setLoading(true);
@@ -176,16 +200,20 @@ export default function LoginPage() {
         emailVal,
         passwordVal,
         totpCode || undefined,
-        rememberMe
+        rememberMe,
+        turnstileSiteKey ? turnstileToken : undefined
       );
       if ("requires2fa" in data && data.requires2fa) {
         setNeeds2fa(true);
         setError(null);
+        // The token was consumed by this request; the 2FA submit needs a new one.
+        resetTurnstile();
         return;
       }
       await finishLogin(data as { user: UserDto; tenant: TenantDto | null });
     } catch (err) {
       setError(err instanceof Error ? err.message : ta("auth.loginFailed"));
+      resetTurnstile();
     } finally {
       window.clearTimeout(slowTimer);
       setSlowHint(false);
@@ -201,13 +229,19 @@ export default function LoginPage() {
       setError(ta("auth.magicLinkNeedEmail"));
       return;
     }
+    if (turnstileSiteKey && !turnstileToken) {
+      setError(CAPTCHA_REQUIRED);
+      return;
+    }
     setMagicLoading(true);
     try {
-      await api.requestMagicLink(emailVal);
+      await api.requestMagicLink(emailVal, turnstileSiteKey ? turnstileToken : undefined);
       setInfo(ta("auth.magicLinkSent"));
     } catch (err) {
       setError(err instanceof Error ? err.message : ta("auth.loginFailed"));
     } finally {
+      // Tokens are single-use: always require a fresh challenge afterwards.
+      resetTurnstile();
       setMagicLoading(false);
     }
   }
@@ -241,7 +275,7 @@ export default function LoginPage() {
           <button
             type="button"
             onClick={() => void onMagicLink()}
-            disabled={magicLoading || loading}
+            disabled={magicLoading || loading || (!!turnstileSiteKey && !turnstileToken)}
             className="flex w-full items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-50"
           >
             {magicLoading ? ta("auth.magicLinkSending") : ta("auth.magicLink")}
@@ -346,7 +380,15 @@ export default function LoginPage() {
               autoFocus
             />
           ) : null}
-          <Button type="submit" className="w-full" disabled={loading}>
+          {turnstileSiteKey ? (
+            <TurnstileWidget
+              ref={turnstileRef}
+              siteKey={turnstileSiteKey}
+              onToken={setTurnstileToken}
+              className="flex justify-center"
+            />
+          ) : null}
+          <Button type="submit" className="w-full" disabled={loading || captchaMissing}>
             {loading
               ? ta("auth.signingIn")
               : needs2fa

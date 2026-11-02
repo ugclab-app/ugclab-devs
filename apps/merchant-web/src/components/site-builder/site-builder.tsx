@@ -9,6 +9,7 @@ import { createBlockWithVariant } from "./block-variants";
 import {
   PAGE_TEMPLATES,
   getStoreTheme,
+  themePageLayouts,
   type StoreThemePreset,
 } from "./store-themes";
 import { ThemeGalleryModal } from "./theme-gallery-modal";
@@ -199,41 +200,41 @@ export function SiteBuilder({
   }
 
   function applyStoreTheme(preset: StoreThemePreset) {
-    if (showProduct) {
-      if (
-        !window.confirm(
-          `Apply "${preset.label}" colors & header/footer to the store? Product page sections stay as they are (themes don’t include a product layout yet).`
-        )
-      ) {
-        return;
-      }
-      onPageStyleChange({
-        pageBgColor: preset.theme.pageBgColor,
-        blockGap: preset.theme.blockGap,
-        scrollAnimation: preset.theme.scrollAnimation,
-      });
-      onThemePresetApply?.(preset);
-      onShellChange?.(preset.theme);
-      return;
-    }
+    const pages = themePageLayouts(preset);
+    const enriched: StoreThemePreset = { ...preset, ...pages };
     if (
-      blocks.length > 0 &&
       !window.confirm(
-        `Apply "${preset.label}" theme? This replaces ${blocks.length} homepage blocks and updates colors & styles.`
+        `Use “${preset.label}” on this draft? It sets the homepage, product page, collection, cart, and 404. The design you have now stays under My themes. Buyers still see the live theme until you publish.`
       )
     ) {
       return;
     }
-    const nextBlocks = cloneBlocks(preset.homeBlocks);
-    resetHistory(nextBlocks);
-    setSelection(nextBlocks[0] ? { kind: "block", id: nextBlocks[0].id } : null);
     onPageStyleChange({
       pageBgColor: preset.theme.pageBgColor,
       blockGap: preset.theme.blockGap,
       scrollAnimation: preset.theme.scrollAnimation,
     });
-    onThemePresetApply?.(preset);
+    onThemePresetApply?.(enriched);
     onShellChange?.(preset.theme);
+    const nextBlocks =
+      builderTemplate === "product"
+        ? pages.productPageBlocks
+        : builderTemplate === "collection"
+          ? pages.collectionBlocks
+          : builderTemplate === "cart"
+            ? pages.cartBlocks
+            : builderTemplate === "notFound"
+              ? pages.notFoundBlocks
+              : preset.homeBlocks;
+    const cloned = cloneBlocks(nextBlocks);
+    resetHistory(cloned);
+    setSelection(
+      showProduct && previewProduct
+        ? { kind: "product", id: previewProduct.id }
+        : cloned[0]
+          ? { kind: "block", id: cloned[0].id }
+          : null
+    );
   }
 
   function duplicatePage() {
@@ -783,6 +784,8 @@ export function SiteBuilder({
           setInsertAtIndex(null);
         }}
         onPick={(templateId) => addSection(templateId)}
+        primaryColor={primaryColor}
+        storeName={storeName}
         insertHint={
           insertAtIndex != null
             ? `Section will be inserted at position ${insertAtIndex + 1}.`

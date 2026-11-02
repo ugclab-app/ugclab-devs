@@ -418,43 +418,56 @@ export default function MarketingPage() {
             </label>
 
             <div className="space-y-2">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-medium">Body (HTML)</p>
-                <div className="flex flex-wrap gap-1">
+              <p className="text-sm font-medium">Body (HTML)</p>
+              <div className="space-y-1.5 rounded-lg border border-zinc-100 bg-zinc-50/80 p-3">
+                <p className="text-xs font-medium text-zinc-600">Visual email blocks</p>
+                <div className="flex flex-wrap gap-1.5">
                   {(
                     [
-                      ["Heading", "<h1>Heading</h1>\n"],
-                      ["Text", "<p>Write your message.</p>\n"],
                       [
-                        "Button",
-                        '<p><a href="{{storeUrl}}" style="display:inline-block;background:#6d28d9;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none">Shop now</a></p>\n',
+                        "Hero heading",
+                        '<h1 style="font-size:28px;line-height:1.2;margin:0 0 16px">Your headline</h1>\n',
                       ],
                       [
-                        "Image",
-                        '<p><img src="https://" alt="" style="max-width:100%;height:auto" /></p>\n',
+                        "Paragraph",
+                        '<p style="margin:0 0 16px;line-height:1.6">Write your message here.</p>\n',
+                      ],
+                      [
+                        "CTA button",
+                        '<p style="margin:24px 0"><a href="{{store_url}}" style="display:inline-block;background:#6d28d9;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">Shop now</a></p>\n',
+                      ],
+                      [
+                        "Divider",
+                        '<hr style="border:none;border-top:1px solid #e4e4e7;margin:24px 0" />\n',
+                      ],
+                      [
+                        "Product grid",
+                        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0"><tr><td width="50%" style="padding:8px;text-align:center;background:#fafafa;border:1px dashed #d4d4d8">Product 1<br/><small>Image · Title · Price</small></td><td width="50%" style="padding:8px;text-align:center;background:#fafafa;border:1px dashed #d4d4d8">Product 2<br/><small>Image · Title · Price</small></td></tr></table>\n',
                       ],
                     ] as const
                   ).map(([label, html]) => (
                     <button
                       key={label}
                       type="button"
-                      className="rounded-md border border-violet-200 bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-800"
+                      className="rounded-md border border-violet-200 bg-white px-2.5 py-1 text-[11px] font-medium text-violet-800 hover:bg-violet-50"
                       onClick={() => setBodyHtml((prev) => `${prev}${html}`)}
                     >
                       {label}
                     </button>
                   ))}
-                  {VARS.map((v) => (
-                    <button
-                      key={v}
-                      type="button"
-                      className="rounded-md border border-zinc-200 bg-white px-1.5 py-0.5 font-mono text-[10px] text-zinc-600 hover:border-violet-300 hover:text-violet-700"
-                      onClick={() => insertVar(v)}
-                    >
-                      {v}
-                    </button>
-                  ))}
                 </div>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {VARS.map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    className="rounded-md border border-zinc-200 bg-white px-1.5 py-0.5 font-mono text-[10px] text-zinc-600 hover:border-violet-300 hover:text-violet-700"
+                    onClick={() => insertVar(v)}
+                  >
+                    {v}
+                  </button>
+                ))}
               </div>
               <div className="grid gap-3 lg:grid-cols-2">
                 <textarea

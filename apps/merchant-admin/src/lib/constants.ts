@@ -22,6 +22,7 @@ export const LOCALES = [
   { value: "ky", label: "Кыргызча" },
   { value: "kk", label: "Қазақша" },
   { value: "uz", label: "Oʻzbekcha" },
+  { value: "tr", label: "Türkçe" },
 ] as const;
 
 export const TIMEZONES = [

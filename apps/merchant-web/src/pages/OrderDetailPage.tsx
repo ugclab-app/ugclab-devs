@@ -27,6 +27,7 @@ function PartialRefundForm({
   onDone: () => void;
 }) {
   const [selected, setSelected] = useState<Record<string, number>>({});
+  const [toStoreCredit, setToStoreCredit] = useState(false);
 
   async function submit() {
     const lineItems = Object.entries(selected)
@@ -36,9 +37,19 @@ function PartialRefundForm({
       alert("Select at least one line");
       return;
     }
-    if (!confirm("Issue partial refund in Stripe for selected items?")) return;
+    if (
+      !confirm(
+        toStoreCredit
+          ? "Refund selected items to the customer's store credit?"
+          : "Issue partial refund in Stripe for selected items?"
+      )
+    )
+      return;
     try {
-      await api.refundOrder(orderId, { lineItems });
+      await api.refundOrder(orderId, {
+        lineItems,
+        ...(toStoreCredit ? { toStoreCredit: true } : {}),
+      });
       onDone();
       alert("Partial refund submitted");
     } catch (e) {
@@ -64,6 +75,15 @@ function PartialRefundForm({
           <span className="text-zinc-500">{formatMoney(line.unitAmount * line.quantity, currency)}</span>
         </label>
       ))}
+      <label className="flex items-center gap-2 pt-2 text-xs text-zinc-700">
+        <input
+          type="checkbox"
+          checked={toStoreCredit}
+          onChange={(e) => setToStoreCredit(e.target.checked)}
+          className="rounded border-zinc-300"
+        />
+        Refund to store credit instead of card
+      </label>
       <button type="button" onClick={() => void submit()} className="ugclab-btn border border-red-200 bg-red-50 text-xs text-red-800 mt-2">
         Refund selected
       </button>
@@ -74,6 +94,8 @@ function PartialRefundForm({
 export default function OrderDetailPage() {
   const { id } = useParams<{ id: string }>();
   const qc = useQueryClient();
+  const [supplierError, setSupplierError] = useState<string | null>(null);
+  const [fullRefundToStoreCredit, setFullRefundToStoreCredit] = useState(false);
   const { data, isLoading } = useQuery({
     queryKey: ["order", id],
     queryFn: () => api.order(id!),
@@ -91,6 +113,7 @@ export default function OrderDetailPage() {
   const order = data.order as {
     id: string;
     orderNumber: string;
+    invoiceNumber?: string | null;
     status: OrderStatus;
     trackingNumber: string | null;
     buyerProtection?: boolean;
@@ -110,9 +133,18 @@ export default function OrderDetailPage() {
     shippingAddress1?: string | null;
     shippingAddress2?: string | null;
     shippingCity?: string | null;
+    shippingRegion?: string | null;
     shippingPostal?: string | null;
+    shippingPhone?: string | null;
     shippingCountry?: string | null;
     shippingName?: string | null;
+    supplierOrders?: {
+      id: string;
+      provider: string;
+      externalOrderId: string | null;
+      status: string;
+      error: string | null;
+    }[];
     tags?: string[];
     items: {
       id: string;
@@ -142,6 +174,16 @@ export default function OrderDetailPage() {
     fulfillmentMethod?: string | null;
     pickupReadyAt?: string | null;
     pickupWarehouseId?: string | null;
+    loyaltyPointsSpent?: number;
+    loyaltyDiscountAmount?: number;
+    tipAmount?: number | null;
+    storeCreditAmount?: number | null;
+    customFields?: Record<string, string> | null;
+    digitalDownloads?: Array<{
+      id: string;
+      licenseKey: string | null;
+      product: { title: string } | null;
+    }>;
   };
 
   const paymentModel = (data as { paymentModel?: string }).paymentModel ?? "mor";
@@ -163,6 +205,7 @@ export default function OrderDetailPage() {
         { label: `#${order.orderNumber}` },
       ]}
       title={`Order #${order.orderNumber}`}
+      description={order.invoiceNumber ? `Invoice ${order.invoiceNumber}` : undefined}
       actions={
         <div className="flex flex-wrap gap-2">
           {order.status === "PENDING" ? (
@@ -223,29 +266,49 @@ export default function OrderDetailPage() {
             Packing slip
           </button>
           {order.status === "PAID" || order.status === "FULFILLED" ? (
-            <button
-              type="button"
-              onClick={async () => {
-                if (
-                  !confirm(
-                    mor && order.stripePaymentId
-                      ? "Refund in Stripe and mark order as refunded?"
-                      : "Mark this order as refunded?"
+            <span className="inline-flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  if (
+                    !confirm(
+                      fullRefundToStoreCredit
+                        ? "Refund the full order to the customer's store credit and mark as refunded?"
+                        : mor && order.stripePaymentId
+                          ? "Refund in Stripe and mark order as refunded?"
+                          : "Mark this order as refunded?"
+                    )
                   )
-                )
-                  return;
-                try {
-                  await api.refundOrder(order.id);
-                  await qc.invalidateQueries({ queryKey: ["order", id] });
-                  await qc.invalidateQueries({ queryKey: ["orders"] });
-                } catch (e) {
-                  alert(e instanceof Error ? e.message : "Refund failed");
-                }
-              }}
-              className="ugclab-btn border border-red-200 bg-red-50 text-sm text-red-800"
-            >
-              {mor && order.stripePaymentId ? "Refund (Stripe)" : "Refund"}
-            </button>
+                    return;
+                  try {
+                    await api.refundOrder(
+                      order.id,
+                      fullRefundToStoreCredit ? { toStoreCredit: true } : undefined
+                    );
+                    await qc.invalidateQueries({ queryKey: ["order", id] });
+                    await qc.invalidateQueries({ queryKey: ["orders"] });
+                  } catch (e) {
+                    alert(e instanceof Error ? e.message : "Refund failed");
+                  }
+                }}
+                className="ugclab-btn border border-red-200 bg-red-50 text-sm text-red-800"
+              >
+                {fullRefundToStoreCredit
+                  ? "Refund (store credit)"
+                  : mor && order.stripePaymentId
+                    ? "Refund (Stripe)"
+                    : "Refund"}
+              </button>
+              <label className="flex items-center gap-1.5 text-xs text-zinc-600">
+                <input
+                  type="checkbox"
+                  checked={fullRefundToStoreCredit}
+                  onChange={(e) => setFullRefundToStoreCredit(e.target.checked)}
+                  className="rounded border-zinc-300"
+                />
+                To store credit
+              </label>
+            </span>
           ) : null}
           <button
             type="button"
@@ -407,6 +470,35 @@ export default function OrderDetailPage() {
               ))}
             </tbody>
           </table>
+          {order.digitalDownloads && order.digitalDownloads.some((d) => d.licenseKey) ? (
+            <div className="border-t border-zinc-100 px-6 py-4 text-sm">
+              <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                License keys
+              </p>
+              <ul className="mt-2 space-y-1.5">
+                {order.digitalDownloads
+                  .filter((d) => d.licenseKey)
+                  .map((d) => (
+                    <li key={d.id} className="flex flex-wrap gap-2">
+                      <span className="text-zinc-600">
+                        {d.product?.title ?? "Digital"}:
+                      </span>
+                      <code className="rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-xs">
+                        {d.licenseKey}
+                      </code>
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          ) : null}
+          {(order.loyaltyPointsSpent ?? 0) > 0 ? (
+            <p className="border-t border-zinc-100 px-6 py-3 text-xs text-zinc-500">
+              Loyalty: −{order.loyaltyPointsSpent} pts
+              {order.loyaltyDiscountAmount
+                ? ` (${formatMoney(order.loyaltyDiscountAmount, data.currency)})`
+                : ""}
+            </p>
+          ) : null}
         </section>
         <div className="space-y-6">
           <section className="admin-card p-6">
@@ -420,6 +512,26 @@ export default function OrderDetailPage() {
             <p className="mt-4 text-xl font-bold">
               {formatMoney(order.totalAmount, data.currency)}
             </p>
+            {(order.tipAmount ?? 0) > 0 || (order.storeCreditAmount ?? 0) > 0 ? (
+              <dl className="mt-3 space-y-1.5 border-t border-zinc-100 pt-3 text-xs text-zinc-600">
+                {(order.tipAmount ?? 0) > 0 ? (
+                  <div className="flex justify-between">
+                    <dt>Tip</dt>
+                    <dd className="font-medium text-zinc-800">
+                      {formatMoney(order.tipAmount ?? 0, data.currency)}
+                    </dd>
+                  </div>
+                ) : null}
+                {(order.storeCreditAmount ?? 0) > 0 ? (
+                  <div className="flex justify-between">
+                    <dt>Store credit</dt>
+                    <dd className="font-medium text-zinc-800">
+                      −{formatMoney(order.storeCreditAmount ?? 0, data.currency)}
+                    </dd>
+                  </div>
+                ) : null}
+              </dl>
+            ) : null}
             {mor ? (
               <dl className="mt-4 space-y-2 border-t border-zinc-100 pt-4 text-xs text-zinc-600">
                 <div className="flex justify-between">
@@ -511,6 +623,57 @@ export default function OrderDetailPage() {
               </p>
             ) : null}
           </section>
+          {order.customFields && Object.keys(order.customFields).length > 0 ? (
+            <section className="admin-card p-6 text-sm">
+              <h3 className="font-semibold">Checkout fields</h3>
+              <dl className="mt-3 space-y-2 text-xs text-zinc-600">
+                {Object.entries(order.customFields).map(([key, value]) => (
+                  <div key={key} className="flex justify-between gap-3">
+                    <dt className="shrink-0 text-zinc-500">{key}</dt>
+                    <dd className="whitespace-pre-wrap break-words text-right font-medium text-zinc-800">
+                      {value || "—"}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          ) : null}
+          {order.supplierOrders?.length ? (
+            <section className="admin-card p-6 text-sm">
+              <h3 className="font-semibold">Supplier</h3>
+              {supplierError ? <p className="mt-2 text-xs text-red-700">{supplierError}</p> : null}
+              <ul className="mt-3 space-y-3">
+                {order.supplierOrders.map((row) => (
+                  <li key={row.id} className="rounded-xl border border-zinc-100 p-3">
+                    <p className="font-medium text-zinc-900">
+                      {row.provider} · {row.status}
+                    </p>
+                    {row.externalOrderId ? (
+                      <p className="mt-1 font-mono text-xs text-zinc-600">Their order: {row.externalOrderId}</p>
+                    ) : null}
+                    {row.error ? <p className="mt-1 text-xs text-red-700">{row.error}</p> : null}
+                    {row.status !== "SUBMITTED" ? (
+                      <button
+                        type="button"
+                        className="ugclab-btn mt-2 border border-zinc-200 bg-white text-xs"
+                        onClick={async () => {
+                          setSupplierError(null);
+                          try {
+                            await api.pushSupplierOrder(order.id);
+                            void qc.invalidateQueries({ queryKey: ["order", id] });
+                          } catch (err) {
+                            setSupplierError(err instanceof Error ? err.message : "Could not send the order.");
+                          }
+                        }}
+                      >
+                        Send again
+                      </button>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
           <OrderFulfillmentForm
             orderId={order.id}
             trackingNumber={order.trackingNumber}
@@ -544,6 +707,8 @@ export default function OrderDetailPage() {
               shippingAddress1: order.shippingAddress1,
               shippingAddress2: order.shippingAddress2,
               shippingCity: order.shippingCity,
+              shippingRegion: order.shippingRegion,
+              shippingPhone: order.shippingPhone,
               shippingPostal: order.shippingPostal,
               shippingCountry: order.shippingCountry,
             }}

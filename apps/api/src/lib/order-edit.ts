@@ -93,6 +93,10 @@ export async function editOrderShipping(
           : order.shippingAddress2,
       shippingCity:
         body.shippingCity != null ? String(body.shippingCity) : order.shippingCity,
+      shippingRegion:
+        body.shippingRegion != null ? String(body.shippingRegion) : order.shippingRegion,
+      shippingPhone:
+        body.shippingPhone != null ? String(body.shippingPhone) : order.shippingPhone,
       shippingPostal:
         body.shippingPostal != null
           ? String(body.shippingPostal)

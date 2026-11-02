@@ -35,9 +35,10 @@ export function BuilderShellInspector({
           Show announcement
         </label>
         <label className="block text-sm">
-          Message
-          <input
+          Messages
+          <textarea
             className="ugclab-input mt-1"
+            rows={4}
             value={theme.announcementText ?? ""}
             onChange={(e) =>
               patch({
@@ -45,8 +46,11 @@ export function BuilderShellInspector({
                 announcementEnabled: true,
               })
             }
-            placeholder="Free shipping this weekend!"
+            placeholder={"Free shipping\nMore pairs. More laughs."}
           />
+          <span className="mt-1 block text-xs text-zinc-500">
+            One phrase per line. Two or more scroll across the bar.
+          </span>
         </label>
         <label className="block text-sm">
           Background

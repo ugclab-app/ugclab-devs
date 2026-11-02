@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ColumnItem, FaqItem, FeatureItem, HomeBlock, PricingItem, TabItem } from "@ugclab/tenant/store-theme";
+import type { ColumnItem, FaqItem, FeatureItem, HeroSlide, HomeBlock, PricingItem, TabItem } from "@ugclab/tenant/store-theme";
 import { api } from "@/api/client";
 import { MediaPicker } from "@/components/media-picker";
 import { BLOCK_CATALOG } from "./block-catalog";
@@ -14,6 +14,63 @@ import {
 import { BlockStyleFields } from "./block-style-fields";
 import { LinkPathField } from "./link-picker";
 import { CatalogProductsInspector } from "./products-block-preview";
+
+function HeroSlidesEditor({
+  slides,
+  onChange,
+}: {
+  slides: HeroSlide[];
+  onChange: (slides: HeroSlide[]) => void;
+}) {
+  return (
+    <fieldset className="space-y-2">
+      <legend className="text-xs font-medium text-zinc-600">Slides</legend>
+      <p className="text-xs text-zinc-500">Two or more slides rotate on the cover. Each slide can have its own image and text.</p>
+      {slides.map((slide, index) => (
+        <div key={index} className="space-y-1 rounded-lg border border-zinc-200 p-2">
+          <input
+            className="ugclab-input text-xs"
+            placeholder="Image URL"
+            value={slide.imageUrl ?? ""}
+            onChange={(e) =>
+              onChange(slides.map((item, i) => (i === index ? { ...item, imageUrl: e.target.value } : item)))
+            }
+          />
+          <input
+            className="ugclab-input text-xs"
+            placeholder="Title"
+            value={slide.title ?? ""}
+            onChange={(e) =>
+              onChange(slides.map((item, i) => (i === index ? { ...item, title: e.target.value } : item)))
+            }
+          />
+          <input
+            className="ugclab-input text-xs"
+            placeholder="Subtitle"
+            value={slide.subtitle ?? ""}
+            onChange={(e) =>
+              onChange(slides.map((item, i) => (i === index ? { ...item, subtitle: e.target.value } : item)))
+            }
+          />
+          <button
+            type="button"
+            className="text-xs text-red-600"
+            onClick={() => onChange(slides.filter((_, i) => i !== index))}
+          >
+            Remove slide
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        className="text-xs font-medium text-violet-700"
+        onClick={() => onChange([...slides, { title: "", subtitle: "", imageUrl: "" }])}
+      >
+        Add slide
+      </button>
+    </fieldset>
+  );
+}
 
 export function BlockInspector({
   block,
@@ -175,7 +232,7 @@ export function BlockInspector({
           />
           {block.type === "discount_popup" ? (
             <label className="block text-xs">
-              Body
+              {block.collectEmail ? "Fine print" : "Body"}
               <textarea
                 className="ugclab-input mt-1 text-sm"
                 rows={2}
@@ -246,11 +303,20 @@ export function BlockInspector({
             value={block.ctaLabel ?? ""}
             onChange={(ctaLabel) => onChange({ ctaLabel })}
           />
-          <LinkPathField
-            value={block.ctaPath ?? ""}
-            onChange={(ctaPath) => onChange({ ctaPath })}
-          />
+          {block.type === "discount_popup" && block.collectEmail ? null : (
+            <LinkPathField
+              value={block.ctaPath ?? ""}
+              onChange={(ctaPath) => onChange({ ctaPath })}
+            />
+          )}
         </fieldset>
+      ) : null}
+
+      {block.type === "hero" ? (
+        <HeroSlidesEditor
+          slides={block.slides ?? []}
+          onChange={(slides) => onChange({ slides })}
+        />
       ) : null}
 
       {block.type === "hero" || block.type === "featured_collection" ? (
@@ -297,16 +363,31 @@ export function BlockInspector({
         </label>
       )}
 
-      {block.type === "faq" && (
+      {block.type === "faq" || block.type === "icon_accordion" ? (
         <FaqListEditor items={block.faqItems ?? []} onChange={(faqItems) => onChange({ faqItems })} />
-      )}
+      ) : null}
 
-      {block.type === "features" && (
-        <FeaturesListEditor
-          items={block.features ?? []}
-          onChange={(features) => onChange({ features })}
-        />
-      )}
+      {block.type === "features" ||
+      block.type === "compare_table" ||
+      block.type === "order_steps" ||
+      block.type === "pickup" ? (
+        <>
+          {block.type === "compare_table" ? (
+            <p className="text-xs text-zinc-500">
+              Row title is the feature. In the text field write yes or no for the Others column. Your column stays a check.
+            </p>
+          ) : null}
+          {block.type === "pickup" ? (
+            <p className="text-xs text-zinc-500">
+              Each row is a pickup point: title is the place, text is the address or hours.
+            </p>
+          ) : null}
+          <FeaturesListEditor
+            items={block.features ?? []}
+            onChange={(features) => onChange({ features })}
+          />
+        </>
+      ) : null}
 
       {block.type === "gallery" && (
         <GalleryEditor urls={block.galleryUrls ?? []} onChange={(galleryUrls) => onChange({ galleryUrls })} />
@@ -367,6 +448,27 @@ export function BlockInspector({
 
       {block.type === "discount_popup" && (
         <>
+          <label className="flex items-center gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={block.collectEmail === true}
+              onChange={(e) => onChange({ collectEmail: e.target.checked })}
+            />
+            Photo and email signup
+          </label>
+          {block.collectEmail ? (
+            <label className="block text-xs">
+              Image URL
+              <div className="mt-1 flex gap-2">
+                <input
+                  className="ugclab-input flex-1 font-mono text-xs"
+                  value={block.imageUrl ?? ""}
+                  onChange={(e) => onChange({ imageUrl: e.target.value })}
+                />
+                <MediaPicker onUploaded={(url) => onChange({ imageUrl: url })} />
+              </div>
+            </label>
+          ) : null}
           <TextField
             label="Promo code"
             value={block.discountCode ?? ""}
@@ -386,8 +488,9 @@ export function BlockInspector({
             />
           </label>
           <p className="text-xs text-zinc-500">
-            Popup appears on all storefront pages after delay. Customers can dismiss with &quot;Don&apos;t show
-            again&quot;.
+            {block.collectEmail
+              ? "Shows a photo on the left and an email field on the right. The address is saved to the store newsletter."
+              : "Popup appears on all storefront pages after delay. Customers can dismiss with \"Don't show again\"."}
           </p>
         </>
       )}

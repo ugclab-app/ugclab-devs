@@ -148,7 +148,9 @@ export function StoreAnnouncementFields({ theme }: { theme: StoreTheme }) {
     <section className="admin-card space-y-4 p-6">
       <div>
         <h3 className="font-semibold">Announcement bar</h3>
-        <p className="mt-1 text-xs text-zinc-500">Top banner on your storefront (above promo banners).</p>
+        <p className="mt-1 text-xs text-zinc-500">
+          One phrase per line. Two or more lines scroll across the bar.
+        </p>
       </div>
       <label className="flex items-center gap-2 text-sm">
         <input
@@ -158,14 +160,24 @@ export function StoreAnnouncementFields({ theme }: { theme: StoreTheme }) {
         />
         Show custom announcement
       </label>
-      <Field label="Message">
-        <input
+      <Field label="Messages">
+        <textarea
           name="announcementText"
           defaultValue={theme.announcementText ?? ""}
-          placeholder="Free shipping this weekend!"
+          placeholder={"Free shipping\nMore pairs. More laughs."}
+          rows={4}
           className="ugclab-input"
         />
       </Field>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="hidden" name="showPaymentIconsPresent" value="1" />
+        <input
+          type="checkbox"
+          name="showPaymentIcons"
+          defaultChecked={theme.showPaymentIcons !== false}
+        />
+        Show card marks in the cart drawer
+      </label>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Bar color">
           <input

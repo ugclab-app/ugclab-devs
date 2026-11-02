@@ -2,12 +2,15 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, type UserDto } from "@/api/client";
 import { useAuth } from "@/context/auth";
+import { usePlatformLocale } from "@/i18n/locale";
+import type { PlatformAdminLocale } from "@/i18n/messages";
 import { isPlatformStaff } from "@/lib/platform-permissions";
 import { Button, Input } from "@ugclab/ui";
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const { setUser } = useAuth();
+  const { locale, setLocale, t } = usePlatformLocale();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [needs2fa, setNeeds2fa] = useState(false);
@@ -31,13 +34,13 @@ export default function LoginPage() {
       const user = (data as { user: UserDto }).user;
       if (!isPlatformStaff(user.role)) {
         await api.logout();
-        setError("This account is not authorized for platform admin.");
+        setError(t.login.notAuthorized);
         return;
       }
       setUser(user);
       navigate("/dashboard", { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      setError(err instanceof Error ? err.message : t.login.failed);
     } finally {
       setPending(false);
     }
@@ -51,12 +54,21 @@ export default function LoginPage() {
             T
           </span>
           <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-sky-600">
-            Tescommerce Platform
+            {t.brandSub} {t.platform}
           </p>
-          <h1 className="mt-2 text-2xl font-bold text-slate-900">Platform admin</h1>
-          <p className="mt-2 text-sm text-slate-600">
-            Stores, payouts, users, and platform settings.
-          </p>
+          <h1 className="mt-2 text-2xl font-bold text-slate-900">{t.login.title}</h1>
+          <p className="mt-2 text-sm text-slate-600">{t.login.subtitle}</p>
+          <label className="mt-4 inline-flex items-center gap-2 text-sm text-slate-500">
+            <span>{t.language}</span>
+            <select
+              value={locale}
+              onChange={(e) => setLocale(e.target.value as PlatformAdminLocale)}
+              className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-slate-800"
+            >
+              <option value="en">English</option>
+              <option value="tr">Türkçe</option>
+            </select>
+          </label>
         </div>
         <div className="platform-card p-8 shadow-lg">
           <form onSubmit={onSubmit} className="space-y-4">
@@ -67,12 +79,12 @@ export default function LoginPage() {
             ) : null}
             {needs2fa ? (
               <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900">
-                Enter the 6-digit code from your authenticator app.
+                {t.login.totpHint}
               </p>
             ) : null}
             <Input
               name="email"
-              label="Email"
+              label={t.login.email}
               type="email"
               defaultValue={email}
               required
@@ -80,7 +92,7 @@ export default function LoginPage() {
             />
             <Input
               name="password"
-              label="Password"
+              label={t.login.password}
               type="password"
               required
               autoComplete={needs2fa ? "one-time-code" : "current-password"}
@@ -88,7 +100,7 @@ export default function LoginPage() {
             {needs2fa ? (
               <Input
                 name="totpCode"
-                label="2FA code"
+                label={t.login.totp}
                 type="text"
                 inputMode="numeric"
                 maxLength={6}
@@ -97,7 +109,11 @@ export default function LoginPage() {
               />
             ) : null}
             <Button type="submit" className="w-full" disabled={pending}>
-              {pending ? "Signing in…" : needs2fa ? "Verify & sign in" : "Sign in"}
+              {pending
+                ? t.login.signingIn
+                : needs2fa
+                  ? t.login.verify
+                  : t.login.signIn}
             </Button>
           </form>
         </div>

@@ -2,20 +2,51 @@ import { sendEmail } from "./email.js";
 
 const OPS_EMAIL = () => process.env.PLATFORM_OPS_EMAIL?.trim() || null;
 
+async function sendOpsTelegram(text: string) {
+  const token = process.env.PLATFORM_OPS_TELEGRAM_BOT_TOKEN?.trim();
+  const chat = process.env.PLATFORM_OPS_TELEGRAM_CHAT_ID?.trim();
+  if (!token || !chat) return;
+  const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: chat, text: text.slice(0, 3500) }),
+  });
+  if (!res.ok) console.error("[ops-telegram]", await res.text());
+}
+
 export async function notifyPlatformOps(opts: {
   subject: string;
   html: string;
   text?: string;
+  dedupeKey?: string;
 }): Promise<boolean> {
+  const text = opts.text ?? opts.subject;
   const to = OPS_EMAIL();
-  if (!to) return false;
+  const { prisma } = await import("@ugclab/database");
+  if (opts.dedupeKey) {
+    const since = new Date(Date.now() - 60 * 60 * 1000);
+    const prior = await prisma.platformEmailLog.findFirst({
+      where: { template: `ops:${opts.dedupeKey}`, createdAt: { gte: since }, status: "sent" },
+      select: { id: true },
+    });
+    if (prior) return false;
+  }
+  await sendOpsTelegram(`${opts.subject}\n${text}`).catch((e) => console.error("[ops-telegram]", e));
+  if (!to) {
+    if (opts.dedupeKey) {
+      await prisma.platformEmailLog.create({
+        data: { to: "telegram", subject: opts.subject.slice(0, 200), template: `ops:${opts.dedupeKey}`, status: "sent" },
+      }).catch(() => {});
+    }
+    return false;
+  }
   try {
     await sendEmail({
       to,
       subject: opts.subject,
       html: opts.html,
-      text: opts.text,
-      template: "ops-alert",
+      text,
+      template: opts.dedupeKey ? `ops:${opts.dedupeKey}` : "ops-alert",
     });
     return true;
   } catch (e) {

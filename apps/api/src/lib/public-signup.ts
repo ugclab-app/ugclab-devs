@@ -3,7 +3,25 @@ import { prisma } from "@ugclab/database";
 import { isSlugAvailable, slugifyStoreName } from "@ugclab/tenant";
 import { assertDatabaseReady, databaseTimeoutMessage } from "./db-ready.js";
 import { MERCHANT_WEB_URL } from "../env.js";
+import { recordStoreAcquisition } from "./acquisition.js";
 import { attributePlatformPartner } from "./platform-partner.js";
+import { sendStoreOpenedEmail } from "./user-admin-email.js";
+
+/** Store defaults by signup country. Anything else starts in English and USD. */
+export function storeDefaultsForCountry(country: string) {
+  switch (country) {
+    case "KG":
+      return { defaultLocale: "ru", currency: "KGS", enabledLocales: ["ru", "ky", "en"], timezone: "Asia/Bishkek" };
+    case "KZ":
+      return { defaultLocale: "ru", currency: "KZT", enabledLocales: ["ru", "kk", "en"], timezone: "Asia/Almaty" };
+    case "UZ":
+      return { defaultLocale: "ru", currency: "UZS", enabledLocales: ["uz", "ru", "en"], timezone: "Asia/Tashkent" };
+    case "TR":
+      return { defaultLocale: "tr", currency: "TRY", enabledLocales: ["tr", "en"], timezone: "Europe/Istanbul" };
+    default:
+      return { defaultLocale: "en", currency: "USD", enabledLocales: ["en"], timezone: "UTC" };
+  }
+}
 
 export type SignupInput = {
   name: string;
@@ -83,35 +101,13 @@ export async function registerMerchantStore(body: SignupInput) {
         name: body.storeName,
         ownerId: user.id,
         subscriptionPlanId: planId,
-        settings: {
-          create: {
-            defaultLocale: country === "KG" || country === "KZ" || country === "UZ" ? "ru" : "en",
-            currency:
-              country === "KG" ? "KGS" : country === "KZ" ? "KZT" : country === "UZ" ? "UZS" : "USD",
-            enabledLocales:
-              country === "KG"
-                ? ["ru", "ky", "en"]
-                : country === "KZ"
-                  ? ["ru", "kk", "en"]
-                  : country === "UZ"
-                    ? ["uz", "ru", "en"]
-                    : ["en"],
-            timezone:
-              country === "KG"
-                ? "Asia/Bishkek"
-                : country === "KZ"
-                  ? "Asia/Almaty"
-                  : country === "UZ"
-                    ? "Asia/Tashkent"
-                    : "UTC",
-          },
-        },
+        settings: { create: storeDefaultsForCountry(country) },
         shippingZones: {
           create: {
             name: "Rest of world",
             countries: [country],
             flatRateAmount: 0,
-            currency: country === "KG" ? "KGS" : country === "KZ" ? "KZT" : "USD",
+            currency: storeDefaultsForCountry(country).currency,
           },
         },
       },
@@ -119,14 +115,29 @@ export async function registerMerchantStore(body: SignupInput) {
     tenantId = tenant.id;
   });
 
-  if (body.ref) {
-    await attributePlatformPartner({
-      tenantId,
-      ownerEmail: email,
-      ownerId: userId,
-      refCode: body.ref,
-    }).catch((err) => console.error("[platform-partner] attribute", err));
-  }
+  const partnerAttributed = body.ref
+    ? await attributePlatformPartner({
+        tenantId,
+        ownerEmail: email,
+        ownerId: userId,
+        refCode: body.ref,
+      }).catch((err) => {
+        console.error("[platform-partner] attribute", err);
+        return false;
+      })
+    : false;
+  await recordStoreAcquisition({
+    tenantId,
+    email,
+    partnerAttributed: Boolean(partnerAttributed),
+  }).catch((err) => console.error("[signup] acquisition", err));
+
+  await sendStoreOpenedEmail({
+    to: email,
+    ownerName: body.name,
+    storeName: body.storeName,
+    storeSlug: slug,
+  }).catch((err) => console.error("[signup] store-opened email", err));
 
   return {
     ok: true as const,
@@ -149,7 +160,7 @@ export async function createStoreForOwner(opts: {
 
   const user = await prisma.user.findUnique({
     where: { id: opts.userId },
-    select: { id: true, country: true, email: true },
+    select: { id: true, country: true, email: true, name: true },
   });
   if (!user) {
     return { ok: false as const, status: 404, error: "User not found" };
@@ -190,56 +201,43 @@ export async function createStoreForOwner(opts: {
       ownerId: user.id,
       subscriptionPlanId: planId,
       settings: {
-        create: {
-          defaultLocale:
-            country === "KG" || country === "KZ" || country === "UZ" ? "ru" : "en",
-          currency:
-            country === "KG"
-              ? "KGS"
-              : country === "KZ"
-                ? "KZT"
-                : country === "UZ"
-                  ? "UZS"
-                  : "USD",
-          enabledLocales:
-            country === "KG"
-              ? ["ru", "ky", "en"]
-              : country === "KZ"
-                ? ["ru", "kk", "en"]
-                : country === "UZ"
-                  ? ["uz", "ru", "en"]
-                  : ["en"],
-          timezone:
-            country === "KG"
-              ? "Asia/Bishkek"
-              : country === "KZ"
-                ? "Asia/Almaty"
-                : country === "UZ"
-                  ? "Asia/Tashkent"
-                  : "UTC",
-        },
+        create: storeDefaultsForCountry(country),
       },
       shippingZones: {
         create: {
           name: "Rest of world",
           countries: [country],
           flatRateAmount: 0,
-          currency:
-            country === "KG" ? "KGS" : country === "KZ" ? "KZT" : "USD",
+          currency: storeDefaultsForCountry(country).currency,
         },
       },
     },
     select: { id: true, name: true, slug: true },
   });
 
-  if (opts.ref) {
-    await attributePlatformPartner({
-      tenantId: tenant.id,
-      ownerEmail: user.email,
-      ownerId: user.id,
-      refCode: opts.ref,
-    }).catch((err) => console.error("[platform-partner] attribute", err));
-  }
+  const partnerAttributed = opts.ref
+    ? await attributePlatformPartner({
+        tenantId: tenant.id,
+        ownerEmail: user.email,
+        ownerId: user.id,
+        refCode: opts.ref,
+      }).catch((err) => {
+        console.error("[platform-partner] attribute", err);
+        return false;
+      })
+    : false;
+  await recordStoreAcquisition({
+    tenantId: tenant.id,
+    email: user.email,
+    partnerAttributed: Boolean(partnerAttributed),
+  }).catch((err) => console.error("[signup] acquisition", err));
+
+  await sendStoreOpenedEmail({
+    to: user.email,
+    ownerName: user.name,
+    storeName: tenant.name,
+    storeSlug: tenant.slug,
+  }).catch((err) => console.error("[signup] store-opened email", err));
 
   return { ok: true as const, tenant };
 }

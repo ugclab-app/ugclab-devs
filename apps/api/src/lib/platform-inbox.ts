@@ -8,6 +8,13 @@ export async function getPlatformInbox(): Promise<{
 }> {
   const items = await getPlatformActionItems();
 
+  let unreadMail = 0;
+  try {
+    unreadMail = await prisma.platformMailboxThread.count({ where: { unread: true } });
+  } catch (err) {
+    console.warn("[platform-inbox] mailbox unread", err);
+  }
+
   const [failedWebhooks, noFirstOrder, pendingReviews] = await Promise.all([
     prisma.stripeWebhookEvent.count({
       where: {
@@ -28,6 +35,17 @@ export async function getPlatformInbox(): Promise<{
     }),
     prisma.productReview.count({ where: { approved: false } }),
   ]);
+
+  if (unreadMail > 0) {
+    items.unshift({
+      id: "mailbox-unread",
+      priority: "high",
+      title: "Unread mail",
+      description: `${unreadMail} conversation(s) in the platform mailbox`,
+      href: "/mail",
+      count: unreadMail,
+    });
+  }
 
   if (failedWebhooks > 0) {
     items.unshift({

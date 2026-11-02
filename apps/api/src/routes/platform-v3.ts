@@ -257,10 +257,20 @@ export function registerPlatformV3Routes(platform: Hono<AuthEnv>) {
     async (c) => {
       const body = await c.req.json<{ tenantIds: string[] }>();
       const ids = Array.isArray(body.tenantIds) ? body.tenantIds.slice(0, 100) : [];
+      const targets = await prisma.tenant.findMany({
+        where: { id: { in: ids }, status: { not: TenantStatus.SUSPENDED } },
+        select: { id: true },
+      });
       const r = await prisma.tenant.updateMany({
-        where: { id: { in: ids } },
+        where: { id: { in: targets.map((t) => t.id) } },
         data: { status: TenantStatus.SUSPENDED },
       });
+      const { notifyStoreSuspended } = await import("../lib/owner-alerts.js");
+      for (const t of targets) {
+        notifyStoreSuspended(t.id).catch((err) =>
+          console.error("[email] store suspended", err)
+        );
+      }
       await audit(c, "tenants.bulk_suspend", `Suspended ${r.count} stores`);
       return c.json({ count: r.count });
     }

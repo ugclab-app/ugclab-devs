@@ -41,11 +41,16 @@ export async function checkTxtVerification(
 
 export function dnsInstructions(domain: string, token: string) {
   const host = normalizeDomainInput(domain);
+  const apex = host.startsWith("www.") ? host.slice(4) : host;
+  const apexLike = apex.split(".").length === 2;
   return {
-    txtHost: host,
+    txtHost: host.startsWith("www.") ? apex : host,
     txtValue: token,
-    cnameHost: host.startsWith("www.") ? host : `www.${host}`,
+    cnameHost: host.startsWith("www.") ? host : apexLike ? `www.${apex}` : host,
+    apexHost: apexLike ? "@" : undefined,
     cnameTarget: process.env.STOREFRONT_CNAME_TARGET ?? "cname.tescommerce.com",
-    note: "Add a TXT record at the domain root (or _ugclab subdomain) with the verification value. Point www CNAME to your storefront host per Vercel/custom host docs.",
+    note: apexLike
+      ? "Add two CNAME records, both pointing at the target below: host @ and host www. In Cloudflare turn the proxy off (DNS only, grey cloud). Add the TXT record, then click Check DNS. The certificate appears a few minutes after the check succeeds."
+      : "Point this host's CNAME at the target below. In Cloudflare turn the proxy off (DNS only). Add the TXT record, then click Check DNS.",
   };
 }

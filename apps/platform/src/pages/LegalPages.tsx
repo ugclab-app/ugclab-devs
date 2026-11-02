@@ -36,13 +36,13 @@ function LegalShell({
           <div className="flex items-center gap-4">
             <Link
               to="/privacy"
-              className="hidden text-sm font-medium text-zinc-600 transition hover:text-violet-600 sm:inline"
+              className="hidden text-sm font-medium text-zinc-600 transition hover:text-brand-600 sm:inline"
             >
               Privacy
             </Link>
             <Link
               to="/terms"
-              className="hidden text-sm font-medium text-zinc-600 transition hover:text-violet-600 sm:inline"
+              className="hidden text-sm font-medium text-zinc-600 transition hover:text-brand-600 sm:inline"
             >
               Terms
             </Link>
@@ -57,20 +57,20 @@ function LegalShell({
       </header>
 
       <main className="mx-auto max-w-3xl px-6 py-12 md:py-16">
-        <p className="text-xs font-semibold uppercase tracking-wider text-violet-600">Legal</p>
+        <p className="text-xs font-semibold uppercase tracking-wider text-brand-600">Legal</p>
         <h1 className="mt-2 text-3xl font-bold tracking-tight text-zinc-900 md:text-4xl">
           {title}
         </h1>
         <p className="mt-2 text-sm text-zinc-500">Last updated: {updated}</p>
 
-        <article className="mt-8 rounded-2xl border border-zinc-200/80 bg-white/90 p-6 shadow-xl shadow-violet-500/5 backdrop-blur-sm md:p-10">
+        <article className="mt-8 rounded-2xl border border-zinc-200/80 bg-white/90 p-6 shadow-xl shadow-brand-500/5 backdrop-blur-sm md:p-10">
           <div className="space-y-8">{children}</div>
         </article>
 
         <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
           <Link
             to="/"
-            className="text-sm font-medium text-violet-600 transition hover:text-violet-700"
+            className="text-sm font-medium text-brand-600 transition hover:text-brand-700"
           >
             ← Back to home
           </Link>
@@ -111,7 +111,7 @@ export function PrivacyPage() {
         ecommerce platform.
       </p>
       <Section title="Information we collect">
-        <ul className="list-disc space-y-2.5 pl-5 marker:text-violet-400">
+        <ul className="list-disc space-y-2.5 pl-5 marker:text-brand-400">
           <li>
             <strong className="font-semibold text-zinc-800">Account data</strong> — name, email,
             store name, and credentials you provide at signup.
@@ -156,7 +156,7 @@ export function PrivacyPage() {
         <p>
           For privacy requests, email{" "}
           <a
-            className="font-semibold text-violet-600 underline decoration-violet-200 underline-offset-2 hover:text-violet-700"
+            className="font-semibold text-brand-600 underline decoration-brand-200 underline-offset-2 hover:text-brand-700"
             href="mailto:privacy@tescommerce.com"
           >
             privacy@tescommerce.com
@@ -183,7 +183,7 @@ export function TermsPage() {
         </p>
       </Section>
       <Section title="Your responsibilities">
-        <ul className="list-disc space-y-2.5 pl-5 marker:text-violet-400">
+        <ul className="list-disc space-y-2.5 pl-5 marker:text-brand-400">
           <li>Provide accurate account information and keep credentials secure.</li>
           <li>
             Comply with applicable laws, tax rules, and payment-provider requirements for goods you
@@ -223,7 +223,7 @@ export function TermsPage() {
         <p>
           Questions about these Terms:{" "}
           <a
-            className="font-semibold text-violet-600 underline decoration-violet-200 underline-offset-2 hover:text-violet-700"
+            className="font-semibold text-brand-600 underline decoration-brand-200 underline-offset-2 hover:text-brand-700"
             href="mailto:legal@tescommerce.com"
           >
             legal@tescommerce.com

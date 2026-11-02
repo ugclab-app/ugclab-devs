@@ -1,7 +1,7 @@
 import { createHash } from "crypto";
 import { readFile } from "fs/promises";
 import path from "path";
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { getCookie, setCookie } from "hono/cookie";
 import {
   OrderStatus,
@@ -19,10 +19,16 @@ import {
   parsePostCheckoutUpsell,
   publicIntegrations,
 } from "../lib/growth-settings.js";
+import {
+  buildGoogleMerchantRss,
+  buildMetaCatalogCsv,
+} from "../lib/catalog-feeds.js";
+import { getStorefrontUrl } from "../lib/storefront.js";
 import { getCollectionProducts } from "../lib/store-collections.js";
 import { getUploadRoot } from "../lib/uploads.js";
 import {
   cartKey,
+  chargedUnit,
   CUSTOMER_COOKIE,
   getCart,
   resolveTenantBySlug,
@@ -42,9 +48,14 @@ import {
 import { isAnnouncementActive, parseStoreTheme } from "../lib/store-theme.js";
 import { resolveStorefrontThemeRaw } from "../lib/storefront-theme-resolve.js";
 import { buildProductSearchWhere } from "../lib/product-search.js";
-import { displayCurrencyMeta, priceForDisplay } from "../lib/store-display-currency.js";
+import {
+  applyDisplayCurrency,
+  displayCurrencyMeta,
+  priceForDisplay,
+} from "../lib/store-display-currency.js";
 import { filterCatalog, paginate, parseMajorToCents } from "../lib/catalog-list.js";
 import { priceForCountry } from "../lib/country-price.js";
+import { ensureFxRates } from "../lib/fx-rates.js";
 import { parseStoreMarkets } from "../lib/store-markets.js";
 import { registerBuyerRoutes } from "./storefront-buyer.js";
 import { resolveTenantFromHost } from "@ugclab/tenant";
@@ -70,6 +81,12 @@ import {
 } from "../lib/affiliate.js";
 
 const store = new Hono();
+
+// prices below are converted with live FX rates; load the current snapshot first
+store.use("*", async (_c, next) => {
+  await ensureFxRates();
+  await next();
+});
 
 function tenantSlug(c: { req: { query: (k: string) => string | undefined } }) {
   return String(c.req.query("tenant") ?? "demo").toLowerCase();
@@ -232,8 +249,12 @@ store.get("/context", async (c) => {
     .filter(Boolean) as string[];
 
   const announcements = [...promoAnnouncements];
-  if (isAnnouncementActive(theme)) {
-    announcements.unshift(theme.announcementText!);
+  if (isAnnouncementActive(theme) && theme.announcementText) {
+    const parts = theme.announcementText
+      .split(/\r?\n|\|/)
+      .map((part) => part.trim())
+      .filter(Boolean);
+    announcements.unshift(...(parts.length > 0 ? parts : [theme.announcementText]));
   }
 
   const featuredCollection = theme.heroCollectionSlug
@@ -250,6 +271,18 @@ store.get("/context", async (c) => {
     tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug },
     addons: installedApps,
     giftWrap,
+    checkoutExtras: {
+      tipsEnabled: tenant.settings?.tipsEnabled === true,
+      tipPresets: tenant.settings?.tipPresets ?? [],
+      customFields: (await import("../lib/checkout-extras.js")).parseCheckoutFields(
+        tenant.settings?.checkoutFields
+      ),
+      blockedCountries: tenant.settings?.blockedCountries ?? [],
+      turnstileSiteKey:
+        tenant.settings?.turnstileSiteKey && tenant.settings?.turnstileSecretKey
+          ? tenant.settings.turnstileSiteKey
+          : null,
+    },
     passwordLocked:
       Boolean(passwordHash) &&
       !previewing &&
@@ -349,7 +382,7 @@ store.get("/ai-catalog", async (c) => {
       const mapped = priceForDisplay(
         localize(mapProduct(p), locale),
         locale,
-        tenant.settings
+        tenant.settings, undefined, p.translations
       );
       return {
         id: mapped.id,
@@ -365,6 +398,105 @@ store.get("/ai-catalog", async (c) => {
           p.inventory > 0,
       };
     }),
+  });
+});
+
+async function loadFeedProducts(tenantId: string) {
+  return prisma.product.findMany({
+    where: { tenantId, status: ProductStatus.ACTIVE },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      slug: true,
+      type: true,
+      priceAmount: true,
+      inventory: true,
+      images: { take: 1, orderBy: { sortOrder: "asc" }, select: { storageKey: true } },
+    },
+    orderBy: { updatedAt: "desc" },
+    take: 5000,
+  });
+}
+
+function apiPublicBase(c: import("hono").Context): string {
+  return (
+    process.env.API_PUBLIC_URL?.replace(/\/$/, "") ||
+    new URL(c.req.url).origin
+  );
+}
+
+/** Google Merchant Center RSS (enable in Growth → Integrations). */
+store.get("/feeds/google-merchant.xml", async (c) => {
+  const slug = tenantSlug(c);
+  const tenant = await resolveTenantBySlug(slug);
+  if (!tenant) return c.json({ error: "Store not found" }, 404);
+  const integrations = parseIntegrations(tenant.settings?.integrations);
+  if (!integrations.productFeedsEnabled) {
+    return c.json({ error: "Product feeds disabled" }, 403);
+  }
+  const currency = tenant.settings?.currency ?? "USD";
+  const products = await loadFeedProducts(tenant.id);
+  const xml = buildGoogleMerchantRss({
+    storeName: tenant.name,
+    storefrontUrl: getStorefrontUrl(tenant.slug),
+    apiPublicUrl: apiPublicBase(c),
+    currency,
+    products,
+  });
+  return c.body(xml, 200, {
+    "Content-Type": "application/xml; charset=utf-8",
+    "Cache-Control": "public, max-age=900",
+  });
+});
+
+/** Meta Commerce Manager catalog CSV. */
+store.get("/feeds/meta-catalog.csv", async (c) => {
+  const slug = tenantSlug(c);
+  const tenant = await resolveTenantBySlug(slug);
+  if (!tenant) return c.json({ error: "Store not found" }, 404);
+  const integrations = parseIntegrations(tenant.settings?.integrations);
+  if (!integrations.productFeedsEnabled) {
+    return c.json({ error: "Product feeds disabled" }, 403);
+  }
+  const currency = tenant.settings?.currency ?? "USD";
+  const products = await loadFeedProducts(tenant.id);
+  const csv = buildMetaCatalogCsv({
+    storeName: tenant.name,
+    storefrontUrl: getStorefrontUrl(tenant.slug),
+    apiPublicUrl: apiPublicBase(c),
+    currency,
+    products,
+  });
+  return c.body(csv, 200, {
+    "Content-Type": "text/csv; charset=utf-8",
+    "Content-Disposition": `attachment; filename="${tenant.slug}-meta-catalog.csv"`,
+    "Cache-Control": "public, max-age=900",
+  });
+});
+
+/** TikTok catalog CSV (same schema as Meta). */
+store.get("/feeds/tiktok-catalog.csv", async (c) => {
+  const slug = tenantSlug(c);
+  const tenant = await resolveTenantBySlug(slug);
+  if (!tenant) return c.json({ error: "Store not found" }, 404);
+  const integrations = parseIntegrations(tenant.settings?.integrations);
+  if (!integrations.productFeedsEnabled) {
+    return c.json({ error: "Product feeds disabled" }, 403);
+  }
+  const currency = tenant.settings?.currency ?? "USD";
+  const products = await loadFeedProducts(tenant.id);
+  const csv = buildMetaCatalogCsv({
+    storeName: tenant.name,
+    storefrontUrl: getStorefrontUrl(tenant.slug),
+    apiPublicUrl: apiPublicBase(c),
+    currency,
+    products,
+  });
+  return c.body(csv, 200, {
+    "Content-Type": "text/csv; charset=utf-8",
+    "Content-Disposition": `attachment; filename="${tenant.slug}-tiktok-catalog.csv"`,
+    "Cache-Control": "public, max-age=900",
   });
 });
 
@@ -441,7 +573,7 @@ store.get("/products", async (c) => {
         },
         locale,
         tenant.settings,
-        requestedCurrency
+        requestedCurrency, p.translations
       )
     ),
     {
@@ -462,7 +594,9 @@ store.get("/products", async (c) => {
   });
 });
 
-store.get("/products/:productSlug", async (c) => {
+store.get("/products/:productSlug", async (c, next) => {
+  // `/products/recent` is registered below; don't let the slug route swallow it.
+  if (c.req.param("productSlug") === "recent") return next();
   const slug = tenantSlug(c);
   const tenant = await resolveTenantBySlug(slug);
   if (!tenant) return c.json({ error: "Store not found" }, 404);
@@ -484,6 +618,7 @@ store.get("/products/:productSlug", async (c) => {
     include: {
       images: { orderBy: { sortOrder: "asc" } },
       variants: { orderBy: { title: "asc" } },
+      digitalAsset: { select: { lessons: true } },
     },
   });
   if (!product) return c.json({ error: "Not found" }, 404);
@@ -523,7 +658,7 @@ store.get("/products/:productSlug", async (c) => {
         },
         locale,
         tenant.settings,
-        requestedCurrency
+        requestedCurrency, product.translations
       ),
       seoTitle: String(seoMeta.title ?? "").trim() || mapped.title,
       seoDescription: String(seoMeta.description ?? "").trim() || null,
@@ -541,6 +676,19 @@ store.get("/products/:productSlug", async (c) => {
         )
       ),
       inventory: product.inventory,
+      quantityOffers: product.quantityOffers ?? [],
+      payWhatYouWant: product.payWhatYouWant,
+      // in the display currency, like priceAmount
+      minPriceAmount: product.payWhatYouWant
+        ? applyDisplayCurrency(
+            { priceAmount: product.minPriceAmount ?? product.priceAmount },
+            baseCurrency,
+            displayCurrency
+          ).priceAmount
+        : null,
+      lessonCount: product.digitalAsset
+        ? (await import("../lib/courses.js")).parseLessons(product.digitalAsset.lessons).length
+        : 0,
       preorderEnabled: product.preorderEnabled,
       preorderShipAt: product.preorderShipAt?.toISOString() ?? null,
       tryBeforeYouBuyEnabled: product.tryBeforeYouBuyEnabled,
@@ -558,6 +706,125 @@ store.get("/products/:productSlug", async (c) => {
     },
     reviews,
     questions,
+  });
+});
+
+/** "Similar products" (collections / tags / type / price) and "bought together" (co-purchases). */
+store.get("/products/:productSlug/recommendations", async (c) => {
+  const slug = tenantSlug(c);
+  const tenant = await resolveTenantBySlug(slug);
+  if (!tenant) return c.json({ error: "Store not found" }, 404);
+  const locale = pickLocale(tenant.settings, c.req.query("locale"));
+  const requestedCurrency = c.req.query("currency");
+  const { displayCurrency, baseCurrency } = displayCurrencyMeta(
+    locale,
+    tenant.settings,
+    requestedCurrency
+  );
+  const limit = Math.min(8, Math.max(1, parseInt(c.req.query("limit") ?? "4", 10) || 4));
+
+  const target = await prisma.product.findFirst({
+    where: { tenantId: tenant.id, slug: c.req.param("productSlug"), status: ProductStatus.ACTIVE },
+    select: {
+      id: true,
+      type: true,
+      tags: true,
+      priceAmount: true,
+      createdAt: true,
+      collectionItems: { select: { collectionId: true } },
+    },
+  });
+  if (!target) return c.json({ error: "Not found" }, 404);
+
+  const { rankSimilar, rankCoPurchases } = await import("../lib/recommendations.js");
+
+  const [candidates, lines] = await Promise.all([
+    prisma.product.findMany({
+      where: { tenantId: tenant.id, status: ProductStatus.ACTIVE, id: { not: target.id } },
+      select: {
+        id: true,
+        type: true,
+        tags: true,
+        priceAmount: true,
+        createdAt: true,
+        collectionItems: { select: { collectionId: true } },
+      },
+      take: 400,
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.orderLineItem.findMany({
+      where: {
+        tenantId: tenant.id,
+        productId: { not: null },
+        order: {
+          status: { in: [OrderStatus.PAID, OrderStatus.FULFILLED] },
+          items: { some: { productId: target.id } },
+        },
+      },
+      select: { orderId: true, productId: true },
+      orderBy: { order: { createdAt: "desc" } },
+      take: 2000,
+    }),
+  ]);
+
+  const toCandidate = (p: (typeof candidates)[number]) => ({
+    id: p.id,
+    type: p.type,
+    tags: p.tags,
+    priceAmount: p.priceAmount,
+    createdAt: p.createdAt,
+    collectionIds: p.collectionItems.map((cp) => cp.collectionId),
+  });
+  const similarIds = rankSimilar(toCandidate(target), candidates.map(toCandidate), limit);
+
+  const byOrder = new Map<string, string[]>();
+  for (const l of lines) {
+    if (!l.productId) continue;
+    const arr = byOrder.get(l.orderId) ?? [];
+    arr.push(l.productId);
+    byOrder.set(l.orderId, arr);
+  }
+  const together = rankCoPurchases(target.id, [...byOrder.values()], limit).map((t) => t.id);
+
+  // Fall back to newest products when the store has no signal yet.
+  if (similarIds.length < limit) {
+    for (const p of candidates) {
+      if (similarIds.length >= limit) break;
+      if (!similarIds.includes(p.id) && !together.includes(p.id)) similarIds.push(p.id);
+    }
+  }
+
+  const ids = [...new Set([...similarIds, ...together])];
+  if (!ids.length) {
+    return c.json({ currency: displayCurrency, baseCurrency, similar: [], boughtTogether: [] });
+  }
+  const raw = await prisma.product.findMany({
+    where: { tenantId: tenant.id, id: { in: ids }, status: ProductStatus.ACTIVE },
+    include: {
+      images: { take: 1, orderBy: { sortOrder: "asc" } },
+      variants: { select: { id: true }, orderBy: { title: "asc" } },
+    },
+  });
+  const byId = new Map(raw.map((p) => [p.id, p]));
+  const present = (list: string[]) =>
+    list
+      .map((id) => byId.get(id))
+      .filter((p): p is NonNullable<typeof p> => Boolean(p))
+      .map((p) =>
+        priceForDisplay(
+          localize(mapProduct(p), locale),
+          locale,
+          tenant.settings,
+          requestedCurrency,
+          p.translations
+        )
+      );
+
+  return c.json({
+    currency: displayCurrency,
+    baseCurrency,
+    similar: present(similarIds),
+    boughtTogether: present(together),
   });
 });
 
@@ -627,7 +894,7 @@ store.get("/products/recent", async (c) => {
         localize(mapProduct(p), locale),
         locale,
         tenant.settings,
-        requestedCurrency
+        requestedCurrency, p.translations
       )
     ),
   });
@@ -733,7 +1000,7 @@ store.get("/collections/:collectionSlug", async (c) => {
             },
             locale,
             tenant.settings,
-            requestedCurrency
+            requestedCurrency, p.translations
           )
         ),
         {
@@ -776,7 +1043,8 @@ store.get("/cart", async (c) => {
       const variant = item.variantId
         ? p.variants.find((v) => v.id === item.variantId)
         : null;
-      const unit = variant?.priceAmount ?? p.priceAmount;
+      const catalog = variant?.priceAmount ?? p.priceAmount;
+      const unit = chargedUnit(item, catalog);
       const title = variant ? `${p.title} — ${variant.title}` : p.title;
       const lineTotal = unit * item.quantity;
       total += lineTotal;
@@ -786,6 +1054,7 @@ store.get("/cart", async (c) => {
         variantId: item.variantId,
         title,
         unit,
+        unitAmountCents: item.unitAmountCents,
         lineTotal,
         quantity: item.quantity,
         imageKey: p.images[0]?.storageKey ?? null,
@@ -814,7 +1083,7 @@ async function persistAbandonedCart(c: import("hono").Context, tenant: { id: str
     const variant = item.variantId
       ? p.variants.find((v) => v.id === item.variantId)
       : null;
-    subtotal += (variant?.priceAmount ?? p.priceAmount) * item.quantity;
+    subtotal += chargedUnit(item, variant?.priceAmount ?? p.priceAmount) * item.quantity;
   }
   await syncAbandonedCart({
     c,
@@ -835,14 +1104,71 @@ store.post("/cart/add", async (c) => {
     variantId?: string;
     quantity?: number;
     subscribe?: boolean;
+    offerQty?: number;
+    picks?: string[];
+    /** Pay-what-you-want: buyer-chosen unit price in cents of `currency` (default: store base). */
+    priceCents?: number;
+    currency?: string;
   }>();
+  if (body.offerQty) {
+    const product = await prisma.product.findFirst({
+      where: { id: body.productId, tenantId: tenant.id, status: ProductStatus.ACTIVE },
+      include: { variants: true },
+    });
+    if (!product) return c.json({ error: "Product not found" }, 404);
+    const { parseQuantityOffers, splitOfferUnits } = await import("../lib/quantity-offers.js");
+    const offer = parseQuantityOffers(product.quantityOffers).find((row) => row.qty === body.offerQty);
+    if (!offer) return c.json({ error: "That offer is not available." }, 400);
+    const picks = (body.picks ?? []).map((id) => String(id)).filter(Boolean);
+    if (picks.length !== offer.qty || picks.some((variantId) => !product.variants.some((row) => row.id === variantId))) {
+      return c.json({ error: "Choose a color for each item." }, 400);
+    }
+    const units = splitOfferUnits(offer.priceCents, picks.length);
+    picks.forEach((variantId, index) => {
+      addCartItem(c, {
+        productId: product.id,
+        tenantId: tenant.id,
+        quantity: 1,
+        variantId,
+        unitAmountCents: units[index],
+      });
+    });
+    await persistAbandonedCart(c, tenant);
+    return c.json({ ok: true });
+  }
   const qty = Math.max(1, body.quantity ?? 1);
+  let pwywUnit: number | undefined;
+  if (body.priceCents != null) {
+    const product = await prisma.product.findFirst({
+      where: { id: body.productId, tenantId: tenant.id, status: ProductStatus.ACTIVE },
+      select: { payWhatYouWant: true, priceAmount: true, minPriceAmount: true },
+    });
+    if (!product) return c.json({ error: "Product not found" }, 404);
+    const { resolvePwywUnit } = await import("../lib/checkout-extras.js");
+    const baseCurrency = (tenant.settings?.currency ?? "USD").toUpperCase();
+    const fromCurrency = String(body.currency ?? baseCurrency).toUpperCase();
+    let requestedCents = Number(body.priceCents);
+    if (fromCurrency !== baseCurrency && Number.isFinite(requestedCents)) {
+      const { convertAmount } = await import("@ugclab/i18n/store-currency");
+      const { ensureFxRates } = await import("../lib/fx-rates.js");
+      await ensureFxRates().catch(() => {});
+      requestedCents = convertAmount(requestedCents, fromCurrency, baseCurrency);
+    }
+    const unit = resolvePwywUnit({
+      payWhatYouWant: product.payWhatYouWant,
+      priceAmount: product.priceAmount,
+      minPriceAmount: product.minPriceAmount,
+      requestedCents,
+    });
+    if (unit != null && unit > 0) pwywUnit = unit;
+  }
   addCartItem(c, {
     productId: body.productId,
     tenantId: tenant.id,
     quantity: qty,
     variantId: body.variantId,
     subscribe: body.subscribe === true,
+    ...(pwywUnit != null ? { unitAmountCents: pwywUnit } : {}),
   });
   await persistAbandonedCart(c, tenant);
   return c.json({ ok: true });
@@ -867,7 +1193,7 @@ store.post("/cart/email", async (c) => {
     const variant = item.variantId
       ? p.variants.find((v) => v.id === item.variantId)
       : null;
-    subtotal += (variant?.priceAmount ?? p.priceAmount) * item.quantity;
+    subtotal += chargedUnit(item, variant?.priceAmount ?? p.priceAmount) * item.quantity;
   }
   await syncAbandonedCart({
     c,
@@ -889,6 +1215,7 @@ store.patch("/cart", async (c) => {
     productId: string;
     variantId?: string;
     quantity: number;
+    unitAmountCents?: number;
   }>();
   updateCartItem(
     c,
@@ -898,6 +1225,7 @@ store.patch("/cart", async (c) => {
       tenantId: tenant.id,
       variantId: body.variantId,
       quantity: 1,
+      unitAmountCents: body.unitAmountCents,
     },
     body.quantity
   );
@@ -909,11 +1237,12 @@ store.delete("/cart", async (c) => {
   const slug = tenantSlug(c);
   const tenant = await resolveTenantBySlug(slug);
   if (!tenant) return c.json({ error: "Store not found" }, 404);
-  const body = await c.req.json<{ productId: string; variantId?: string }>();
+  const body = await c.req.json<{ productId: string; variantId?: string; unitAmountCents?: number }>();
   removeCartItem(c, {
     productId: body.productId,
     tenantId: tenant.id,
     variantId: body.variantId,
+    unitAmountCents: body.unitAmountCents,
   });
   await persistAbandonedCart(c, tenant);
   return c.json({ ok: true });
@@ -1250,6 +1579,9 @@ store.post("/checkout/place", async (c) => {
   }
   try {
     const body = await c.req.json<Record<string, unknown>>();
+    const { requireStoreTurnstile } = await import("../lib/turnstile.js");
+    const captcha = await requireStoreTurnstile(c, tenant.settings, body);
+    if (captcha) return captcha;
     const result = await placeStoreOrder(c, tenant.id, body);
     return c.json(result);
   } catch (e) {
@@ -1420,6 +1752,143 @@ store.get("/orders/:orderId/invoice", async (c) => {
   return c.html(html);
 });
 
+store.get("/loyalty", async (c) => {
+  const slug = tenantSlug(c);
+  const tenant = await resolveTenantBySlug(slug);
+  if (!tenant) return c.json({ error: "Store not found" }, 404);
+  const settings = tenant.settings;
+  const { loyaltyFromSettings } = await import("../lib/loyalty.js");
+  const loyalty = loyaltyFromSettings(settings);
+  if (!loyalty.enabled) {
+    return c.json({
+      enabled: false,
+      points: 0,
+      earnPerMajor: 0,
+      redeemCentsPerPoint: 0,
+    });
+  }
+  const raw = getCookie(c, CUSTOMER_COOKIE);
+  let points = 0;
+  if (raw) {
+    try {
+      const { tenantId, customerId } = JSON.parse(raw) as {
+        tenantId: string;
+        customerId: string;
+      };
+      if (tenantId === tenant.id && customerId) {
+        const cust = await prisma.customer.findFirst({
+          where: { id: customerId, tenantId: tenant.id },
+          select: { loyaltyPoints: true },
+        });
+        points = cust?.loyaltyPoints ?? 0;
+      }
+    } catch {
+      /* guest */
+    }
+  }
+  return c.json({
+    enabled: true,
+    points,
+    earnPerMajor: loyalty.earnPerMajor,
+    redeemCentsPerPoint: loyalty.redeemCentsPerPoint,
+  });
+});
+
+function readCustomerCookie(c: Context, tenantId: string): string | null {
+  const raw = getCookie(c, CUSTOMER_COOKIE);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as { tenantId?: string; customerId?: string };
+    if (parsed.tenantId !== tenantId || !parsed.customerId) return null;
+    return parsed.customerId;
+  } catch {
+    return null;
+  }
+}
+
+/** Store credit balance for the signed-in customer. */
+store.get("/store-credit", async (c) => {
+  const slug = tenantSlug(c);
+  const tenant = await resolveTenantBySlug(slug);
+  if (!tenant) return c.json({ error: "Store not found" }, 404);
+  const customerId = readCustomerCookie(c, tenant.id);
+  if (!customerId) return c.json({ balanceCents: 0, currency: tenant.settings?.currency ?? "USD" });
+  const cust = await prisma.customer.findFirst({
+    where: { id: customerId, tenantId: tenant.id },
+    select: { storeCreditCents: true },
+  });
+  return c.json({
+    balanceCents: cust?.storeCreditCents ?? 0,
+    currency: tenant.settings?.currency ?? "USD",
+  });
+});
+
+/** Purchased digital products (files + course lessons) for the signed-in customer. */
+store.get("/account/library", async (c) => {
+  const slug = tenantSlug(c);
+  const tenant = await resolveTenantBySlug(slug);
+  if (!tenant) return c.json({ error: "Store not found" }, 404);
+  const customerId = readCustomerCookie(c, tenant.id);
+  if (!customerId) return c.json({ error: "Sign in required" }, 401);
+
+  const downloads = await prisma.digitalDownload.findMany({
+    where: {
+      tenantId: tenant.id,
+      order: {
+        customerId,
+        status: { in: [OrderStatus.PAID, OrderStatus.FULFILLED] },
+      },
+    },
+    include: {
+      order: { select: { orderNumber: true, createdAt: true } },
+      product: {
+        select: {
+          id: true,
+          slug: true,
+          title: true,
+          images: { take: 1, orderBy: { sortOrder: "asc" }, select: { storageKey: true } },
+          digitalAsset: {
+            select: { fileName: true, storageKey: true, downloadLimit: true, lessons: true },
+          },
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const { parseLessons, toEmbedUrl } = await import("../lib/courses.js");
+  const seen = new Set<string>();
+  const items = downloads
+    .filter((d) => {
+      if (seen.has(d.productId)) return false;
+      seen.add(d.productId);
+      return true;
+    })
+    .map((d) => {
+      const asset = d.product.digitalAsset;
+      const lessons = parseLessons(asset?.lessons).map((l) => ({
+        ...l,
+        embedUrl: l.videoUrl ? toEmbedUrl(l.videoUrl) : null,
+      }));
+      return {
+        productId: d.product.id,
+        slug: d.product.slug,
+        title: d.product.title,
+        imageKey: d.product.images[0]?.storageKey ?? null,
+        orderNumber: d.order.orderNumber,
+        purchasedAt: d.order.createdAt,
+        download:
+          asset?.storageKey && d.downloads < asset.downloadLimit
+            ? { token: d.token, fileName: asset.fileName, remaining: asset.downloadLimit - d.downloads }
+            : null,
+        licenseKey: d.licenseKey,
+        lessons,
+      };
+    });
+
+  return c.json({ items });
+});
+
 store.get("/account/session", async (c) => {
   const slug = tenantSlug(c);
   const tenant = await resolveTenantBySlug(slug);
@@ -1511,7 +1980,15 @@ store.post("/account/login", async (c) => {
   const slug = tenantSlug(c);
   const tenant = await resolveTenantBySlug(slug);
   if (!tenant) return c.json({ error: "Store not found" }, 404);
-  const { email, password } = await c.req.json<{ email: string; password: string }>();
+  const loginBody = await c.req.json<{
+    email: string;
+    password: string;
+    turnstileToken?: string;
+  }>();
+  const { email, password } = loginBody;
+  const { requireStoreTurnstile } = await import("../lib/turnstile.js");
+  const captcha = await requireStoreTurnstile(c, tenant.settings, loginBody);
+  if (captcha) return captcha;
   const norm = String(email ?? "").trim().toLowerCase();
   const customer = await prisma.customer.findUnique({
     where: { tenantId_email: { tenantId: tenant.id, email: norm } },
@@ -2257,6 +2734,9 @@ store.get("/download/:token", async (c) => {
     return c.json({ error: "Download link expired" }, 403);
   }
   const asset = download.product.digitalAsset;
+  if (!asset.storageKey) {
+    return c.json({ error: "This product has no downloadable file — open it in your library" }, 404);
+  }
   if (download.downloads >= asset.downloadLimit) {
     return c.json({ error: "Download limit reached" }, 403);
   }

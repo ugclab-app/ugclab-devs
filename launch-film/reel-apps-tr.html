@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <title>Tescommerce — Reel: 14 apps vs one store</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 1080px;
+      height: 1920px;
+      overflow: hidden;
+      background: #f6f5f1;
+      font-family: "Segoe UI Variable Display", "Segoe UI", sans-serif;
+      color: #111114;
+      -webkit-font-smoothing: antialiased;
+    }
+    /* electric palette: ink + violet + lime, unlike the other reels */
+    :root { --ink: #111114; --muted: #6b6b76; --line: #e7e5df; --violet: #6d28d9; --lime: #a3e635; --red: #ef4444; }
+    #stage { position: relative; width: 1080px; height: 1920px; overflow: hidden; }
+    .abs { position: absolute; }
+    .layer { position: absolute; inset: 0; will-change: transform, filter, opacity; }
+    .gtext { background: linear-gradient(90deg, #6d28d9, #9333ea 50%, #db2777); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    #bg { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 28%, #ffffff 0%, #f6f5f1 60%, #ebe8e0 100%); }
+    #grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(17, 17, 20, 0.04) 2px, transparent 2px), linear-gradient(90deg, rgba(17, 17, 20, 0.04) 2px, transparent 2px); background-size: 90px 90px; }
+    .blob { position: absolute; border-radius: 50%; }
+    #blobA { width: 1000px; height: 1000px; background: radial-gradient(circle, rgba(109, 40, 217, 0.13), transparent 65%); }
+    #blobB { width: 900px; height: 900px; background: radial-gradient(circle, rgba(163, 230, 53, 0.2), transparent 65%); }
+
+    .title { position: absolute; left: 0; right: 0; text-align: center; font-size: 100px; font-weight: 750; letter-spacing: -0.045em; line-height: 1.04; }
+    .title > div { display: block; }
+    .phone { position: absolute; left: 200px; top: 560px; width: 680px; height: 1240px; border-radius: 90px; background: #111114; padding: 16px; box-shadow: 0 60px 140px rgba(17, 17, 20, 0.3); }
+    .screen { width: 100%; height: 100%; border-radius: 76px; background: linear-gradient(170deg, #ede9fe, #fdf2f8 55%, #ecfccb); overflow: hidden; position: relative; }
+    .app { position: absolute; width: 128px; text-align: center; }
+    .app .ic { width: 128px; height: 128px; border-radius: 34px; display: grid; place-items: center; font-size: 64px; box-shadow: 0 10px 22px rgba(17, 17, 20, 0.16); position: relative; }
+    .app .lb { margin-top: 12px; font-size: 24px; font-weight: 650; color: #3f3f46; white-space: nowrap; margin-left: -20px; margin-right: -20px; }
+    .app .badge { position: absolute; right: -10px; top: -10px; min-width: 44px; height: 44px; padding: 0 10px; border-radius: 999px; background: var(--red); color: #fff; font-size: 24px; font-weight: 800; display: grid; place-items: center; border: 3px solid #fff; }
+    .app .x { position: absolute; left: -12px; top: -12px; width: 42px; height: 42px; border-radius: 50%; background: #52525b; color: #fff; font-size: 24px; font-weight: 800; display: grid; place-items: center; border: 3px solid #fff; }
+    .noti { position: absolute; left: 120px; width: 840px; padding: 24px 30px; border-radius: 34px; background: rgba(255, 255, 255, 0.94); box-shadow: 0 24px 60px rgba(17, 17, 20, 0.22); display: flex; align-items: center; gap: 22px; font-size: 32px; font-weight: 700; }
+    .noti .ni { width: 72px; height: 72px; border-radius: 20px; display: grid; place-items: center; font-size: 38px; flex: none; }
+    .noti small { display: block; font-size: 26px; font-weight: 600; color: var(--muted); }
+    .noti .when { margin-left: auto; align-self: flex-start; font-size: 22px; color: var(--muted); font-weight: 600; }
+    .tbig { width: 300px; height: 300px; border-radius: 84px; font-size: 180px; }
+    .mark { display: grid; place-items: center; color: #fff; font-weight: 700; background: linear-gradient(135deg, #1f3fe8, #5b78ff); box-shadow: 0 24px 60px rgba(37, 70, 240, 0.35); }
+    .feat { position: absolute; width: 440px; height: 104px; border-radius: 28px; background: #fff; box-shadow: 0 14px 36px rgba(17, 17, 20, 0.08), 0 0 0 1px rgba(17, 17, 20, 0.05); display: flex; align-items: center; gap: 18px; padding: 0 22px; font-size: 30px; font-weight: 700; }
+    .feat .fi { width: 64px; height: 64px; border-radius: 18px; display: grid; place-items: center; font-size: 34px; flex: none; }
+    .feat .ck { margin-left: auto; width: 46px; height: 46px; border-radius: 50%; background: var(--lime); color: #1a2e05; display: grid; place-items: center; font-size: 28px; font-weight: 900; }
+    .score { position: absolute; left: 90px; width: 900px; height: 190px; border-radius: 36px; background: #fff; box-shadow: 0 24px 60px rgba(17, 17, 20, 0.1); display: flex; align-items: center; padding: 0 44px; }
+    .score .nm { font-size: 40px; font-weight: 750; letter-spacing: -0.02em; }
+    .score .nm small { display: block; font-size: 26px; color: var(--muted); font-weight: 600; letter-spacing: 0; }
+    .roll { margin-left: auto; width: 170px; height: 130px; overflow: hidden; position: relative; text-align: right; }
+    .roll div { position: absolute; right: 0; height: 130px; line-height: 130px; font-size: 120px; font-weight: 850; letter-spacing: -0.05em; font-variant-numeric: tabular-nums; }
+    .hand { position: absolute; width: 64px; height: 64px; filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.25)); }
+    .ring { position: absolute; width: 110px; height: 110px; margin: -55px 0 0 -55px; border-radius: 50%; background: rgba(109, 40, 217, 0.3); }
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <div id="bg"></div>
+    <div id="grid"></div>
+    <div class="blob" id="blobA"></div>
+    <div class="blob" id="blobB"></div>
+
+    <!-- the phone is shared by hook / chaos / delete, so it lives outside the scene layers -->
+    <div class="layer" id="s-hook">
+      <div class="title" id="hookT" style="top:200px"><div>Mağazanda</div><div><span class="gtext"><span id="hookN">0</span> uygulama var.</span></div></div>
+    </div>
+    <div class="layer" id="s-chaos">
+      <div class="title" id="chT" style="top:200px"><div>14 giriş.</div><div><span class="gtext">14 fatura.</span></div></div>
+    </div>
+    <div class="layer" id="s-del">
+      <div class="title" id="deT" style="top:200px"><div>Peki hepsini</div><div><span class="gtext">silsen?</span></div></div>
+    </div>
+    <div class="layer" id="phoneLayer">
+      <div class="phone" id="phone"><div class="screen" id="screen">
+        <div class="abs" style="left:0;right:0;top:34px;display:flex;justify-content:space-between;padding:0 70px;font-size:26px;font-weight:700"><span>9:41</span><span>●●● ▮</span></div>
+        <div id="apps"></div>
+        <div id="merge" class="abs" style="left:174px;top:470px"><div class="mark tbig">T</div></div>
+        <div id="burst" class="abs" style="left:324px;top:620px"></div>
+      </div></div>
+      <div id="notis"></div>
+    </div>
+
+    <div class="layer" id="s-built">
+      <div class="title" id="buT" style="top:170px"><div>Hepsi.</div><div><span class="gtext">Zaten dahil.</span></div></div>
+      <div id="feats"></div>
+    </div>
+
+    <div class="layer" id="s-score">
+      <div class="title" id="scT" style="top:200px"><div>Önce</div><div><span class="gtext">→ sonra.</span></div></div>
+      <div id="scores"></div>
+    </div>
+
+    <div class="layer" id="s-end">
+      <div class="abs" style="left:0;right:0;top:560px;display:flex;flex-direction:column;align-items:center">
+        <div id="endQ" style="font-size:84px;font-weight:750;letter-spacing:-0.045em;color:var(--muted)"><s>14 uygulama</s>?</div>
+        <div class="mark" id="endMark" style="margin-top:50px;width:200px;height:200px;border-radius:60px;font-size:116px">T</div>
+        <div id="endWord" style="margin-top:36px;font-size:120px;font-weight:700;letter-spacing:-0.05em"></div>
+        <div id="endTag" style="margin-top:10px;font-size:58px;font-weight:650;letter-spacing:-0.02em"><span class="gtext">Tek mağaza. Her şey içinde.</span></div>
+        <div id="endCta" style="margin-top:70px;padding:30px 52px;border-radius:999px;background:#111114;color:#fff;font-size:42px;font-weight:700;box-shadow:0 24px 60px rgba(17,17,20,.3)">Ücretsiz başla → link bio'da</div>
+      </div>
+    </div>
+
+    <div class="hand" id="hand"><svg width="64" height="64" viewBox="0 0 24 24"><path d="M4 2l15 11.5-6.6 1 3.8 7.4-2.9 1.4-3.8-7.5L4 20z" fill="#111114" stroke="#fff" stroke-width="1.4" stroke-linejoin="round" /></svg></div>
+    <div class="ring" id="ring"></div>
+  </div>
+
+  <script>
+    const SCENES = [
+      { id: "hook", dur: 4.8 }, { id: "chaos", dur: 6.0 }, { id: "del", dur: 5.6 },
+      { id: "built", dur: 7.6 }, { id: "score", dur: 6.2 }, { id: "end", dur: 5.2 }
+    ];
+    const plan = { scenes: [], duration: 0 };
+    {
+      let t = 0;
+      for (const s of SCENES) {
+        plan.scenes.push({ id: s.id, start: t, dur: s.dur, vo: null, voOffset: 0 });
+        t += s.dur;
+      }
+      plan.duration = t;
+    }
+    window.__plan = plan;
+
+    // ---------- helpers (same engine as reel-payments.html) ----------
+    const $ = (id) => document.getElementById(id);
+    const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+    const seg = (t, a, b) => clamp((t - a) / (b - a));
+    const lerp = (a, b, p) => a + (b - a) * p;
+    const E = {
+      out: (x) => 1 - Math.pow(1 - x, 3),
+      expo: (x) => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * x)),
+      inOut: (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2),
+      in: (x) => x * x * x,
+      back: (x) => { const c1 = 1.6, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); }
+    };
+    const set = (el, o) => { for (const k in o) el.style[k] = o[k]; };
+    const fx = (el, { x = 0, y = 0, s = 1, r = 0, o = 1, b = 0, extra = "" }) =>
+      set(el, { transform: `${extra} translate(${x}px, ${y}px) scale(${s}) rotate(${r}deg)`, opacity: o, filter: b > 0.05 ? `blur(${b}px)` : "none" });
+    const rise = (el, t, at, dist = 70, dur = 0.5) => {
+      const p = E.expo(seg(t, at, at + dur));
+      fx(el, { y: (1 - p) * dist, o: p, b: (1 - p) * 14 });
+      return p;
+    };
+    const pop = (el, t, at, extra = "") => {
+      const q = E.back(seg(t, at, at + 0.45));
+      fx(el, { extra, s: 0.5 + 0.5 * q, o: clamp(q * 1.6) });
+    };
+    const tap = (t, at, x, y) => {
+      const hand = $("hand"), ring = $("ring");
+      const pin = seg(t, at - 0.45, at - 0.05), pout = seg(t, at + 0.3, at + 0.5);
+      set(hand, { left: lerp(x + 260, x, E.inOut(pin)) + "px", top: lerp(y + 260, y, E.inOut(pin)) + "px", opacity: pin > 0 && pout < 1 ? (1 - pout) * clamp(pin * 3) : 0, transform: `scale(${t > at && t < at + 0.15 ? 0.86 : 1})` });
+      const pr = seg(t, at, at + 0.5);
+      set(ring, { left: x + 10 + "px", top: y + 10 + "px", opacity: pr > 0 && pr < 1 ? 1 - pr : 0, transform: `scale(${0.3 + pr * 1.6})` });
+    };
+    const titleIn = (t, id, at = 0.08) => [...$(id).children].forEach((c, i) => rise(c, t, at + i * 0.12));
+
+    // ---------- data: every "app" below is a built-in Tescommerce feature (merchant admin → Growth, Marketing, Reviews, POS …) ----------
+    const APPS = [
+      ["⭐", "Yorumlar", "#fde68a", "Fotoğraflı ürün yorumları"],
+      ["✉️", "E-posta", "#bfdbfe", "E-posta otomasyonları"],
+      ["🛒", "Sepet", "#fecaca", "Sepet hatırlatmaları"],
+      ["⬆️", "Upsell", "#ddd6fe", "Ödeme sonrası upsell"],
+      ["📦", "Paketler", "#fed7aa", "Ürün paketleri"],
+      ["🎁", "Hediye", "#fbcfe8", "Hediye kartları"],
+      ["🔁", "Abonelik", "#bbf7d0", "Abonelikler"],
+      ["🤝", "Ortaklar", "#c7d2fe", "Creator'lar ve ortaklar"],
+      ["💱", "Kur", "#99f6e4", "Çoklu para birimi"],
+      ["🧩", "Sayfalar", "#e9d5ff", "Sayfa oluşturucu"],
+      ["🔎", "SEO", "#d9f99d", "SEO merkezi"],
+      ["❤️", "Favoriler", "#fecdd3", "Favori listesi"],
+      ["📈", "Analitik", "#bae6fd", "Canlı görünüm ve analitik"],
+      ["🧾", "POS", "#e7e5e4", "Satış noktası (POS)"]
+    ];
+    const APP_XY = APPS.map((_, i) => [40 + (i % 4) * 152, 170 + Math.floor(i / 4) * 240]);
+    const CENTER = [324 - 64, 620 - 64];
+    $("apps").innerHTML = APPS.map(([e, n, c], i) => `<div class="app" id="ap${i}" style="left:${APP_XY[i][0]}px;top:${APP_XY[i][1]}px"><div class="ic" style="background:${c}">${e}<span class="badge" id="bd${i}"></span><span class="x" id="ax${i}">×</span></div><div class="lb">${n}</div></div>`).join("");
+    const NOTIS = [
+      [0, "Yorum uygulaması", "Deneme süren yarın bitiyor"],
+      [1, "E-posta uygulaması", "2291 no'lu faturanın vadesi geldi"],
+      [3, "Upsell uygulaması", "Çalışmaya devam için güncelleme gerekli"],
+      [8, "Kur uygulaması", "Gelecek ay yeni fiyatlar"],
+      [12, "Analitik uygulaması", "Devam için mağazanı yeniden bağla"]
+    ];
+    $("notis").innerHTML = NOTIS.map(([a, n, m], i) => `<div class="noti" id="no${i}" style="top:${600 + i * 150}px"><span class="ni" style="background:${APPS[a][2]}">${APPS[a][0]}</span><div>${n}<small>${m}</small></div><span class="when">şimdi</span></div>`).join("");
+    $("burst").innerHTML = Array.from({ length: 14 }, (_, i) => `<div class="abs" id="bu${i}" style="width:22px;height:22px;margin:-11px;border-radius:50%;background:${i % 2 ? "#a3e635" : "#8b5cf6"}"></div>`).join("");
+    $("feats").innerHTML = APPS.map(([e, , c, f], i) => `<div class="feat" id="fe${i}" style="left:${i % 2 ? 560 : 80}px;top:${470 + Math.floor(i / 2) * 128}px"><span class="fi" style="background:${c}">${e}</span><span>${f}</span><span class="ck" id="fc${i}">✓</span></div>`).join("");
+    const SCORE = [["Girişler", "tek hesap", 14, 1], ["Paneller", "tek yönetim paneli", 14, 1], ["Aylık uygulama faturaları", "tek plan", 14, 1], ["Güncellenecek uygulamalar", "kurulacak bir şey yok", 14, 0]];
+    $("scores").innerHTML = SCORE.map(([n, s, a, b], i) => `<div class="score" id="sc${i}" style="top:${580 + i * 220}px"><div class="nm">${n}<small>${s}</small></div><div class="roll"><div id="ra${i}" style="color:#a1a1aa">${a}</div><div id="rb${i}" class="gtext" style="padding-right:4px">${b}</div></div></div>`).join("");
+    $("endWord").innerHTML = [..."Tescommerce"].map((c, i) => `<span id="ew${i}" style="display:inline-block">${c}</span>`).join("");
+
+    // ---------- shared phone (hook → chaos → delete) ----------
+    const S0 = plan.scenes[0].start, S2 = plan.scenes[2];
+    function phone(time) {
+      const layer = $("phoneLayer");
+      const end = S2.start + S2.dur;
+      if (time > end) { layer.style.visibility = "hidden"; return; }
+      layer.style.visibility = "visible";
+      const pin = E.expo(seg(time, 0.1, 0.8)), pout = E.in(seg(time, end - 0.3, end));
+      fx(layer, { y: (1 - pin) * 300, o: pin * (1 - pout), s: 1 + pout * 0.14, b: pout * 18 });
+      const chaos = plan.scenes[1], tc = time - chaos.start, td = time - S2.start;
+      // hook: apps install one by one
+      let installed = 0;
+      APPS.forEach((_, i) => {
+        const at = 0.7 + i * 0.22;
+        if (time > at) installed += 1;
+        const q = E.back(seg(time, at, at + 0.35));
+        let x = 0, y = 0, s = 0.3 + 0.7 * q, r = 0, o = clamp(q * 2);
+        // chaos: everything shakes a little more with every notification
+        if (tc > 0 && td < 0) { const k = clamp(tc / 4); x = Math.sin(time * 37 + i) * 3 * k; r = Math.sin(time * 29 + i * 2) * 2 * k; }
+        // delete: jiggle mode, then every icon is sucked into the centre
+        if (td > 0) {
+          r = Math.sin(time * 26 + i * 1.7) * 4;
+          const m = E.in(seg(td, 2.1 + (i % 7) * 0.05, 2.75 + (i % 7) * 0.05));
+          x = (CENTER[0] - APP_XY[i][0]) * m; y = (CENTER[1] - APP_XY[i][1]) * m;
+          s = 1 - 0.75 * m; r = r * (1 - m) + m * 180; o = 1 - seg(m, 0.8, 1);
+        }
+        fx($("ap" + i), { x, y, s, r, o });
+        // badges pile up during chaos
+        const bn = tc > 0 ? Math.min(9, Math.floor(clamp((tc - 0.3 - (i % 5) * 0.3) / 3.5) * (2 + (i % 4) * 2))) : 0;
+        $("bd" + i).textContent = bn;
+        $("bd" + i).style.opacity = bn > 0 && td < 0 ? 1 : 0;
+        $("ax" + i).style.opacity = td > 0.6 ? seg(td, 0.6 + i * 0.03, 0.9 + i * 0.03) * (td < 2.1 ? 1 : 0) : 0;
+      });
+      $("hookN").textContent = installed;
+      // notifications slide down from the top, stacking
+      NOTIS.forEach((_, i) => {
+        const at = 0.5 + i * 0.6;
+        const p = E.expo(seg(tc, at, at + 0.45)), q = E.in(seg(tc, 5.0, 5.6));
+        fx($("no" + i), { y: (1 - p) * -260 - q * 200, o: p * (1 - q), s: 0.96 + 0.04 * p });
+      });
+      // merge into one icon + burst
+      const mq = E.back(seg(td, 2.75, 3.25));
+      fx($("merge"), { s: 0.2 + 0.8 * mq, o: clamp(mq * 2), r: (1 - mq) * -30 });
+      for (let i = 0; i < 14; i += 1) {
+        const p = E.out(seg(td, 2.8, 3.6)), a = (i / 14) * Math.PI * 2;
+        set($("bu" + i), { transform: `translate(${Math.cos(a) * 300 * p}px, ${Math.sin(a) * 300 * p}px) scale(${1 - p})`, opacity: p > 0 && p < 1 ? 1 : 0 });
+      }
+      $("screen").style.background = td > 2.85 ? "linear-gradient(170deg, #f5f3ff, #ffffff 55%, #f7fee7)" : "";
+      if (td > 0) tap(td, 1.6, 200 + 16 + APP_XY[5][0] - 12, 560 + 16 + APP_XY[5][1] - 12);
+    }
+
+    // ---------- scenes ----------
+    const scenes = {
+      hook(t) { titleIn(t, "hookT", 0); },
+      chaos(t) { titleIn(t, "chT"); },
+      del(t) { titleIn(t, "deT"); },
+      built(t) {
+        titleIn(t, "buT");
+        APPS.forEach((_, i) => {
+          const at = 0.4 + i * 0.13;
+          const p = E.expo(seg(t, at, at + 0.5));
+          fx($("fe" + i), { x: (1 - p) * (i % 2 ? 200 : -200), o: p, b: (1 - p) * 10 });
+          pop($("fc" + i), t, at + 0.9);
+        });
+      },
+      score(t) {
+        titleIn(t, "scT");
+        SCORE.forEach((_, i) => {
+          const at = 0.4 + i * 0.25;
+          const p = E.expo(seg(t, at, at + 0.5));
+          fx($("sc" + i), { y: (1 - p) * 80, o: p, b: (1 - p) * 10 });
+          // slot roll: old number leaves upward, new one lands
+          const r = E.back(seg(t, 1.8 + i * 0.45, 2.3 + i * 0.45));
+          $("ra" + i).style.transform = `translateY(${-r * 130}px)`;
+          $("rb" + i).style.transform = `translateY(${(1 - r) * 130}px)`;
+        });
+      },
+      end(t) {
+        rise($("endQ"), t, 0.05, 40);
+        const pm = E.back(seg(t, 0.35, 0.9));
+        fx($("endMark"), { s: 0.3 + 0.7 * pm, r: (1 - pm) * -25, o: clamp(pm * 2) });
+        for (let i = 0; i < 11; i += 1) {
+          const p = E.expo(seg(t, 0.6 + i * 0.035, 1.05 + i * 0.035));
+          fx($("ew" + i), { y: (1 - p) * 80, o: p, b: (1 - p) * 10 });
+        }
+        rise($("endTag"), t, 1.15, 50, 0.6);
+        const pc = E.back(seg(t, 1.55, 2.05));
+        fx($("endCta"), { s: (0.7 + 0.3 * pc) * (1 + 0.025 * Math.sin(Math.max(0, t - 2.1) * 5)), o: clamp(pc * 2) });
+      }
+    };
+
+    // ---------- frame ----------
+    const ENTER = 0.45, EXIT = 0.3;
+    function renderAt(time) {
+      set($("blobA"), { left: 300 + Math.sin(time * 0.3) * 160 + "px", top: -380 + Math.cos(time * 0.25) * 100 + "px" });
+      set($("blobB"), { left: -420 + Math.cos(time * 0.27) * 120 + "px", top: 1200 + Math.sin(time * 0.33) * 120 + "px" });
+      set($("hand"), { opacity: 0 });
+      set($("ring"), { opacity: 0 });
+      for (const s of plan.scenes) {
+        const layer = $("s-" + s.id);
+        const t = time - s.start;
+        const last = s === plan.scenes[plan.scenes.length - 1];
+        if (t < -0.001 || (!last && t > s.dur)) { layer.style.visibility = "hidden"; continue; }
+        layer.style.visibility = "visible";
+        const pin = s.start === 0 ? 1 : E.expo(seg(t, 0, ENTER));
+        const pout = last ? 0 : E.in(seg(t, s.dur - EXIT, s.dur));
+        fx(layer, { s: lerp(0.94, 1, pin) * (1 + pout * 0.14), o: pin * (1 - pout), b: (1 - pin) * 16 + pout * 18 });
+        scenes[s.id](t, s.dur);
+      }
+      phone(time);
+    }
+    window.renderAt = renderAt;
+    document.fonts.ready.then(() => {
+      renderAt(0);
+      window.__ready = true;
+    });
+  </script>
+</body>
+</html>

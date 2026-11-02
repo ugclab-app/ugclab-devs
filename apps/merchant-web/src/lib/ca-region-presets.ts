@@ -1,5 +1,5 @@
-/** Recommended store settings for Central Asia markets. */
-export type CaPresetId = "kg" | "kz" | "uz";
+/** Recommended store settings for Central Asia and Türkiye. */
+export type CaPresetId = "kg" | "kz" | "uz" | "tr";
 
 export const CA_REGION_PRESETS: Record<
   CaPresetId,
@@ -27,5 +27,11 @@ export const CA_REGION_PRESETS: Record<
     timezone: "Asia/Tashkent",
     defaultLocale: "uz",
     enabledLocales: ["uz", "ru", "en"],
+  },
+  tr: {
+    currency: "TRY",
+    timezone: "Europe/Istanbul",
+    defaultLocale: "tr",
+    enabledLocales: ["tr", "en"],
   },
 };

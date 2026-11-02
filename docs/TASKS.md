@@ -6,7 +6,15 @@
 
 - ✅ Prisma generate на Windows (`npm run db:generate:safe`)
 - ✅ E2E: login → product → checkout (`npm run e2e:checkout`)
-- ⬜ CI: turbo lint + build
+- ✅ CI: GitHub Actions — API lint + unit tests (`.github/workflows/ci.yml`)
+- ✅ Rate limit: login / forgot-password / magic-link / reset-password / merchant-api-v1
+- ✅ Product feeds: Google Merchant XML + Meta/TikTok CSV (`/api/store/feeds/…`, Growth toggle)
+- ✅ OpenAPI: `GET /api/v1/openapi.json`
+- ✅ Merchant webhooks: SSRF-guard (https, no private IP / DNS rebinding), delivery log, retries 1m→12h (cron), redeliver from admin
+- ✅ Cloudflare Turnstile: merchant login/signup/forgot/magic-link (`TURNSTILE_*` env) + storefront checkout/login (per-store keys in Growth → Checkout options)
+- ✅ GDPR: customer export JSON + erase (anonymize) in Customer detail — orders kept, PII blanked
+- ✅ Unit tests: checkout totals / credits / refund math, invoice numbers, forecast, recommendations, URL guard (`order-math.test.ts`)
+- ⬜ Sentry: установить `@sentry/node` + `SENTRY_DSN` (заготовка `error-report.ts`)
 - ⬜ Убрать дубль `merchant-admin` vs `merchant-web` (один dev-порт)
 - ⬜ Обновить README (фазы 0–1)
 
@@ -27,8 +35,18 @@
 - ✅ Двухколоночная форма (media, rich text, slug, SEO, collections, SKU, sticky bar)
 - ✅ Scheduled publish (`publishAt` + cron)
 - ✅ Cost per item (`costAmountCents`)
-- ⬜ Product bundles / frequently bought together
-- ⬜ CSV import: preview ошибок + mapping колонок
+- ✅ Recommendations: «You may also like» (collections/tags/type/price) + «Frequently bought together» (co-purchases) — `GET /store/products/:slug/recommendations`
+- ✅ Stock forecast: «runs out in N days» + suggested reorder (Inventory → Stock forecast, `GET /merchant/inventory/forecast`)
+- ✅ CSV import: preview + mapping колонок
+- ✅ Digital license keys (pool on product → assign on fulfill)
+- ✅ Loyalty points (earn/redeem)
+- ✅ SMS/WhatsApp via Twilio (Growth → Integrations)
+- ✅ Visual email blocks builder (Marketing)
+- ✅ Wise auto-transfer hook on payout mark-paid
+- ✅ Mobile admin drawer nav
+- ✅ Store migration: Shopify / WooCommerce / Etsy CSV (products+variants+images, customers, orders) — `POST /merchant/import/store`
+- ✅ Courses / gated content: lessons (text + embedded video) on digital products → storefront `/library`
+- ✅ Pay what you want + minimum price
 - ⬜ Digital subscriptions (recurring)
 - ⬜ Geo-prices
 - ✅ Bulk: delete, add to collection (+ publish/archive)
@@ -40,6 +58,7 @@
 - 🟡 Единый UX страницы заказов (Order detail + AdminPageShell)
 - ✅ Timeline + partial fulfill UI
 - ✅ Shippo label panel в карточке заказа
+- ✅ Invoice numbering: prefix + sequential counter (Growth → Checkout options), assigned on paid; shown on invoice PDF/HTML and searchable
 - 🟡 Bulk fulfill; фильтр по стране; колонки Date / Items / Ship to / Tracking / MoR net
 
 ## E. Коллекции, скидки, черновики
@@ -93,6 +112,11 @@
 - ✅ Stripe Connect + Link + platform billing (API) — Connect опционален (`PAYMENT_MODEL=connect`)
 - ✅ Payments hub в админке
 - ⬜ PayPal / local methods
+- ✅ BNPL (Klarna / Afterpay / Affirm) via Stripe — Growth → Checkout options; auto by currency
+- ✅ Store credit: balance on customer, refund-to-credit, apply at checkout
+- ✅ Tips at checkout (percent presets / custom)
+- ✅ Custom checkout fields (delivery date, VAT/INN, comment…)
+- ✅ Blocked countries (no checkout)
 - 🟡 Stripe Tax (Settings Tax tab + checkout; Dashboard enable still required)
 - ✅ Platform MoR (default): checkout на platform Stripe, balance, payout requests
 - ✅ MoR: refund через Stripe API + webhook `charge.refunded`
@@ -103,7 +127,7 @@
 - ✅ MoR: CSV export payouts; min payout + schedule (env)
 - ✅ MoR: Stripe Tax + PayPal (theme toggles)
 - ✅ Connect отключён в MoR (`/connect` → 400)
-- ⬜ Wise auto-payout API
+- ✅ Wise auto-payout API (optional on mark-paid)
 - ✅ MoR: payout status labels + merchant/platform emails
 - ✅ Platform admin: «What to do today» action items
 
@@ -116,7 +140,9 @@
 ## K. Platform marketing site (:3000)
 
 - 🟡 Landing + signup (:3000 page exists; OAuth TBD)
-- ⬜ Тарифы, docs, status
+- ✅ `/pricing`, `/tools/savings`, guides, glossary (en/ru/tr)
+- ✅ Expanded `/vs/*` + `/sell-from/*` SEO pages + sitemap/prerender
+- 🟡 Status page exists; full docs hub still light
 
 ---
 

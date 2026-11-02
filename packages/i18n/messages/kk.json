@@ -143,5 +143,40 @@
     "storeClosed": "Жақында ашылады.",
     "wishlist": { "title": "Таңдаулылар", "add": "Таңдаулылар", "saved": "♥ Сақталды" },
     "collections": { "title": "Жинақтар" }
+  },
+  "signup": {
+    "headline": "Your global store",
+    "headlineAccent": "starts here.",
+    "sidebar": "Join thousands of creators selling digital products and merch worldwide.",
+    "title": "Create your store",
+    "subtitle": "Free to start. No credit card required.",
+    "name": "Your name",
+    "email": "Email",
+    "password": "Password",
+    "storeName": "Store name",
+    "country": "Country",
+    "submit": "Create store",
+    "submitting": "Creating…",
+    "haveAccount": "Already have an account?",
+    "signIn": "Sign in",
+    "slowHint": "Still working… First request can take up to a minute if the server was idle.",
+    "errorTimeout": "Server timed out. Try again in a minute or contact support.",
+    "errorFailed": "Signup failed",
+    "errorAbort": "Request timed out. The server may be starting up — try again.",
+    "errorNetwork": "Network error. Check your connection and try again.",
+    "countries": {
+      "US": "United States",
+      "KG": "Kyrgyzstan",
+      "KZ": "Kazakhstan",
+      "RU": "Russia",
+      "GB": "United Kingdom",
+      "DE": "Germany",
+      "FR": "France",
+      "CA": "Canada",
+      "AU": "Australia",
+      "AE": "UAE",
+      "TR": "Türkiye",
+      "IN": "India"
+    }
   }
 }

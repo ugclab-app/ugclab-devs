@@ -89,17 +89,27 @@ const APP_SEED = [
   },
 ] as const;
 
-export async function ensureMarketplace() {
-  await prisma.platformApp.createMany({
-    data: APP_SEED.map((app) => ({ ...app, published: true })),
-    skipDuplicates: true,
-  });
-  for (const [id, priceCents] of Object.entries(THEME_PRICES)) {
-    await prisma.storeThemeCatalog.updateMany({
-      where: { id },
-      data: { priceCents },
+let marketplaceSeeded: Promise<void> | null = null;
+
+/** Seed apps + theme prices. Runs once per process; the seed only changes on deploy. */
+export function ensureMarketplace() {
+  if (!marketplaceSeeded) {
+    marketplaceSeeded = (async () => {
+      await prisma.platformApp.createMany({
+        data: APP_SEED.map((app) => ({ ...app, published: true })),
+        skipDuplicates: true,
+      });
+      await Promise.all(
+        Object.entries(THEME_PRICES).map(([id, priceCents]) =>
+          prisma.storeThemeCatalog.updateMany({ where: { id }, data: { priceCents } })
+        )
+      );
+    })().catch((e) => {
+      marketplaceSeeded = null;
+      throw e;
     });
   }
+  return marketplaceSeeded;
 }
 
 export async function activeAddonIds(tenantId: string, kind: "THEME" | "APP") {

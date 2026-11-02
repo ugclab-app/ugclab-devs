@@ -5,6 +5,7 @@ export type SendEmailParams = {
   text?: string;
   from?: string;
   replyTo?: string;
+  headers?: Record<string, string>;
   /** Outlook / some clients; Gmail Important is still algorithmic. */
   priority?: "high" | "normal";
 };
@@ -31,15 +32,18 @@ export async function sendEmail({
   text,
   from,
   replyTo,
+  headers,
   template,
   priority = "normal",
-}: SendEmailParams & { template?: string }) {
+}: SendEmailParams & { template?: string }): Promise<{ id: string | null }> {
   const resendKey = process.env.RESEND_API_KEY;
   const sendgridKey = process.env.SENDGRID_API_KEY;
   const fromHeader =
     from ?? process.env.EMAIL_FROM ?? "Tescommerce <orders@tescommerce.com>";
 
   const priorityHeaders = resolvePriorityHeaders(priority);
+  const extraHeaders = { ...(priorityHeaders ?? {}), ...(headers ?? {}) };
+  const hasExtraHeaders = Object.keys(extraHeaders).length > 0;
 
   if (resendKey) {
     const res = await fetch("https://api.resend.com/emails", {
@@ -55,18 +59,19 @@ export async function sendEmail({
         html,
         ...(text ? { text } : {}),
         ...(replyTo ? { reply_to: replyTo } : {}),
-        ...(priorityHeaders ? { headers: priorityHeaders } : {}),
+        ...(hasExtraHeaders ? { headers: extraHeaders } : {}),
       }),
     });
     if (!res.ok) throw new Error(`Resend error: ${await res.text()}`);
+    const payload = (await res.json().catch(() => ({}))) as { id?: string };
     const { logPlatformEmail } = await import("./email-log.js");
     await logPlatformEmail({ to, subject, template, status: "sent" });
-    return;
+    return { id: payload.id ?? null };
   }
 
   if (sendgridKey) {
     const sgHeaders = {
-      ...(priorityHeaders ?? {}),
+      ...extraHeaders,
       ...(replyTo ? { "Reply-To": replyTo } : {}),
     };
     const res = await fetch("https://api.sendgrid.com/v3/mail/send", {
@@ -96,10 +101,11 @@ export async function sendEmail({
     if (!res.ok) throw new Error(`SendGrid error: ${await res.text()}`);
     const { logPlatformEmail } = await import("./email-log.js");
     await logPlatformEmail({ to, subject, template, status: "sent" });
-    return;
+    return { id: null };
   }
 
   console.warn("[email] No RESEND_API_KEY or SENDGRID_API_KEY — skipped:", subject);
   const { logPlatformEmail } = await import("./email-log.js");
   await logPlatformEmail({ to, subject, template, status: "skipped" });
+  return { id: null };
 }

@@ -41,6 +41,7 @@ import HelpPage from "@/pages/HelpPage";
 import GrowthPage from "@/pages/GrowthPage";
 import AppsPage from "@/pages/AppsPage";
 import InventoryPage from "@/pages/InventoryPage";
+import SuppliersPage from "@/pages/SuppliersPage";
 import PlatformMessagesPage from "@/pages/PlatformMessagesPage";
 import ReturnsPage from "@/pages/ReturnsPage";
 import B2bPage from "@/pages/B2bPage";
@@ -145,6 +146,7 @@ export default function App() {
         <Route path="collections/:id" element={<CollectionEditPage />} />
         <Route path="shipping" element={<ShippingPage />} />
         <Route path="inventory" element={<PermissionGate perm="products"><InventoryPage /></PermissionGate>} />
+        <Route path="suppliers" element={<PermissionGate perm="products"><SuppliersPage /></PermissionGate>} />
         <Route path="discounts" element={<DiscountsPage />} />
         <Route path="promotions" element={<PromotionsPage />} />
         <Route path="pages" element={<PagesPage />} />

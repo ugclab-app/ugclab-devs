@@ -52,15 +52,28 @@ export async function checkLowStockForTenant(tenantId: string) {
 
 export async function checkLowStockAfterInventoryChange(
   tenantId: string,
-  productId: string
+  productId: string,
+  previousInventory?: number | null
 ) {
   const product = await prisma.product.findUnique({
     where: { id: productId },
-    select: { inventory: true, type: true, status: true, tenantId: true },
+    select: { inventory: true, title: true, type: true, status: true, tenantId: true },
   });
   if (!product || product.tenantId !== tenantId) return;
   if (product.type !== ProductType.PHYSICAL || product.status !== ProductStatus.ACTIVE)
     return;
+
+  const now = product.inventory ?? 0;
+  if (
+    previousInventory != null &&
+    previousInventory > 0 &&
+    now <= 0
+  ) {
+    const { notifyProductSoldOut } = await import("./owner-alerts.js");
+    notifyProductSoldOut(tenantId, product.title).catch((err) =>
+      console.error("[email] sold out", err)
+    );
+  }
 
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },

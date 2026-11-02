@@ -47,6 +47,10 @@ export const BLOCK_CATALOG: BlockCatalogItem[] = [
   { type: "carousel", label: "Carousel", description: "Horizontal image slider", category: "content", icon: "⟷" },
   { type: "instagram_embed", label: "Instagram", description: "Embed feed", category: "social", icon: "◎" },
   { type: "product_compare", label: "Compare products", description: "Side-by-side PDPs", category: "store", icon: "⚖" },
+  { type: "compare_table", label: "Us vs others", description: "Checkmark comparison", category: "content", icon: "☑" },
+  { type: "order_steps", label: "Order steps", description: "Ordered, ready, delivered", category: "content", icon: "→" },
+  { type: "pickup", label: "Pickup", description: "Local pickup points", category: "store", icon: "⌂" },
+  { type: "icon_accordion", label: "Detail rows", description: "Fit, materials, shipping", category: "content", icon: "▾" },
 ];
 
 const CATEGORY_LABELS: Record<BlockCategory, string> = {
@@ -248,6 +252,46 @@ export function createBlock(type: HomeSection): HomeBlock {
       return { ...base, title: "Follow us", instagramEmbedUrl: "" };
     case "product_compare":
       return { ...base, title: "Compare", compareProductSlugs: [] };
+    case "compare_table":
+      return {
+        ...base,
+        title: "Why shop with us",
+        subtitle: "Others",
+        features: [
+          { title: "The detail people notice", text: "no" },
+          { title: "A gift people remember", text: "no" },
+          { title: "Slip on in seconds", text: "yes" },
+        ],
+      };
+    case "order_steps":
+      return {
+        ...base,
+        title: "How your order moves",
+        features: [
+          { title: "Ordered", text: "We get the order right away." },
+          { title: "Order ready", text: "Packed and handed to the carrier." },
+          { title: "Delivered", text: "Tracking lands in your inbox." },
+        ],
+      };
+    case "pickup":
+      return {
+        ...base,
+        title: "Pick up in store",
+        subtitle: "Choose a point at checkout if it is open.",
+        features: [
+          { title: "Main shop", text: "Ask us for today's hours." },
+        ],
+      };
+    case "icon_accordion":
+      return {
+        ...base,
+        title: "Good to know",
+        faqItems: [
+          { question: "Find your fit", answer: "One size. Check the size note before you order." },
+          { question: "The details", answer: "Materials and what is in the box." },
+          { question: "Shipping & returns", answer: "Free shipping. 30 days to request a return on unused items." },
+        ],
+      };
     default:
       return { ...base, title: BLOCK_CATALOG.find((b) => b.type === type)?.label };
   }

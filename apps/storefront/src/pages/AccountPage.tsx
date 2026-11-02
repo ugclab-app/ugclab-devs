@@ -113,7 +113,13 @@ export function AccountPage() {
         </div>
       ) : null}
 
-      <p className="mt-3 text-sm">
+      <p className="mt-3 flex flex-wrap gap-4 text-sm">
+        <Link
+          to={storeHref("/library", nav)}
+          className="font-medium text-[var(--store-primary)]"
+        >
+          Library →
+        </Link>
         <Link
           to={storeHref("/gift-card", nav)}
           className="font-medium text-[var(--store-primary)]"

@@ -51,17 +51,7 @@ export async function validateDiscountCode(
   return { discount, discountAmount };
 }
 
-export function calcTax(
-  taxableBase: number,
-  taxRateBps: number,
-  taxIncluded: boolean
-): number {
-  if (taxRateBps <= 0) return 0;
-  if (taxIncluded) {
-    return Math.round((taxableBase * taxRateBps) / (10000 + taxRateBps));
-  }
-  return Math.round((taxableBase * taxRateBps) / 10000);
-}
+export { calcTax } from "./order-math.js";
 
 export type ShippingQuote = { amount: number; label: string | null };
 
