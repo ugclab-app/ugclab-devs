@@ -3,6 +3,7 @@ import {
   listDisplayCurrencies,
   resolveDisplayCurrency,
 } from "@ugclab/i18n/store-currency";
+import { applyFxRounding, parseFxRounding } from "@ugclab/i18n/fx-rounding";
 import { parseStoreMarkets } from "./store-markets.js";
 import { fixedPriceForCurrency } from "./country-price.js";
 
@@ -13,6 +14,7 @@ type CurrencySettings = {
   localeCurrencies?: unknown;
   markets?: unknown;
   enabledLocales?: string[];
+  fxRounding?: unknown;
 } | null | undefined;
 
 export function displayCurrencyMeta(
@@ -70,14 +72,23 @@ export function priceForDisplay<T extends { priceAmount: number; compareAt?: num
     displayCurrency !== baseCurrency.toUpperCase()
       ? fixedPriceForCurrency(translations, displayCurrency)
       : null;
-  if (fixed == null) return converted;
+  const rules = parseFxRounding(settings?.fxRounding);
+  const round = (n: number) => applyFxRounding(n, rules);
+  if (fixed == null) {
+    return {
+      ...converted,
+      priceAmount: round(converted.priceAmount),
+      compareAt:
+        converted.compareAt != null ? round(converted.compareAt) : null,
+    };
+  }
+  const priceAmount = round(fixed);
   return {
     ...converted,
-    priceAmount: fixed,
-    // keep the same "was" discount ratio against the fixed price
+    priceAmount,
     compareAt:
       item.compareAt != null && item.priceAmount > 0
-        ? Math.round((item.compareAt * fixed) / item.priceAmount)
+        ? round((item.compareAt * fixed) / item.priceAmount)
         : null,
   };
 }

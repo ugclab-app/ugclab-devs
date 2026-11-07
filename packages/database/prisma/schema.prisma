@@ -619,6 +619,9 @@ model Tenant {
   /// outreach, partner, or direct. Empty on stores opened before this field.
   acquisitionSource        String?
   activationNudgeSentAt    DateTime? @db.Timestamptz(6)
+  /// Past-due billing reminder step (0 = none, 1/2/3 = day 0/3/7 emails).
+  dunningStep              Int       @default(0)
+  lastDunningAt            DateTime? @db.Timestamptz(6)
   createdAt              DateTime  @default(now()) @db.Timestamptz(6)
   updatedAt              DateTime  @updatedAt @db.Timestamptz(6)
 
@@ -672,6 +675,8 @@ model Tenant {
   addons                   TenantAddon[]
   merchantKyc              MerchantKyc?
   supplierAccounts         SupplierAccount[]
+  planCancelFeedbacks      PlanCancelFeedback[]
+  savedFilters             SavedFilter[]
 }
 
 enum SupplierProvider {
@@ -946,6 +951,8 @@ model StoreSettings {
   /// Cloudflare Turnstile site key shown on storefront checkout / account forms.
   turnstileSiteKey    String?
   turnstileSecretKey  String?
+  /// FX display rounding: { mode: "round"|"floor"|"ceil"|"nearest", step?: number }
+  fxRounding          Json?
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
@@ -1018,6 +1025,8 @@ model DiscountCode {
   startsAt       DateTime?    @db.Timestamptz(6)
   expiresAt      DateTime?    @db.Timestamptz(6)
   collectionId   String?
+  /// Groups codes created together via batch generate.
+  batchId        String?
   createdAt      DateTime     @default(now()) @db.Timestamptz(6)
 
   tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -1026,6 +1035,7 @@ model DiscountCode {
 
   @@unique([tenantId, code])
   @@index([tenantId])
+  @@index([tenantId, batchId])
 }
 
 model DigitalDownload {
@@ -1081,6 +1091,15 @@ model Product {
   /// Buyer chooses the price (>= minPriceAmount, or priceAmount when null).
   payWhatYouWant          Boolean   @default(false)
   minPriceAmount          Int?
+  /// Soft-delete: hidden from catalog; purge after 30 days.
+  deletedAt               DateTime? @db.Timestamptz(6)
+  /// Purchase quantity limits (storefront cart / checkout).
+  minQuantity             Int       @default(1)
+  maxQuantity             Int?
+  /// Scheduled price change (applied by cron when scheduledPriceAt <= now).
+  scheduledPriceAmount    Int?
+  scheduledCompareAt      Int?
+  scheduledPriceAt        DateTime? @db.Timestamptz(6)
   createdAt    DateTime      @default(now()) @db.Timestamptz(6)
   updatedAt    DateTime      @updatedAt @db.Timestamptz(6)
 
@@ -1103,9 +1122,12 @@ model Product {
   wishlistItems        WishlistItem[]
   stockAlerts          StockAlert[]
   supplierLink         SupplierProductLink?
+  revisions            ProductRevision[]
 
   @@unique([tenantId, slug])
   @@index([tenantId, status])
+  @@index([tenantId, deletedAt])
+  @@index([scheduledPriceAt])
 }
 
 model ProductVariant {
@@ -1283,6 +1305,8 @@ model Customer {
   storeCreditCents Int      @default(0)
   /// Set when personal data was erased on a GDPR request; orders stay for accounting.
   anonymizedAt     DateTime? @db.Timestamptz(6)
+  /// After merge, source customer points here (kept for audit; email mangled).
+  mergedIntoId     String?
   createdAt        DateTime @default(now()) @db.Timestamptz(6)
 
   tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -1293,10 +1317,12 @@ model Customer {
   productSubscriptions ProductSubscription[]
   addresses    CustomerAddress[]
   wishlistItems WishlistItem[]
+  notes        CustomerNote[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
   @@index([b2bCompanyId])
+  @@index([mergedIntoId])
 }
 
 model CustomerAddress {
@@ -2072,6 +2098,8 @@ model ProductSubscription {
   status               ProductSubscriptionStatus  @default(INCOMPLETE)
   interval             String
   currentPeriodEnd     DateTime?                  @db.Timestamptz(6)
+  dunningStep          Int                        @default(0)
+  lastDunningAt        DateTime?                  @db.Timestamptz(6)
   createdAt            DateTime                   @default(now()) @db.Timestamptz(6)
   updatedAt            DateTime                   @updatedAt @db.Timestamptz(6)
 
@@ -2154,4 +2182,92 @@ model DigitalEntitlement {
   @@index([tenantId, customerId])
   @@index([productId])
   @@index([subscriptionId])
+}
+
+enum BackgroundJobStatus {
+  PENDING
+  PROCESSING
+  SUCCESS
+  FAILED
+  DEAD
+}
+
+/// Durable outbox for emails and other work that must survive Vercel freezes.
+model BackgroundJob {
+  id          String              @id @default(cuid())
+  type        String
+  payload     Json
+  status      BackgroundJobStatus @default(PENDING)
+  attempts    Int                 @default(0)
+  maxAttempts Int                 @default(8)
+  runAt       DateTime            @default(now()) @db.Timestamptz(6)
+  lockedAt    DateTime?           @db.Timestamptz(6)
+  lastError   String?
+  createdAt   DateTime            @default(now()) @db.Timestamptz(6)
+  completedAt DateTime?           @db.Timestamptz(6)
+
+  @@index([status, runAt])
+  @@index([type, createdAt])
+}
+
+/// Why a merchant cancelled (or tried to) their platform plan — churn insights + save offers.
+model PlanCancelFeedback {
+  id            String   @id @default(cuid())
+  tenantId      String
+  userId        String?
+  planSlug      String?
+  reason        String
+  details       String?
+  acceptedOffer Boolean  @default(false)
+  offerCode     String?
+  createdAt     DateTime @default(now()) @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+}
+
+/// Staff-only notes on a customer (not visible on storefront).
+model CustomerNote {
+  id          String   @id @default(cuid())
+  tenantId    String
+  customerId  String
+  body        String   @db.Text
+  authorEmail String?
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, customerId])
+  @@index([customerId, createdAt])
+}
+
+/// Snapshot of product fields for history / rollback.
+model ProductRevision {
+  id          String   @id @default(cuid())
+  tenantId    String
+  productId   String
+  snapshot    Json
+  summary     String?
+  authorEmail String?
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, productId, createdAt])
+}
+
+/// Named saved views for orders / products list query strings.
+model SavedFilter {
+  id          String   @id @default(cuid())
+  tenantId    String
+  scope       String
+  name        String
+  query       Json
+  authorEmail String?
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, scope])
 }

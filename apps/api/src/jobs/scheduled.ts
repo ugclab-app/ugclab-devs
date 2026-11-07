@@ -15,6 +15,11 @@ import { syncAllSupplierTracking } from "../lib/suppliers.js";
 import { processActivationNudges } from "../lib/activation-nudge.js";
 import { refreshFxRatesIfStale } from "../lib/fx-rates.js";
 import { processWebhookRetries } from "../lib/merchant-webhooks.js";
+import { processDueJobs } from "../lib/job-queue.js";
+import {
+  processPlatformDunning,
+  processProductSubscriptionDunning,
+} from "../lib/billing-dunning.js";
 
 let lastWeeklyReportDay = -1;
 
@@ -58,10 +63,29 @@ export async function runScheduledJobs() {
   }
 
   try {
+    const jobs = await processDueJobs();
+    if (jobs.processed > 0) {
+      console.log(`[cron] background jobs: ${jobs.ok} ok / ${jobs.fail} fail`);
+    }
+  } catch (e) {
+    console.error("[cron] background jobs", e);
+  }
+
+  try {
     const wh = await processWebhookRetries();
     if (wh.retried > 0) console.log(`[cron] webhook retries: ${wh.retried}`);
   } catch (e) {
     console.error("[cron] webhook retries", e);
+  }
+
+  try {
+    const d1 = await processPlatformDunning();
+    const d2 = await processProductSubscriptionDunning();
+    if (d1.sent + d2.sent > 0) {
+      console.log(`[cron] dunning emails: platform=${d1.sent} product=${d2.sent}`);
+    }
+  } catch (e) {
+    console.error("[cron] dunning", e);
   }
 
   await processAbandonedCartReminders();

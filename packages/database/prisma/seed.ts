@@ -34,6 +34,7 @@ async function main() {
     where: { slug: "pro" },
     update: {
       priceMonthly: 2900,
+      platformFeeBps: 400,
       trialDays: 14,
       stripePriceId: process.env.STRIPE_PRICE_PRO ?? null,
     },
@@ -43,7 +44,7 @@ async function main() {
       priceMonthly: 2900,
       currency: "USD",
       productLimit: 500,
-      platformFeeBps: 300,
+      platformFeeBps: 400,
       trialDays: 14,
       stripePriceId: process.env.STRIPE_PRICE_PRO ?? null,
     },

@@ -3,6 +3,88 @@ import { isMorPaymentModel } from "./payment-model.js";
 
 const PAID = [OrderStatus.PAID, OrderStatus.FULFILLED];
 
+/** Per-store contribution: fees + plan MRR − partner fee-share − paid payouts (MoR cash out). */
+export async function getMerchantProfitabilityReport(days = 30) {
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const tenants = await prisma.tenant.findMany({
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      status: true,
+      subscriptionPlan: { select: { priceMonthly: true, name: true } },
+      owner: { select: { email: true } },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 500,
+  });
+
+  const feeByTenant = await prisma.order.groupBy({
+    by: ["tenantId"],
+    where: { status: { in: PAID }, createdAt: { gte: since } },
+    _sum: { platformFeeAmount: true, totalAmount: true },
+    _count: true,
+  });
+  const feeMap = new Map(
+    feeByTenant.map((r) => [
+      r.tenantId,
+      {
+        fees: r._sum.platformFeeAmount ?? 0,
+        gmv: r._sum.totalAmount ?? 0,
+        orders: r._count,
+      },
+    ])
+  );
+
+  const payouts = await prisma.merchantPayout.groupBy({
+    by: ["tenantId"],
+    where: { status: { in: ["PAID", "COMPLETED", "paid"] }, createdAt: { gte: since } },
+    _sum: { amount: true },
+  });
+  const payoutMap = new Map(payouts.map((p) => [p.tenantId, p._sum.amount ?? 0]));
+
+  const partnerRows = await prisma.platformPartnerReferral.groupBy({
+    by: ["tenantId"],
+    where: { createdAt: { gte: since } },
+    _sum: { amountCents: true },
+  });
+
+  const partnerMap = new Map(
+    partnerRows.map((r) => [r.tenantId, r._sum.amountCents ?? 0])
+  );
+
+  const rows = tenants.map((t) => {
+    const sales = feeMap.get(t.id) ?? { fees: 0, gmv: 0, orders: 0 };
+    const payoutsPaid = payoutMap.get(t.id) ?? 0;
+    const partnerCost = partnerMap.get(t.id) ?? 0;
+    const planMrr = t.subscriptionPlan?.priceMonthly ?? 0;
+    const contribution = sales.fees + planMrr - partnerCost;
+    return {
+      id: t.id,
+      name: t.name,
+      slug: t.slug,
+      status: t.status,
+      ownerEmail: t.owner.email,
+      plan: t.subscriptionPlan?.name ?? null,
+      planMrrCents: planMrr,
+      gmvCents: sales.gmv,
+      feeCents: sales.fees,
+      payoutCents: payoutsPaid,
+      partnerCommissionCents: partnerCost,
+      contributionCents: contribution,
+      orders: sales.orders,
+      losingMoney: contribution < 0,
+    };
+  });
+
+  rows.sort((a, b) => a.contributionCents - b.contributionCents);
+  return {
+    days,
+    losingCount: rows.filter((r) => r.losingMoney).length,
+    rows,
+  };
+}
+
 export async function getPlatformRevenueReport() {
   const now = new Date();
   const months: { key: string; gmv: number; platformFees: number; orders: number }[] =

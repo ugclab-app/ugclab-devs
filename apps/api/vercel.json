@@ -4,8 +4,13 @@
   "framework": null,
   "installCommand": "cd ../.. && npm install",
   "buildCommand": "node scripts/vercel-build.mjs",
+  "crons": [{ "path": "/api/cron", "schedule": "*/5 * * * *" }],
   "functions": {
     "api/index.ts": {
+      "maxDuration": 60,
+      "includeFiles": "../../node_modules/.prisma/**"
+    },
+    "api/cron.ts": {
       "maxDuration": 60,
       "includeFiles": "../../node_modules/.prisma/**"
     },
@@ -20,6 +25,7 @@
     { "source": "/health", "destination": "/api/health" },
     { "source": "/api/health/ping", "destination": "/api/health-ping" },
     { "source": "/api/health/ready", "destination": "/api/health-ready" },
+    { "source": "/api/cron", "destination": "/api/cron" },
     {
       "source": "/",
       "has": [{ "type": "query", "key": "tenant" }],

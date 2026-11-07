@@ -5,6 +5,7 @@ import { assertDatabaseReady, databaseTimeoutMessage } from "./db-ready.js";
 import { MERCHANT_WEB_URL } from "../env.js";
 import { recordStoreAcquisition } from "./acquisition.js";
 import { attributePlatformPartner } from "./platform-partner.js";
+import { notifyNewMerchantSignup } from "./platform-ops-notify.js";
 import { sendStoreOpenedEmail } from "./user-admin-email.js";
 
 /** Store defaults by signup country. Anything else starts in English and USD. */
@@ -139,6 +140,16 @@ export async function registerMerchantStore(body: SignupInput) {
     storeSlug: slug,
   }).catch((err) => console.error("[signup] store-opened email", err));
 
+  await notifyNewMerchantSignup({
+    tenantId,
+    storeName: body.storeName,
+    storeSlug: slug,
+    ownerEmail: email,
+    ownerName: body.name,
+    country,
+    ref: body.ref,
+  }).catch((err) => console.error("[signup] ops notify", err));
+
   return {
     ok: true as const,
     redirect: `${MERCHANT_WEB_URL}/login?email=${encodeURIComponent(email)}&welcome=1`,
@@ -238,6 +249,16 @@ export async function createStoreForOwner(opts: {
     storeName: tenant.name,
     storeSlug: tenant.slug,
   }).catch((err) => console.error("[signup] store-opened email", err));
+
+  await notifyNewMerchantSignup({
+    tenantId: tenant.id,
+    storeName: tenant.name,
+    storeSlug: tenant.slug,
+    ownerEmail: user.email,
+    ownerName: user.name,
+    country,
+    ref: opts.ref,
+  }).catch((err) => console.error("[signup] ops notify", err));
 
   return { ok: true as const, tenant };
 }

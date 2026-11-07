@@ -769,51 +769,12 @@ export default function GrowthPage() {
       )}
 
       {tab === "seo" && (
-        <div className="space-y-4">
-          <div className="rounded-xl border border-zinc-200 p-5 text-sm">
-            <p>
-              <strong>Store:</strong> {String(seo.storeTitle ?? "")}
-            </p>
-            <p className="mt-1 text-zinc-600">
-              Active products: {String(seo.activeProducts ?? 0)} · Sitemap:{" "}
-              {String(seo.sitemapHint ?? "")}
-            </p>
-          </div>
-          <form
-            className="max-w-lg space-y-3 rounded-xl border border-zinc-200 p-5"
-            onSubmit={(e) => {
-              e.preventDefault();
-              const fd = new FormData(e.currentTarget);
-              void run(
-                () =>
-                  api.patchGrowthSettings({
-                    seoTitle: fd.get("seoTitle"),
-                    seoDescription: fd.get("seoDescription"),
-                  }),
-                "Store SEO saved"
-              );
-            }}
-          >
-            <input
-              name="seoTitle"
-              defaultValue={String(settings.seoTitle ?? "")}
-              placeholder="Default meta title"
-              className="ugclab-input w-full"
-            />
-            <textarea
-              name="seoDescription"
-              defaultValue={String(settings.seoDescription ?? "")}
-              placeholder="Default meta description"
-              className="ugclab-input w-full min-h-[80px]"
-            />
-            <button type="submit" disabled={pending} className="ugclab-btn ugclab-btn-primary">
-              Save store SEO
-            </button>
-          </form>
-          <p className="text-sm text-zinc-500">
-            Per-product SEO: edit on each product, or use bulk in Products → edit.
-          </p>
-        </div>
+        <SeoHub
+          seo={seo}
+          settings={settings}
+          pending={pending}
+          run={run}
+        />
       )}
 
       {tab === "tax" && (
@@ -1413,6 +1374,111 @@ export default function GrowthPage() {
           </ul>
         </div>
       )}
+    </div>
+  );
+}
+
+function SeoHub({
+  seo,
+  settings,
+  pending,
+  run,
+}: {
+  seo: Record<string, unknown>;
+  settings: GrowthSettingsDto;
+  pending: boolean;
+  run: (fn: () => Promise<unknown>, msg: string) => Promise<void>;
+}) {
+  const auditQ = useQuery({
+    queryKey: ["growth-seo-audit"],
+    queryFn: () => api.growthSeoAudit(),
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-zinc-200 p-5 text-sm">
+        <p>
+          <strong>Store:</strong> {String(seo.storeTitle ?? "")}
+        </p>
+        <p className="mt-1 text-zinc-600">
+          Active products: {String(seo.activeProducts ?? 0)} · Sitemap:{" "}
+          {String(seo.sitemapHint ?? "")}
+        </p>
+      </div>
+
+      <div className="rounded-xl border border-zinc-200 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="font-semibold">SEO check</h2>
+          <button
+            type="button"
+            className="ugclab-btn border border-zinc-200 bg-white text-sm"
+            disabled={auditQ.isFetching}
+            onClick={() => void auditQ.refetch()}
+          >
+            {auditQ.isFetching ? "Checking…" : "Re-run check"}
+          </button>
+        </div>
+        {auditQ.data ? (
+          <>
+            <p className="mt-3 text-3xl font-bold text-zinc-900">
+              {auditQ.data.grade}{" "}
+              <span className="text-base font-medium text-zinc-500">
+                {auditQ.data.score}/{auditQ.data.maxScore}
+              </span>
+            </p>
+            <ul className="mt-4 space-y-2 text-sm">
+              {auditQ.data.checks.map((c) => (
+                <li
+                  key={c.id}
+                  className={`rounded-lg px-3 py-2 ${c.ok ? "bg-emerald-50 text-emerald-900" : "bg-amber-50 text-amber-950"}`}
+                >
+                  {c.ok ? "✓" : "!"} {c.message}
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : auditQ.isError ? (
+          <p className="mt-3 text-sm text-red-600">Could not load SEO audit.</p>
+        ) : (
+          <p className="mt-3 text-sm text-zinc-500">Loading score…</p>
+        )}
+      </div>
+
+      <form
+        className="max-w-lg space-y-3 rounded-xl border border-zinc-200 p-5"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const fd = new FormData(e.currentTarget);
+          void run(
+            () =>
+              api.patchGrowthSettings({
+                seoTitle: fd.get("seoTitle"),
+                seoDescription: fd.get("seoDescription"),
+              }),
+            "Store SEO saved"
+          );
+        }}
+      >
+        <input
+          name="seoTitle"
+          defaultValue={String(settings.seoTitle ?? "")}
+          placeholder="Default meta title"
+          className="ugclab-input w-full"
+        />
+        <textarea
+          name="seoDescription"
+          defaultValue={String(settings.seoDescription ?? "")}
+          placeholder="Default meta description"
+          className="ugclab-input w-full min-h-[80px]"
+        />
+        <button type="submit" disabled={pending} className="ugclab-btn ugclab-btn-primary">
+          Save store SEO
+        </button>
+      </form>
+      <p className="text-sm text-zinc-500">
+        Per-product SEO: edit on each product. Webhooks for Zapier/Make: Growth → Webhooks
+        (order.*, product.*, customer.created, subscription.updated).
+      </p>
     </div>
   );
 }

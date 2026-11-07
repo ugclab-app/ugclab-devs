@@ -53,4 +53,10 @@ export {
   type Priced,
 } from "./store-currency.js";
 
+export {
+  applyFxRounding,
+  parseFxRounding,
+  type FxRoundingRules,
+} from "./fx-rounding.js";
+
 export { localizeStoreTheme } from "./storefront-theme-locale.js";

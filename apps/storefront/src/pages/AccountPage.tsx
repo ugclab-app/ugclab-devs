@@ -126,6 +126,12 @@ export function AccountPage() {
         >
           Check gift card balance →
         </Link>
+        <Link
+          to={storeHref("/track", nav)}
+          className="font-medium text-[var(--store-primary)]"
+        >
+          Track order →
+        </Link>
       </p>
 
       {!customer ? (

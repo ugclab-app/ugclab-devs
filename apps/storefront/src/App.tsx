@@ -16,6 +16,7 @@ import { AccountResetPage } from "@/pages/AccountResetPage";
 import { SearchPage } from "@/pages/SearchPage";
 import { GiftCardBalancePage } from "@/pages/GiftCardBalancePage";
 import { OrderPage } from "@/pages/OrderPage";
+import { TrackOrderPage } from "@/pages/TrackOrderPage";
 import { ReturnRequestPage } from "@/pages/ReturnRequestPage";
 import { PolicyPage } from "@/pages/PolicyPage";
 import { WishlistPage } from "@/pages/WishlistPage";
@@ -43,6 +44,7 @@ export default function App() {
         <Route path="account/reset" element={<AccountResetPage />} />
         <Route path="search" element={<SearchPage />} />
         <Route path="gift-card" element={<GiftCardBalancePage />} />
+        <Route path="track" element={<TrackOrderPage />} />
         <Route path="orders/:id" element={<OrderPage />} />
         <Route path="orders/:id/return" element={<ReturnRequestPage />} />
         <Route path="policies/:kind" element={<PolicyPage />} />

@@ -11,6 +11,7 @@ import type { AuthEnv } from "../middleware/session.js";
 import { logPlatformAudit } from "../lib/platform-audit.js";
 import {
   getBillingHealthReport,
+  getMerchantProfitabilityReport,
   getPlatformRevenueReport,
 } from "../lib/platform-revenue.js";
 import {
@@ -28,6 +29,11 @@ export function registerPlatformV2Routes(platform: Hono<AuthEnv>) {
 
   platform.get("/billing-health", async (c) => {
     return c.json(await getBillingHealthReport());
+  });
+
+  platform.get("/profitability", async (c) => {
+    const days = Math.min(90, Math.max(7, Number(c.req.query("days") ?? 30) || 30));
+    return c.json(await getMerchantProfitabilityReport(days));
   });
 
   platform.get("/disputes", async (c) => {

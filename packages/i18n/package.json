@@ -18,6 +18,12 @@
       "import": "./dist/store-currency.js",
       "default": "./dist/store-currency.js"
     },
+    "./fx-rounding": {
+      "types": "./src/fx-rounding.ts",
+      "development": "./src/fx-rounding.ts",
+      "import": "./dist/fx-rounding.js",
+      "default": "./dist/fx-rounding.js"
+    },
     "./messages/en.json": "./messages/en.json"
   },
   "scripts": {

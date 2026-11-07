@@ -152,7 +152,7 @@ const compareExtras = {
       rows: [
         { label: "Customer ownership", tes: "Yours", other: "Marketplace owns traffic" },
         { label: "Brand & domain", tes: "Your store + domain", other: "Etsy shop" },
-        { label: "Fees", tes: "5% or 3% platform", other: "Listing + transaction + ads" },
+        { label: "Fees", tes: "5% or 4% platform", other: "Listing + transaction + ads" },
         { label: "Payout flexibility", tes: "12 currencies", other: "Etsy payout rules" },
         { label: "Digital + physical", tes: "Yes", other: "Yes" },
       ],
@@ -178,7 +178,7 @@ const compareExtras = {
       rows: [
         { label: "Покупатель", tes: "Ваш", other: "Трафик у маркетплейса" },
         { label: "Бренд и домен", tes: "Свой магазин", other: "Магазин Etsy" },
-        { label: "Комиссии", tes: "5% или 3%", other: "Листинг + транзакция + реклама" },
+        { label: "Комиссии", tes: "5% или 4%", other: "Листинг + транзакция + реклама" },
         { label: "Выплаты", tes: "12 валют", other: "Правила Etsy" },
         { label: "Цифра + физика", tes: "Да", other: "Да" },
       ],
@@ -1527,7 +1527,7 @@ export const seoHubCopy = {
   en: {
     pricingTitle: "Tescommerce pricing",
     pricingDescription:
-      "Starter free with 5% fee, Growth $29/mo with 3% fee, Pro $79/mo — simple plans for cross-border sellers.",
+      "Starter free with 5% fee, Growth $29/mo with 4% fee, Pro $79/mo — simple plans for cross-border sellers.",
     pricingHeading: "Simple pricing that grows with you",
     pricingIntro: "No surprise app stack. Pick a plan, open a store, get paid where you live.",
     savingsTitle: "Shopify vs Tescommerce fee calculator",
@@ -1553,7 +1553,7 @@ export const seoHubCopy = {
   ru: {
     pricingTitle: "Тарифы Tescommerce",
     pricingDescription:
-      "Starter бесплатно с комиссией 5%, Growth $29/мес с 3%, Pro $79/мес — простые планы для трансграничных продавцов.",
+      "Starter бесплатно с комиссией 5%, Growth $29/мес с 4%, Pro $79/мес — простые планы для трансграничных продавцов.",
     pricingHeading: "Простые тарифы, которые растут вместе с вами",
     pricingIntro: "Без зоопарка приложений. Выберите план, откройте магазин, получайте выплаты дома.",
     savingsTitle: "Калькулятор комиссий Shopify vs Tescommerce",

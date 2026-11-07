@@ -5,6 +5,10 @@ import { formatMoney } from "@ugclab/i18n";
 import { api } from "@/api/client";
 import { AdminPageShell } from "@/components/admin-page-shell";
 import { CustomerSegmentBadges } from "@/components/customer-segment-badges";
+import {
+  CustomerNotesPanel,
+  CustomerTimelinePanel,
+} from "@/components/customer-notes-panel";
 import { OrderStatusBadge } from "@/components/status-badge";
 import type { OrderStatus } from "@/lib/database-types";
 
@@ -49,6 +53,8 @@ export default function CustomerDetailPage() {
   const [eraseConfirm, setEraseConfirm] = useState("");
   const [eraseError, setEraseError] = useState<string | null>(null);
   const [eraseNote, setEraseNote] = useState<string | null>(null);
+  const [mergeId, setMergeId] = useState("");
+  const [mergeMsg, setMergeMsg] = useState<string | null>(null);
   const anonymize = useMutation({
     mutationFn: () => api.anonymizeCustomer(id!),
     onSuccess: (r) => {
@@ -222,6 +228,48 @@ export default function CustomerDetailPage() {
           value={formatShortDate(summary.lastOrderAt)}
         />
       </div>
+
+      {id ? (
+        <div className="mb-8 grid gap-4 lg:grid-cols-2">
+          <CustomerTimelinePanel customerId={id} />
+          <CustomerNotesPanel customerId={id} />
+        </div>
+      ) : null}
+
+      {id && !anonymized ? (
+        <section className="admin-card mb-8 space-y-3 p-4">
+          <h3 className="font-semibold text-zinc-900">Merge duplicate</h3>
+          <p className="text-xs text-zinc-500">
+            Keep this customer and absorb another (orders, addresses, credit). Enter the duplicate customer id.
+          </p>
+          {mergeMsg ? <p className="text-sm text-zinc-700">{mergeMsg}</p> : null}
+          <div className="flex flex-wrap gap-2">
+            <input
+              className="ugclab-input w-64 font-mono text-sm"
+              placeholder="Duplicate customer id"
+              value={mergeId}
+              onChange={(e) => setMergeId(e.target.value)}
+            />
+            <button
+              type="button"
+              className="ugclab-btn ugclab-btn-secondary text-sm"
+              disabled={!mergeId.trim()}
+              onClick={async () => {
+                try {
+                  await api.mergeCustomers(id, mergeId.trim());
+                  setMergeMsg("Merged. Duplicate anonymized.");
+                  setMergeId("");
+                  void qc.invalidateQueries({ queryKey: ["customer", id] });
+                } catch (e) {
+                  setMergeMsg(e instanceof Error ? e.message : "Merge failed");
+                }
+              }}
+            >
+              Merge into this customer
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       <section className="admin-card mb-8 p-6 space-y-5">
         <h2 className="font-semibold text-zinc-900">Store credit & loyalty</h2>

@@ -1,4 +1,4 @@
-import { test } from "node:test";
+import { test } from "vitest";
 import assert from "node:assert/strict";
 import { convertAmount, getFxRates, setFxRates } from "@ugclab/i18n/store-currency";
 import {

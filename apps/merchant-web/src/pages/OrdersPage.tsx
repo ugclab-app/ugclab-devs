@@ -8,6 +8,7 @@ import { OrdersTable, type OrderListRow } from "@/components/orders-table";
 import { EmptyState } from "@/components/empty-state";
 import { AdminPageShell } from "@/components/admin-page-shell";
 import { FormAlert } from "@/components/form-alert";
+import { SavedFiltersBar } from "@/components/saved-filters-bar";
 import type { OrderStatus } from "@/lib/database-types";
 import { useAdminT } from "@/hooks/use-admin-t";
 
@@ -140,6 +141,9 @@ export default function OrdersPage() {
       }
     >
       <OrdersToolbar sortOptions={SORT_OPTIONS} />
+      <div className="mt-3">
+        <SavedFiltersBar scope="ORDERS" />
+      </div>
 
       {banner ? (
         <div className="mt-4">

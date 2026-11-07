@@ -7,7 +7,7 @@ const SHOPIFY_BASIC = 39;
 const SHOPIFY_THIRD_PARTY_FEE = 0.02;
 const STARTER_FEE = 0.05;
 const GROWTH_PRICE = 29;
-const GROWTH_FEE = 0.03;
+const GROWTH_FEE = 0.04;
 
 export function SavingsCalculator() {
   const { locale, content } = useLanding();

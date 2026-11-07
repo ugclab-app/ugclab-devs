@@ -201,7 +201,7 @@ const en = {
     shopifyFee: "2% third-party payment fee",
     tesTitle: "Tescommerce",
     starter: "Starter: 5% platform fee",
-    growth: "Growth: $29 + 3% platform fee",
+    growth: "Growth: $29 + 4% platform fee",
     total: "Total per month",
     save: "You save {month} a month — {year} a year",
     moreExpensive:
@@ -256,7 +256,7 @@ const en = {
     eyebrow: "Pricing",
     title: "Simple pricing that grows with you",
     mostPopular: "Most popular",
-    breakEven: "Growth costs less than Starter once you sell more than $1,450 a month.",
+    breakEven: "Growth costs less than Starter once you sell more than $2,900 a month.",
     plans: [
       {
         name: "Starter",
@@ -272,7 +272,7 @@ const en = {
         price: "$29",
         period: "/month",
         desc: "For growing brands",
-        features: ["Unlimited products", "Custom domain", "3% platform fee", "Stripe Tax ready", "Priority support"],
+        features: ["Unlimited products", "Custom domain", "4% platform fee", "Stripe Tax ready", "Priority support"],
         cta: "Start trial",
         highlighted: true,
       },
@@ -306,7 +306,7 @@ const en = {
       },
       {
         q: "What fees does Tescommerce charge?",
-        a: "Starter is free with a 5% platform fee on sales. Growth is $29 a month with a 3% fee. Card processing is charged at standard Stripe rates.",
+        a: "Starter is free with a 5% platform fee on sales. Growth is $29 a month with a 4% fee. Card processing is charged at standard Stripe rates.",
       },
       {
         q: "What is Merchant of Record (MoR)?",
@@ -408,9 +408,9 @@ const en = {
       eyebrow: "Gumroad alternative",
       heading: "Keep more of every sale than on Gumroad",
       intro:
-        "Gumroad is easy, but it takes 10% of every sale and gives you a profile page, not a store. Tescommerce is also Merchant of Record — at 5% or 3%.",
+        "Gumroad is easy, but it takes 10% of every sale and gives you a profile page, not a store. Tescommerce is also Merchant of Record — at 5% or 4%.",
       rows: [
-        { label: "Platform fee", tes: "5% (Starter) or 3% (Growth)", other: "10%" },
+        { label: "Platform fee", tes: "5% (Starter) or 4% (Growth)", other: "10%" },
         { label: "Merchant of Record", tes: "Yes", other: "Yes" },
         { label: "Your own branded store", tes: "Yes, with site builder", other: "Profile page" },
         { label: "Custom domain", tes: "Yes", other: "No" },
@@ -689,7 +689,7 @@ const ru: LandingContent = {
     shopifyFee: "2% за сторонний платёжный сервис",
     tesTitle: "Tescommerce",
     starter: "Starter: комиссия 5%",
-    growth: "Growth: $29 + комиссия 3%",
+    growth: "Growth: $29 + комиссия 4%",
     total: "Итого в месяц",
     save: "Экономия {month} в месяц — {year} в год",
     moreExpensive:
@@ -744,7 +744,7 @@ const ru: LandingContent = {
     eyebrow: "Тарифы",
     title: "Простые тарифы, которые растут вместе с вами",
     mostPopular: "Популярный",
-    breakEven: "Growth выгоднее Starter, когда вы продаёте больше чем на $1 450 в месяц.",
+    breakEven: "Growth выгоднее Starter, когда вы продаёте больше чем на $2 900 в месяц.",
     plans: [
       {
         name: "Starter",
@@ -760,7 +760,7 @@ const ru: LandingContent = {
         price: "$29",
         period: "/мес",
         desc: "Для растущих брендов",
-        features: ["Без лимита товаров", "Свой домен", "Комиссия 3%", "Готов к Stripe Tax", "Приоритетная поддержка"],
+        features: ["Без лимита товаров", "Свой домен", "Комиссия 4%", "Готов к Stripe Tax", "Приоритетная поддержка"],
         cta: "Попробовать",
         highlighted: true,
       },
@@ -794,7 +794,7 @@ const ru: LandingContent = {
       },
       {
         q: "Какие комиссии у Tescommerce?",
-        a: "Starter бесплатный с комиссией 5% с продаж. Growth — $29 в месяц и комиссия 3%. Обработка карт оплачивается по стандартным тарифам Stripe.",
+        a: "Starter бесплатный с комиссией 5% с продаж. Growth — $29 в месяц и комиссия 4%. Обработка карт оплачивается по стандартным тарифам Stripe.",
       },
       {
         q: "Что такое Merchant of Record (MoR)?",
@@ -896,9 +896,9 @@ const ru: LandingContent = {
       eyebrow: "Альтернатива Gumroad",
       heading: "Оставляйте себе больше с каждой продажи, чем на Gumroad",
       intro:
-        "Gumroad простой, но забирает 10% каждой продажи и даёт страницу профиля, а не магазин. Tescommerce тоже Merchant of Record — за 5% или 3%.",
+        "Gumroad простой, но забирает 10% каждой продажи и даёт страницу профиля, а не магазин. Tescommerce тоже Merchant of Record — за 5% или 4%.",
       rows: [
-        { label: "Комиссия платформы", tes: "5% (Starter) или 3% (Growth)", other: "10%" },
+        { label: "Комиссия платформы", tes: "5% (Starter) или 4% (Growth)", other: "10%" },
         { label: "Merchant of Record", tes: "Да", other: "Да" },
         { label: "Свой магазин с брендом", tes: "Да, с конструктором", other: "Страница профиля" },
         { label: "Свой домен", tes: "Да", other: "Нет" },

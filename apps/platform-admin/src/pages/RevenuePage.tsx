@@ -10,10 +10,61 @@ export default function RevenuePage() {
     queryKey: ["billing-health"],
     queryFn: () => api.billingHealth(),
   });
+  const profitQ = useQuery({
+    queryKey: ["profitability"],
+    queryFn: () => api.profitability(30),
+  });
 
   return (
     <div className="space-y-8">
       <h1 className="text-2xl font-bold">Revenue & billing</h1>
+
+      <QueryState query={profitQ}>
+        {(data) => (
+          <section className="platform-card overflow-hidden">
+            <div className="border-b px-6 py-4">
+              <h2 className="font-semibold">Merchant profitability (30d)</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Contribution = platform fees + plan MRR − partner commissions.{" "}
+                {data.losingCount} store(s) below zero.
+              </p>
+            </div>
+            <div className="max-h-96 overflow-auto">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-slate-50 text-left text-xs uppercase text-slate-500">
+                  <tr>
+                    <th className="px-4 py-2">Store</th>
+                    <th className="px-4 py-2">GMV</th>
+                    <th className="px-4 py-2">Fees</th>
+                    <th className="px-4 py-2">Plan</th>
+                    <th className="px-4 py-2">Contribution</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {data.rows.slice(0, 40).map((r) => (
+                    <tr key={r.id} className={r.losingMoney ? "bg-red-50/60" : undefined}>
+                      <td className="px-4 py-2">
+                        <Link to={`/tenants/${r.id}`} className="font-medium text-sky-600">
+                          {r.name}
+                        </Link>
+                        <p className="text-xs text-slate-400">{r.ownerEmail}</p>
+                      </td>
+                      <td className="px-4 py-2">{formatMoney(r.gmvCents, "USD")}</td>
+                      <td className="px-4 py-2">{formatMoney(r.feeCents, "USD")}</td>
+                      <td className="px-4 py-2">{formatMoney(r.planMrrCents, "USD")}</td>
+                      <td
+                        className={`px-4 py-2 font-medium ${r.losingMoney ? "text-red-700" : "text-emerald-700"}`}
+                      >
+                        {formatMoney(r.contributionCents, "USD")}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+      </QueryState>
 
       <QueryState query={revenueQ}>
         {(data) => {

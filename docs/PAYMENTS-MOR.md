@@ -55,6 +55,14 @@ Webhook `charge.dispute.created|updated|closed` → order event `STRIPE_DISPUTE`
 - Optional `PLATFORM_OPS_EMAIL` — alert when a merchant requests a payout.
 - CSV export: merchant **Export payouts CSV**; platform **Export all payouts CSV**.
 
+## Risk rules
+
+- `MOR_FIRST_PAYOUT_HOLD_DAYS` — new stores cannot request the first payout until N days after signup (default 14). Cleared after any `PAID` payout.
+- `MOR_NEW_SHOP_DAYS` + `MOR_NEW_SHOP_WEEKLY_GMV_CENTS` — during the new-shop window, checkout rejects orders that would push GMV (PENDING+PAID+FULFILLED) over the cap (default 7 days / $500). Set cap to `0` to disable.
+- `MOR_DISPUTE_FREEZE_THRESHOLD` — when open/lost Stripe disputes on distinct orders reach N (default 3), the tenant is auto-`SUSPENDED`. Set to `0` to disable.
+- Passport KYC must be `APPROVED` before payout; suspended tenants cannot request payouts.
+- Money-path unit coverage: `apps/api/src/lib/money-path.test.ts` (payment → refund → balance → payout + risk helpers).
+
 ## Checkout options (store theme)
 
 - **Stripe Tax** — `stripeTaxEnabled` in theme / Settings → Appearance.

@@ -7,11 +7,22 @@ import { FormAlert } from "@/components/form-alert";
 import { SettingsPanelShell } from "@/components/settings-section";
 import { BillingInvoicesPanel } from "@/components/billing-invoices-panel";
 
+const CANCEL_REASONS = [
+  "Too expensive",
+  "Missing features",
+  "Switching to another platform",
+  "Store on pause / seasonal",
+  "Other",
+];
+
 export function BillingPanel() {
   const [searchParams, setSearchParams] = useSearchParams();
   const qc = useQueryClient();
   const [alert, setAlert] = useState<{ ok?: boolean; message?: string }>({});
   const [pending, setPending] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState(CANCEL_REASONS[0]!);
+  const [cancelDetails, setCancelDetails] = useState("");
 
   const billingReturn = searchParams.get("billing");
   if (billingReturn === "success") {
@@ -68,6 +79,36 @@ export function BillingPanel() {
       setAlert({
         ok: false,
         message: e instanceof Error ? e.message : "Portal unavailable",
+      });
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function submitCancel(acceptOffer: boolean) {
+    setPending(true);
+    setAlert({});
+    try {
+      const res = await api.billingCancelFeedback({
+        reason: cancelReason,
+        details: cancelDetails || undefined,
+        acceptOffer,
+      });
+      if (acceptOffer && res.offer) {
+        setAlert({ ok: true, message: res.offer.message });
+        setCancelOpen(false);
+        return;
+      }
+      if (res.url) {
+        window.location.href = res.url;
+        return;
+      }
+      setAlert({ ok: true, message: "Feedback saved." });
+      setCancelOpen(false);
+    } catch (e) {
+      setAlert({
+        ok: false,
+        message: e instanceof Error ? e.message : "Could not save feedback",
       });
     } finally {
       setPending(false);
@@ -152,14 +193,76 @@ export function BillingPanel() {
 
           {sub.status !== "none" &&
           (data.subscription as { stripeSubscriptionId?: string })?.stripeSubscriptionId ? (
-            <button
-              type="button"
-              disabled={pending}
-              onClick={openPortal}
-              className="ugclab-btn mt-6 border border-zinc-200 bg-white text-sm"
-            >
-              Manage subscription in Stripe
-            </button>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <button
+                type="button"
+                disabled={pending}
+                onClick={openPortal}
+                className="ugclab-btn border border-zinc-200 bg-white text-sm"
+              >
+                Manage subscription in Stripe
+              </button>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => setCancelOpen(true)}
+                className="ugclab-btn border border-red-200 bg-white text-sm text-red-700"
+              >
+                Cancel plan…
+              </button>
+            </div>
+          ) : null}
+
+          {cancelOpen ? (
+            <div className="mt-6 space-y-3 rounded-xl border border-amber-200 bg-amber-50/40 p-5">
+              <h3 className="font-semibold text-zinc-900">Before you go</h3>
+              <p className="text-sm text-zinc-600">
+                Tell us why — or take 20% off next month and stay.
+              </p>
+              <select
+                className="ugclab-input w-full"
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+              >
+                {CANCEL_REASONS.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+              <textarea
+                className="ugclab-input w-full min-h-[72px]"
+                placeholder="Optional details"
+                value={cancelDetails}
+                onChange={(e) => setCancelDetails(e.target.value)}
+              />
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => void submitCancel(true)}
+                  className="ugclab-btn ugclab-btn-primary text-sm"
+                >
+                  Stay — claim 20% offer
+                </button>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => void submitCancel(false)}
+                  className="ugclab-btn border border-zinc-200 bg-white text-sm"
+                >
+                  Continue to cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => setCancelOpen(false)}
+                  className="ugclab-btn text-sm text-zinc-500"
+                >
+                  Never mind
+                </button>
+              </div>
+            </div>
           ) : null}
         </>
       )}

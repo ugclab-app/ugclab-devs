@@ -614,6 +614,7 @@ store.get("/products/:productSlug", async (c, next) => {
       tenantId: tenant.id,
       slug: c.req.param("productSlug"),
       status: ProductStatus.ACTIVE,
+      deletedAt: null,
     },
     include: {
       images: { orderBy: { sortOrder: "asc" } },
@@ -707,6 +708,54 @@ store.get("/products/:productSlug", async (c, next) => {
     reviews,
     questions,
   });
+});
+
+/** Recent purchases for social proof toast (city/country + minutes ago, no PII). */
+store.get("/products/:productSlug/recent-purchases", async (c) => {
+  const slug = tenantSlug(c);
+  const tenant = await resolveTenantBySlug(slug);
+  if (!tenant) return c.json({ buys: [] });
+  const product = await prisma.product.findFirst({
+    where: {
+      tenantId: tenant.id,
+      slug: c.req.param("productSlug"),
+      status: ProductStatus.ACTIVE,
+    },
+    select: { id: true },
+  });
+  if (!product) return c.json({ buys: [] });
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const lines = await prisma.orderLineItem.findMany({
+    where: {
+      productId: product.id,
+      order: {
+        tenantId: tenant.id,
+        status: { in: [OrderStatus.PAID, OrderStatus.FULFILLED] },
+        createdAt: { gte: since },
+      },
+    },
+    orderBy: { order: { createdAt: "desc" } },
+    take: 12,
+    select: {
+      order: {
+        select: {
+          createdAt: true,
+          shippingCity: true,
+          shippingCountry: true,
+        },
+      },
+    },
+  });
+  const now = Date.now();
+  const buys = lines.map((l) => {
+    const mins = Math.max(1, Math.round((now - l.order.createdAt.getTime()) / 60_000));
+    return {
+      city: l.order.shippingCity?.trim() || null,
+      country: l.order.shippingCountry?.trim() || null,
+      minutesAgo: mins,
+    };
+  });
+  return c.json({ buys });
 });
 
 /** "Similar products" (collections / tags / type / price) and "bought together" (co-purchases). */
@@ -1137,12 +1186,39 @@ store.post("/cart/add", async (c) => {
     return c.json({ ok: true });
   }
   const qty = Math.max(1, body.quantity ?? 1);
+  const limits = await prisma.product.findFirst({
+    where: {
+      id: body.productId,
+      tenantId: tenant.id,
+      status: ProductStatus.ACTIVE,
+      deletedAt: null,
+    },
+    select: {
+      id: true,
+      minQuantity: true,
+      maxQuantity: true,
+      payWhatYouWant: true,
+      priceAmount: true,
+      minPriceAmount: true,
+    },
+  });
+  if (!limits) return c.json({ error: "Product not found" }, 404);
+  const minQ = Math.max(1, limits.minQuantity ?? 1);
+  const maxQ = limits.maxQuantity;
+  const existingCart = getCart(c).filter(
+    (i) => i.tenantId === tenant.id && i.productId === body.productId
+  );
+  const already = existingCart.reduce((s, i) => s + i.quantity, 0);
+  const nextTotal = already + qty;
+  if (nextTotal < minQ && already === 0 && qty < minQ) {
+    return c.json({ error: `Minimum quantity is ${minQ}` }, 400);
+  }
+  if (maxQ != null && nextTotal > maxQ) {
+    return c.json({ error: `Maximum quantity is ${maxQ}` }, 400);
+  }
   let pwywUnit: number | undefined;
   if (body.priceCents != null) {
-    const product = await prisma.product.findFirst({
-      where: { id: body.productId, tenantId: tenant.id, status: ProductStatus.ACTIVE },
-      select: { payWhatYouWant: true, priceAmount: true, minPriceAmount: true },
-    });
+    const product = limits;
     if (!product) return c.json({ error: "Product not found" }, 404);
     const { resolvePwywUnit } = await import("../lib/checkout-extras.js");
     const baseCurrency = (tenant.settings?.currency ?? "USD").toUpperCase();
@@ -1702,6 +1778,42 @@ store.get("/orders/:orderId", async (c) => {
   });
 });
 
+/** Post-purchase "how did you hear about us?" — stored on Order.customFields. */
+store.post("/orders/:orderId/how-heard", async (c) => {
+  const slug = tenantSlug(c);
+  const tenant = await resolveTenantBySlug(slug);
+  if (!tenant) return c.json({ error: "Store not found" }, 404);
+  const token = c.req.query("token") ?? "";
+  const body = await c.req.json<{ answer?: string }>();
+  const answer = String(body.answer ?? "").trim().slice(0, 120);
+  if (!answer) return c.json({ error: "answer required" }, 400);
+  const order = await prisma.order.findFirst({
+    where: { id: c.req.param("orderId"), tenantId: tenant.id },
+    select: { id: true, accessToken: true, customFields: true },
+  });
+  if (!order) return c.json({ error: "Not found" }, 404);
+  if (order.accessToken && order.accessToken !== token) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+  const prev =
+    order.customFields &&
+    typeof order.customFields === "object" &&
+    !Array.isArray(order.customFields)
+      ? { ...(order.customFields as Record<string, unknown>) }
+      : {};
+  if (typeof prev.howDidYouHear === "string" && prev.howDidYouHear.trim()) {
+    return c.json({ ok: true, already: true });
+  }
+  prev.howDidYouHear = answer;
+  await prisma.order.update({
+    where: { id: order.id },
+    data: {
+      customFields: prev as import("@ugclab/database").Prisma.InputJsonValue,
+    },
+  });
+  return c.json({ ok: true });
+});
+
 store.post("/orders/:orderId/received", async (c) => {
   const slug = tenantSlug(c);
   const tenant = await resolveTenantBySlug(slug);
@@ -1974,6 +2086,57 @@ store.post("/account/lookup", async (c) => {
     },
   });
   return c.json({ orders });
+});
+
+/** Guest track: order number + email → order id + access token (no login). */
+store.post("/orders/track", async (c) => {
+  const slug = tenantSlug(c);
+  const tenant = await resolveTenantBySlug(slug);
+  if (!tenant) return c.json({ error: "Store not found" }, 404);
+  const body = await c.req.json<{ orderNumber?: string; email?: string }>();
+  const orderNumber = String(body.orderNumber ?? "")
+    .trim()
+    .replace(/^#/, "");
+  const email = String(body.email ?? "").trim().toLowerCase();
+  if (!orderNumber || !email) {
+    return c.json({ error: "Order number and email required" }, 400);
+  }
+  const order = await prisma.order.findFirst({
+    where: {
+      tenantId: tenant.id,
+      orderNumber,
+      OR: [{ guestEmail: email }, { customer: { email } }],
+      status: {
+        in: [
+          OrderStatus.PAID,
+          OrderStatus.FULFILLED,
+          OrderStatus.PENDING,
+          OrderStatus.REFUNDED,
+        ],
+      },
+    },
+    select: {
+      id: true,
+      orderNumber: true,
+      status: true,
+      accessToken: true,
+    },
+  });
+  if (!order) return c.json({ error: "Order not found" }, 404);
+  let accessToken = order.accessToken;
+  if (!accessToken) {
+    accessToken = crypto.randomUUID().replace(/-/g, "");
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { accessToken },
+    });
+  }
+  return c.json({
+    orderId: order.id,
+    orderNumber: order.orderNumber,
+    status: order.status,
+    accessToken,
+  });
 });
 
 store.post("/account/login", async (c) => {

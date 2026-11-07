@@ -7,6 +7,7 @@ type Props = InputHTMLAttributes<HTMLInputElement> & {
 
 export function Input({ label, error, className = "", id, ...props }: Props) {
   const inputId = id ?? props.name;
+  const errorId = error && inputId ? `${inputId}-error` : undefined;
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -18,9 +19,15 @@ export function Input({ label, error, className = "", id, ...props }: Props) {
       <input
         id={inputId}
         className={`ugclab-input ${className}`.trim()}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={errorId}
         {...props}
       />
-      {error ? <p className="text-xs text-red-600">{error}</p> : null}
+      {error ? (
+        <p id={errorId} className="text-xs text-red-700" role="alert">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -1,7 +1,8 @@
 /**
- * Central error log for ops. Wire Sentry later:
- *   npm i @sentry/node  +  SENTRY_DSN=…  then captureException here.
+ * Central error log + optional Sentry capture.
+ * Set SENTRY_DSN to ship exceptions (see `./sentry.ts`).
  */
+import { captureException } from "./sentry.js";
 
 export function reportError(
   err: unknown,
@@ -10,8 +11,9 @@ export function reportError(
   const dsnConfigured = Boolean(process.env.SENTRY_DSN?.trim());
   console.error(
     "[error-report]",
-    dsnConfigured ? "(SENTRY_DSN set — install @sentry/node to ship)" : "",
+    dsnConfigured ? "(SENTRY_DSN)" : "",
     context ?? {},
     err
   );
+  void captureException(err, context);
 }

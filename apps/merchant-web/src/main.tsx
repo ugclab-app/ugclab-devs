@@ -5,9 +5,11 @@ import { BrowserRouter } from "react-router-dom";
 import { AuthProvider } from "@/context/auth";
 import { AdminLocaleProvider } from "@/context/admin-locale";
 import App from "@/App";
+import { initClientSentry, Sentry } from "@/lib/sentry";
 import "@/globals.css";
 
 document.documentElement.classList.remove("dark");
+initClientSentry();
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -17,14 +19,16 @@ const queryClient = new QueryClient({
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <AuthProvider>
-          <AdminLocaleProvider>
-            <App />
-          </AdminLocaleProvider>
-        </AuthProvider>
-      </BrowserRouter>
-    </QueryClientProvider>
+    <Sentry.ErrorBoundary fallback={<p className="p-6 text-center text-zinc-600">Something went wrong. Please refresh.</p>}>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <AuthProvider>
+            <AdminLocaleProvider>
+              <App />
+            </AdminLocaleProvider>
+          </AuthProvider>
+        </BrowserRouter>
+      </QueryClientProvider>
+    </Sentry.ErrorBoundary>
   </StrictMode>
 );

@@ -170,7 +170,7 @@ export function PrivacyPage() {
 
 export function TermsPage() {
   return (
-    <LegalShell title="Terms of Service" updated="September 20, 2026">
+    <LegalShell title="Terms of Service" updated="November 5, 2026">
       <p className="text-[15px] leading-relaxed text-zinc-600">
         These Terms govern access to and use of the {c.brand} website and platform. By creating an
         account or using the service, you agree to these Terms.
@@ -192,6 +192,32 @@ export function TermsPage() {
           <li>Do not sell prohibited or infringing products, or misuse the platform.</li>
           <li>Publish your own store privacy/refund policies for buyers where required.</li>
         </ul>
+      </Section>
+      <Section title="Prohibited products & activities">
+        <p>
+          As Merchant of Record / payment facilitator for your store, {c.brand} may refuse, freeze,
+          or close accounts that sell or promote prohibited goods. Without limitation, you may not
+          list or fulfill:
+        </p>
+        <ul className="list-disc space-y-2.5 pl-5 marker:text-brand-400">
+          <li>Illegal drugs, controlled substances, or drug paraphernalia</li>
+          <li>Weapons, firearms, ammunition, explosives, or dual-use military goods</li>
+          <li>Counterfeit, pirated, or trademark-/copyright-infringing goods</li>
+          <li>Stolen goods, identity documents, or government-issued credentials</li>
+          <li>Adult sexual content involving minors, or any CSAM / exploitative material</li>
+          <li>Live animals where prohibited, endangered species, or wildlife trafficking</li>
+          <li>Hazardous materials, toxic chemicals, or unsafe medical devices</li>
+          <li>Tobacco, nicotine products, or alcohol where you lack required licences</li>
+          <li>Gambling, lottery tickets, or unlicensed financial instruments</li>
+          <li>Multi-level marketing schemes that primarily recruit rather than sell product</li>
+          <li>Items subject to sanctions / embargoes for the buyer or destination country</li>
+          <li>Any product or service that Stripe, PayPal, or local PSPs forbid in their AUPs</li>
+        </ul>
+        <p>
+          We may hold first payouts, cap early sales volume, and automatically suspend stores with
+          elevated dispute rates. Violation can lead to immediate suspension, withheld balances, and
+          reports to payment partners or authorities.
+        </p>
       </Section>
       <Section title="Fees & payments">
         <p>

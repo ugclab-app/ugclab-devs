@@ -14,7 +14,19 @@
 - ✅ Cloudflare Turnstile: merchant login/signup/forgot/magic-link (`TURNSTILE_*` env) + storefront checkout/login (per-store keys in Growth → Checkout options)
 - ✅ GDPR: customer export JSON + erase (anonymize) in Customer detail — orders kept, PII blanked
 - ✅ Unit tests: checkout totals / credits / refund math, invoice numbers, forecast, recommendations, URL guard (`order-math.test.ts`)
-- ⬜ Sentry: установить `@sentry/node` + `SENTRY_DSN` (заготовка `error-report.ts`)
+- ✅ Durable job queue (`BackgroundJob` outbox) for emails + Vercel Cron `/api/cron` every 5m
+- ✅ Platform + product-sub dunning emails; cancel survey + stay offer on billing
+- ✅ Store SEO audit score (Growth → SEO hub)
+- ✅ Platform merchant profitability report (Revenue)
+- ✅ AI product describe/translate (`OPENAI_API_KEY`)
+- ✅ Zapier/Make via expanded webhooks + `docs/ZAPIER-MAKE.md`
+- ✅ Money path: payment → refund → balance → payout + MoR risk unit tests (`money-path.test.ts`)
+- ✅ Vitest для API (`vitest run`, auto-discover `*.test.ts`, coverage script)
+- ✅ Sentry: `@sentry/node` (API `SENTRY_DSN`) + `@sentry/react` (storefront/merchant `VITE_SENTRY_DSN`)
+- ✅ Biome lint (`npm run lint:biome`) — CI soft-fail пока чистим долг
+- ✅ Playwright smoke checkout (`npm run e2e:smoke`, API request-level)
+- ✅ UX/a11y: skill `ux-a11y-storefront`, WCAG `--store-on-primary`, focus-visible, form `role="alert"`
+- ✅ Taste: `design-taste-frontend` (project) + rule только landing/темы
 - ⬜ Убрать дубль `merchant-admin` vs `merchant-web` (один dev-порт)
 - ⬜ Обновить README (фазы 0–1)
 
@@ -29,6 +41,14 @@
 - ✅ Страница **Payments** (`/payments`: Connect + Billing + Payouts)
 - ✅ Command palette **⌘P** (навигация по разделам)
 - 🟡 Применить `AdminPageShell` на Orders, Customers, Settings (+ Order detail), Marketing, Collections
+- ✅ Bulk edit spreadsheet (`/products/bulk-edit`, `POST /products/bulk-patch`)
+- ✅ Soft-delete trash 30d + restore (`deletedAt`, cron purge)
+- ✅ Product revisions + rollback on PATCH
+- ✅ Saved filters (orders/products)
+- ✅ Customer internal notes + timeline; merge duplicates API
+- ✅ Guest order → customer convert
+- ✅ How-heard post-purchase survey + `/analytics/how-heard`
+- ✅ Scheduled price change; min/max qty; batch one-time discount codes; FX rounding
 
 ## C. Товары
 
@@ -95,6 +115,14 @@
 
 Уже есть: SEO товара, checkout (шаги, скидка, подарочная карта, доставка, самовывоз), PDF-чек, повтор заказа, трек-номер, отзывы, Q&A, блог, возврат, избранное в браузере, поиск с подсказками, переключатель языка. Сортировка и фильтр type/tag — только на главной.
 
+Конверсия (58–65, 70):
+- ✅ Guest track без логина (`/track`, `POST /orders/track` по номеру + email)
+- ✅ Delivery ETA на PDP и карточке товара
+- ✅ Zoom / lightbox галереи
+- ✅ «Just bought» social proof toast (`GET …/recent-purchases`)
+- ✅ UGC фото из отзывов на PDP
+- ✅ Карта ПВЗ на checkout (Google Maps embed по адресу склада)
+
 Дальше, по порядку:
 
 1. ✅ Кабинет: регистрация, сброс пароля, профиль, сохранённые адреса
@@ -122,6 +150,7 @@
 - ✅ MoR: refund через Stripe API + webhook `charge.refunded`
 - ✅ MoR: partial refund по строкам заказа
 - ✅ MoR: disputes webhook + счётчик в notifications
+- ✅ MoR risk: first-payout hold, new-shop GMV cap, dispute auto-freeze, Terms prohibited list
 - ✅ MoR: sync from Stripe, mark paid fallback
 - ✅ MoR: platform dashboard (debt, pending payouts, disputes)
 - ✅ MoR: CSV export payouts; min payout + schedule (env)

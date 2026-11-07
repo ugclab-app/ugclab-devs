@@ -199,7 +199,7 @@ export const tr: LandingContent = {
     shopifyFee: "%2 üçüncü taraf ödeme ücreti",
     tesTitle: "Tescommerce",
     starter: "Starter: %5 platform ücreti",
-    growth: "Growth: 29 $ + %3 platform ücreti",
+    growth: "Growth: 29 $ + %4 platform ücreti",
     total: "Aylık toplam",
     save: "Ayda {month}, yılda {year} tasarruf edersin",
     moreExpensive:
@@ -253,7 +253,7 @@ export const tr: LandingContent = {
     eyebrow: "Fiyatlar",
     title: "Seninle büyüyen basit fiyatlar",
     mostPopular: "En popüler",
-    breakEven: "Ayda 1.450 $ üzeri satışta Growth, Starter'dan daha ucuza gelir.",
+    breakEven: "Ayda 2.900 $ üzeri satışta Growth, Starter'dan daha ucuza gelir.",
     plans: [
       {
         name: "Starter",
@@ -269,7 +269,7 @@ export const tr: LandingContent = {
         price: "29 $",
         period: "/ay",
         desc: "Büyüyen markalar için",
-        features: ["Sınırsız ürün", "Özel alan adı", "%3 platform ücreti", "Stripe Tax hazır", "Öncelikli destek"],
+        features: ["Sınırsız ürün", "Özel alan adı", "%4 platform ücreti", "Stripe Tax hazır", "Öncelikli destek"],
         cta: "Denemeye başla",
         highlighted: true,
       },
@@ -303,7 +303,7 @@ export const tr: LandingContent = {
       },
       {
         q: "Tescommerce hangi ücretleri alır?",
-        a: "Starter ücretsizdir, satışlardan %5 platform ücreti alınır. Growth ayda 29 $ ve %3 ücrettir. Kart işlemleri standart Stripe oranlarıyla ücretlendirilir.",
+        a: "Starter ücretsizdir, satışlardan %5 platform ücreti alınır. Growth ayda 29 $ ve %4 ücrettir. Kart işlemleri standart Stripe oranlarıyla ücretlendirilir.",
       },
       {
         q: "Merchant of Record (MoR) nedir?",
@@ -405,9 +405,9 @@ export const tr: LandingContent = {
       eyebrow: "Gumroad alternatifi",
       heading: "Her satıştan Gumroad'dakinden fazlasını elinde tut",
       intro:
-        "Gumroad kolay, ama her satışın %10'unu alır ve sana mağaza değil profil sayfası verir. Tescommerce de Merchant of Record — %5 veya %3 ile.",
+        "Gumroad kolay, ama her satışın %10'unu alır ve sana mağaza değil profil sayfası verir. Tescommerce de Merchant of Record — %5 veya %4 ile.",
       rows: [
-        { label: "Platform ücreti", tes: "%5 (Starter) veya %3 (Growth)", other: "%10" },
+        { label: "Platform ücreti", tes: "%5 (Starter) veya %4 (Growth)", other: "%10" },
         { label: "Merchant of Record", tes: "Evet", other: "Evet" },
         { label: "Kendi markalı mağazan", tes: "Evet, site oluşturucuyla", other: "Profil sayfası" },
         { label: "Özel alan adı", tes: "Evet", other: "Hayır" },

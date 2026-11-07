@@ -292,8 +292,10 @@ merchant.get("/products", async (c) => {
     100,
     Math.max(1, parseInt(c.req.query("limit") ?? "25", 10) || 25)
   );
+  const trashOnly = c.req.query("trash") === "1";
   const where = {
     tenantId: tenant.id,
+    deletedAt: trashOnly ? { not: null } : null,
     ...(statusFilter ? { status: statusFilter } : {}),
     ...(typeFilter && !lowStockOnly ? { type: typeFilter } : {}),
     ...(lowStockOnly
@@ -566,7 +568,7 @@ merchant.patch("/products/:id", async (c) => {
   const { tenant, session } = await requireTenant(c.get("session"));
   const productId = c.req.param("id");
   const product = await prisma.product.findFirst({
-    where: { id: productId, tenantId: tenant.id },
+    where: { id: productId, tenantId: tenant.id, deletedAt: null },
     include: { digitalAsset: true },
   });
   if (!product) return c.json({ error: "Not found" }, 404);
@@ -635,6 +637,51 @@ merchant.patch("/products/:id", async (c) => {
     return c.json({ error: "Invalid status" }, 400);
   }
 
+  await prisma.productRevision.create({
+    data: {
+      tenantId: tenant.id,
+      productId: product.id,
+      snapshot: {
+        title: product.title,
+        slug: product.slug,
+        description: product.description,
+        status: product.status,
+        type: product.type,
+        priceAmount: product.priceAmount,
+        compareAt: product.compareAt,
+        inventory: product.inventory,
+        sku: product.sku,
+        tags: product.tags,
+        translations: product.translations,
+        minQuantity: product.minQuantity,
+        maxQuantity: product.maxQuantity,
+        scheduledPriceAmount: product.scheduledPriceAmount,
+        scheduledCompareAt: product.scheduledCompareAt,
+        scheduledPriceAt: product.scheduledPriceAt?.toISOString() ?? null,
+      },
+      summary: "Before edit",
+      authorEmail: session.email,
+    },
+  });
+
+  const minQuantity =
+    body.minQuantity !== undefined
+      ? Math.max(1, parseInt(String(body.minQuantity), 10) || 1)
+      : undefined;
+  const maxQuantity =
+    body.maxQuantity !== undefined
+      ? String(body.maxQuantity).trim() === ""
+        ? null
+        : Math.max(1, parseInt(String(body.maxQuantity), 10) || 1)
+      : undefined;
+  const scheduledPriceAtRaw = String(body.scheduledPriceAt ?? "").trim();
+  const scheduledPriceAt =
+    body.scheduledPriceAt !== undefined
+      ? scheduledPriceAtRaw
+        ? new Date(scheduledPriceAtRaw)
+        : null
+      : undefined;
+
   await prisma.product.update({
     where: { id: product.id },
     data: {
@@ -685,6 +732,26 @@ merchant.patch("/products/:id", async (c) => {
         : {}),
       ...(body.minPrice !== undefined
         ? { minPriceAmount: parseOptionalMoney(body.minPrice) }
+        : {}),
+      ...(minQuantity !== undefined ? { minQuantity } : {}),
+      ...(maxQuantity !== undefined ? { maxQuantity } : {}),
+      ...(body.scheduledPrice !== undefined
+        ? {
+            scheduledPriceAmount: parseOptionalMoney(body.scheduledPrice),
+          }
+        : {}),
+      ...(body.scheduledCompareAt !== undefined
+        ? {
+            scheduledCompareAt: parseOptionalMoney(body.scheduledCompareAt),
+          }
+        : {}),
+      ...(scheduledPriceAt !== undefined
+        ? {
+            scheduledPriceAt:
+              scheduledPriceAt && !Number.isNaN(scheduledPriceAt.getTime())
+                ? scheduledPriceAt
+                : null,
+          }
         : {}),
     },
   });
@@ -839,11 +906,14 @@ merchant.patch("/products/:id", async (c) => {
 merchant.delete("/products/:id", async (c) => {
   const { tenant } = await requireTenant(c.get("session"));
   const product = await prisma.product.findFirst({
-    where: { id: c.req.param("id"), tenantId: tenant.id },
+    where: { id: c.req.param("id"), tenantId: tenant.id, deletedAt: null },
   });
   if (!product) return c.json({ error: "Not found" }, 404);
-  await prisma.product.delete({ where: { id: product.id } });
-  return c.json({ ok: true });
+  await prisma.product.update({
+    where: { id: product.id },
+    data: { deletedAt: new Date(), status: ProductStatus.ARCHIVED },
+  });
+  return c.json({ ok: true, softDeleted: true });
 });
 
 merchant.post("/products/bulk-status", async (c) => {
@@ -866,10 +936,11 @@ merchant.post("/products/bulk-delete", async (c) => {
   const { tenant } = await requireTenant(c.get("session"));
   const { ids } = await c.req.json<{ ids: string[] }>();
   if (!ids?.length) return c.json({ error: "No ids" }, 400);
-  await prisma.product.deleteMany({
-    where: { tenantId: tenant.id, id: { in: ids } },
+  const result = await prisma.product.updateMany({
+    where: { tenantId: tenant.id, id: { in: ids }, deletedAt: null },
+    data: { deletedAt: new Date(), status: ProductStatus.ARCHIVED },
   });
-  return c.json({ ok: true, deleted: ids.length });
+  return c.json({ ok: true, deleted: result.count, softDeleted: true });
 });
 
 merchant.post("/products/bulk-collections", async (c) => {
@@ -1186,6 +1257,11 @@ merchant.patch("/orders/:id/status", async (c) => {
   if (status === OrderStatus.FULFILLED && order.status !== OrderStatus.FULFILLED) {
     const { sendReviewRequestOnce } = await import("../lib/transactional-email.js");
     sendReviewRequestOnce(order.id).catch(console.error);
+    const { dispatchMerchantWebhooks } = await import("../lib/merchant-webhooks.js");
+    dispatchMerchantWebhooks(tenant.id, "order.fulfilled", {
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+    }).catch(console.error);
   }
 
   return c.json({ order: updated });
@@ -1269,6 +1345,11 @@ merchant.patch("/orders/:id/fulfillment", async (c) => {
   if (markFulfilled && order.status !== OrderStatus.FULFILLED) {
     const { sendReviewRequestOnce } = await import("../lib/transactional-email.js");
     sendReviewRequestOnce(order.id).catch(console.error);
+    const { dispatchMerchantWebhooks } = await import("../lib/merchant-webhooks.js");
+    dispatchMerchantWebhooks(tenant.id, "order.fulfilled", {
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+    }).catch(console.error);
   }
 
   return c.json({ order: updated });
@@ -1835,6 +1916,13 @@ merchant.patch("/settings", async (c) => {
       : undefined;
   const markets =
     body.markets !== undefined ? normalizeMarketsInput(body.markets) : undefined;
+  const { parseFxRounding } = await import("@ugclab/i18n/fx-rounding");
+  const fxRounding =
+    body.fxRounding !== undefined
+      ? body.fxRounding === null
+        ? null
+        : parseFxRounding(body.fxRounding)
+      : undefined;
 
   await prisma.$transaction([
     prisma.tenant.update({
@@ -1912,6 +2000,14 @@ merchant.patch("/settings", async (c) => {
           : {}),
         ...(markets !== undefined
           ? { markets: jsonForPrisma(markets) }
+          : {}),
+        ...(fxRounding !== undefined
+          ? {
+              fxRounding:
+                fxRounding === null
+                  ? Prisma.JsonNull
+                  : jsonForPrisma(fxRounding),
+            }
           : {}),
         ...(theme !== undefined ? { theme } : {}),
         ...(themeDraft !== undefined ? { themeDraft } : {}),
@@ -1993,6 +2089,14 @@ merchant.patch("/settings", async (c) => {
           : {}),
         ...(markets !== undefined
           ? { markets: jsonForPrisma(markets) }
+          : {}),
+        ...(fxRounding !== undefined
+          ? {
+              fxRounding:
+                fxRounding === null
+                  ? Prisma.JsonNull
+                  : jsonForPrisma(fxRounding),
+            }
           : {}),
         ...(theme !== undefined ? { theme } : {}),
         ...(themeDraft !== undefined ? { themeDraft } : {}),

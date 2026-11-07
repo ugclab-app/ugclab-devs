@@ -24,10 +24,11 @@ import { getMerchantBalance } from "../lib/merchant-balance.js";
 import { markOrderRefunded } from "../lib/stripe-refund.js";
 import { handleStripeDispute } from "../lib/stripe-disputes.js";
 import {
-  assertMorPayoutAmount,
   getMorPayoutMinCents,
   getMorPayoutScheduleLabel,
 } from "../lib/mor-payout-config.js";
+import { evaluateMorPayoutRequest } from "../lib/mor-risk.js";
+import { getMorPayoutHoldInfo } from "../lib/mor-risk-db.js";
 import { payoutsToCsv } from "../lib/payout-csv.js";
 import {
   isTaxFormType,
@@ -597,6 +598,7 @@ merchantStripe.get("/mor-balance", async (c) => {
     where: { tenantId: tenant.id },
     select: { status: true },
   });
+  const hold = await getMorPayoutHoldInfo(tenant);
   return c.json({
     paymentModel: "mor",
     kycStatus: kyc?.status ?? null,
@@ -613,6 +615,9 @@ merchantStripe.get("/mor-balance", async (c) => {
     owedToCreatorsCents: balance.owedToCreatorsCents,
     payoutMinCents: getMorPayoutMinCents(),
     payoutSchedule: getMorPayoutScheduleLabel(),
+    firstPayoutHeld: hold.firstPayoutHeld,
+    firstPayoutHoldUntil: hold.firstPayoutHoldUntil,
+    firstPayoutHoldDays: hold.firstPayoutHoldDays,
     payouts: balance.payouts.map((p) => ({
       id: p.id,
       amount: p.amount,
@@ -634,12 +639,6 @@ merchantStripe.post("/mor-payout-request", async (c) => {
     where: { tenantId: tenant.id },
     select: { status: true },
   });
-  if (kyc?.status !== MerchantKycStatus.APPROVED) {
-    return c.json(
-      { error: "Payout opens after Tescommerce approves your passport check." },
-      403
-    );
-  }
   const body = (await c.req.json<{ amountCents?: number; note?: string }>()) as {
     amountCents?: number;
     note?: string;
@@ -649,11 +648,30 @@ merchantStripe.post("/mor-payout-request", async (c) => {
     body.amountCents != null && body.amountCents > 0
       ? Math.min(body.amountCents, balance.availableCents)
       : balance.availableCents;
-  if (amount <= 0) {
-    return c.json({ error: "No balance available for payout" }, 400);
+  const hold = await getMorPayoutHoldInfo(tenant);
+  const risk = evaluateMorPayoutRequest({
+    tenantStatus: tenant.status,
+    createdAt: tenant.createdAt,
+    hasPaidPayout: hold.hasPaidPayout,
+    kycApproved: kyc?.status === MerchantKycStatus.APPROVED,
+    availableCents: balance.availableCents,
+    amountCents: amount,
+    minPayoutCents: getMorPayoutMinCents(),
+  });
+  if (!risk.ok) {
+    const status =
+      risk.code === "KYC" || risk.code === "SUSPENDED" || risk.code === "FIRST_PAYOUT_HOLD"
+        ? 403
+        : 400;
+    return c.json(
+      {
+        error: risk.error,
+        code: risk.code,
+        firstPayoutHoldUntil: risk.firstPayoutHoldUntil ?? null,
+      },
+      status
+    );
   }
-  const minErr = assertMorPayoutAmount(amount);
-  if (minErr) return c.json({ error: minErr }, 400);
   const payout = await prisma.merchantPayout.create({
     data: {
       tenantId: tenant.id,
@@ -961,6 +979,50 @@ merchantStripe.post("/billing/portal", async (c) => {
     return_url: `${MERCHANT_WEB_URL}/settings?tab=billing`,
   });
   return c.json({ url: portal.url });
+});
+
+/** Churn survey before the merchant opens Stripe portal to cancel. */
+merchantStripe.post("/billing/cancel-feedback", async (c) => {
+  const { tenant, session } = await requireTenant(c.get("session"));
+  const body = await c.req.json<{
+    reason?: string;
+    details?: string;
+    acceptOffer?: boolean;
+  }>();
+  const reason = String(body.reason ?? "").trim().slice(0, 120);
+  if (!reason) return c.json({ error: "Reason required" }, 400);
+
+  const offerCode = body.acceptOffer ? `STAY20-${tenant.slug.slice(0, 8).toUpperCase()}` : null;
+  await prisma.planCancelFeedback.create({
+    data: {
+      tenantId: tenant.id,
+      userId: session.sub,
+      planSlug: tenant.subscriptionPlanId ?? null,
+      reason,
+      details: body.details ? String(body.details).slice(0, 2000) : null,
+      acceptedOffer: body.acceptOffer === true,
+      offerCode,
+    },
+  });
+
+  if (body.acceptOffer) {
+    return c.json({
+      ok: true,
+      offer: {
+        code: offerCode,
+        message: "Stay offer recorded — reply to founder support with this code for 20% off next month.",
+      },
+    });
+  }
+
+  if (!isStripeConfigured() || !tenant.stripeBillingCustomerId) {
+    return c.json({ ok: true, url: null });
+  }
+  const portal = await getStripe().billingPortal.sessions.create({
+    customer: tenant.stripeBillingCustomerId,
+    return_url: `${MERCHANT_WEB_URL}/settings?tab=billing`,
+  });
+  return c.json({ ok: true, url: portal.url });
 });
 
 merchantStripe.post("/connect", async (c) => {

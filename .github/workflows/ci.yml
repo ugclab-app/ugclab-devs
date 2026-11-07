@@ -35,5 +35,9 @@ jobs:
       - name: API typecheck
         run: npm run lint -w @ugclab/api
 
-      - name: API unit tests
+      - name: API unit tests (Vitest)
         run: npm run test -w @ugclab/api
+
+      - name: Biome lint
+        run: npm run lint:biome
+        continue-on-error: true

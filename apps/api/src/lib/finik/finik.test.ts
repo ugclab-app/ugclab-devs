@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { generateKeyPairSync } from "node:crypto";
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import { Signer } from "@mancho.devs/authorizer";
 import {
   finikAmountToMinor,

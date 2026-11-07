@@ -14,7 +14,10 @@
     "dev:platform": "turbo run dev --filter=@ugclab/api --filter=@ugclab/platform",
     "build": "turbo build",
     "lint": "turbo lint",
+    "lint:biome": "biome lint .",
+    "lint:biome:fix": "biome check --write .",
     "test": "npm run test -w @ugclab/api",
+    "test:coverage": "npm run test:coverage -w @ugclab/api",
     "db:generate": "npm run db:generate -w @ugclab/database",
     "db:generate:safe": "node scripts/db-generate-safe.mjs",
     "db:migrate": "npm run db:migrate -w @ugclab/database",
@@ -27,10 +30,13 @@
     "supabase:verify": "node scripts/verify-supabase-integration.mjs",
     "supabase:verify:prod": "node scripts/verify-supabase-integration.mjs --prod",
     "e2e:checkout": "node scripts/e2e-checkout-flow.mjs",
+    "e2e:smoke": "playwright test",
     "deploy:api": "npm run deploy -w @ugclab/api",
     "vercel:database-url": "node scripts/set-vercel-database-url.mjs"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.6.4",
+    "@playwright/test": "^1.64.1",
     "turbo": "^2.5.4",
     "typescript": "^5.8.3"
   },

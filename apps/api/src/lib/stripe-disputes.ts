@@ -71,6 +71,15 @@ export async function handleStripeDispute(dispute: Stripe.Dispute) {
   } catch {
     /* optional */
   }
+
+  if (!closed) {
+    try {
+      const { maybeAutoFreezeTenantOnDisputes } = await import("./mor-risk-db.js");
+      await maybeAutoFreezeTenantOnDisputes(order.tenantId);
+    } catch (err) {
+      console.error("[mor-risk] dispute auto-freeze failed", err);
+    }
+  }
 }
 
 export type DisputeEvidenceInput = {

@@ -3,7 +3,22 @@
 :root {
   --store-primary: #7c3aed;
   --store-primary-hover: #6d28d9;
+  --store-on-primary: #ffffff;
   --store-container-max: 1440px;
+  --store-focus-ring: color-mix(in srgb, var(--store-primary) 35%, transparent);
+}
+
+/* Keyboard focus — WCAG visible indicator (do not remove without replacement) */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid var(--store-primary);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--store-focus-ring);
 }
 
 .store-container {
@@ -32,8 +47,9 @@ body {
 }
 
 .store-btn-primary {
-  @apply inline-flex items-center justify-center px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition;
+  @apply inline-flex items-center justify-center px-5 py-2.5 text-sm font-semibold shadow-sm transition;
   background-color: var(--store-primary);
+  color: var(--store-on-primary, #fff);
 }
 .store-btn-primary:hover {
   background-color: var(--store-primary-hover);

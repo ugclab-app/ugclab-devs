@@ -164,9 +164,6 @@ export type StoreContextDto = {
     contactPhone?: string | null;
     businessAddress?: string | null;
     faviconUrl?: string | null;
-    contactEmail?: string | null;
-    contactPhone?: string | null;
-    businessAddress?: string | null;
   } | null;
   integrations?: {
     metaPixelId?: string;
@@ -282,6 +279,22 @@ export const storeApi = {
       similar: StoreListProduct[];
       boughtTogether: StoreListProduct[];
     }>(`/products/${slug}/recommendations${qs({ tenant, ...params })}`),
+
+  productRecentBuys: (tenant: string, slug: string) =>
+    request<{
+      buys: Array<{ city: string | null; country: string | null; minutesAgo: number }>;
+    }>(`/products/${slug}/recent-purchases${qs({ tenant })}`),
+
+  trackOrder: (tenant: string, orderNumber: string, email: string) =>
+    request<{
+      orderId: string;
+      orderNumber: string;
+      status: string;
+      accessToken: string;
+    }>(`/orders/track${qs({ tenant })}`, {
+      method: "POST",
+      body: JSON.stringify({ orderNumber, email }),
+    }),
 
   bundles: (tenant: string) =>
     request<{
@@ -510,6 +523,12 @@ export const storeApi = {
     request<{ ok: boolean }>(`/orders/${orderId}/received${qs({ tenant, token })}`, {
       method: "POST",
     }),
+
+  submitHowHeard: (tenant: string, orderId: string, answer: string, token?: string) =>
+    request<{ ok: boolean; already?: boolean }>(
+      `/orders/${orderId}/how-heard${qs({ tenant, token })}`,
+      { method: "POST", body: JSON.stringify({ answer }) }
+    ),
 
   accountSession: (tenant: string) =>
     request<{

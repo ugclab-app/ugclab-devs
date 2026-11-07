@@ -73,3 +73,32 @@ export async function notifyDispute(tenantName: string, orderNumber: string) {
     html: `<p>Dispute on order <strong>#${orderNumber}</strong> for <strong>${tenantName}</strong>.</p>`,
   });
 }
+
+export async function notifyNewMerchantSignup(opts: {
+  storeName: string;
+  storeSlug: string;
+  ownerEmail: string;
+  ownerName?: string | null;
+  country?: string | null;
+  ref?: string | null;
+  tenantId: string;
+}) {
+  const admin =
+    process.env.PLATFORM_ADMIN_URL?.trim() || "http://localhost:3003";
+  const owner = opts.ownerName?.trim() || "—";
+  const country = opts.country?.trim() || "—";
+  const ref = opts.ref?.trim() || "direct";
+  await notifyPlatformOps({
+    subject: `[Tescommerce] New store — ${opts.storeName}`,
+    html: `<p>New merchant store opened.</p>
+<ul>
+<li><strong>Store:</strong> ${opts.storeName} (<code>${opts.storeSlug}</code>)</li>
+<li><strong>Owner:</strong> ${owner} &lt;${opts.ownerEmail}&gt;</li>
+<li><strong>Country:</strong> ${country}</li>
+<li><strong>Ref:</strong> ${ref}</li>
+</ul>
+<p><a href="${admin}/tenants/${opts.tenantId}">Open in platform admin</a></p>`,
+    text: `New store ${opts.storeName} (${opts.storeSlug})\nOwner: ${owner} <${opts.ownerEmail}>\nCountry: ${country}\nRef: ${ref}\n${admin}/tenants/${opts.tenantId}`,
+    dedupeKey: `signup:${opts.tenantId}`,
+  });
+}

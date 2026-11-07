@@ -130,6 +130,7 @@ export default function OrderDetailPage() {
     shippingAmount: number;
     taxAmount: number;
     customer?: { email: string; name: string | null } | null;
+    guestEmail?: string | null;
     shippingAddress1?: string | null;
     shippingAddress2?: string | null;
     shippingCity?: string | null;
@@ -508,7 +509,28 @@ export default function OrderDetailPage() {
             </div>
           </section>
           <section className="admin-card p-6 text-sm">
-            <p className="font-medium">{order.customer?.email ?? "Guest"}</p>
+            <p className="font-medium">{order.customer?.email ?? order.guestEmail ?? "Guest"}</p>
+            {!order.customer && order.guestEmail ? (
+              <button
+                type="button"
+                className="mt-3 text-sm font-medium text-violet-700 hover:underline"
+                onClick={async () => {
+                  try {
+                    const r = await api.convertOrderToCustomer(order.id);
+                    alert(
+                      r.already
+                        ? "Already linked to a customer"
+                        : `Customer created/linked. Reset token: ${r.resetToken ?? "—"}`
+                    );
+                    void qc.invalidateQueries({ queryKey: ["order", order.id] });
+                  } catch (e) {
+                    alert(e instanceof Error ? e.message : "Convert failed");
+                  }
+                }}
+              >
+                Convert guest → customer
+              </button>
+            ) : null}
             <p className="mt-4 text-xl font-bold">
               {formatMoney(order.totalAmount, data.currency)}
             </p>

@@ -1076,6 +1076,16 @@ export async function placeStoreOrder(
   body: Record<string, unknown>
 ) {
   const prepared = await prepareOrder(c, tenantId, body);
+  if (isMorPaymentModel() && prepared.totalAmount > 0) {
+    const { assertCheckoutNewShopGmv } = await import("./mor-risk-db.js");
+    const tenantMeta = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { id: true, createdAt: true },
+    });
+    if (tenantMeta) {
+      await assertCheckoutNewShopGmv(tenantMeta, prepared.totalAmount);
+    }
+  }
   const locale = String(body.locale ?? "en").slice(0, 5);
 
   if (prepared.isSubscriptionCheckout) {

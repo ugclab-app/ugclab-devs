@@ -34,6 +34,8 @@ export function OrderPage() {
   const [reorderBusy, setReorderBusy] = useState(false);
   const [receiveBusy, setReceiveBusy] = useState(false);
   const [receiveError, setReceiveError] = useState<string | null>(null);
+  const [howHeardDone, setHowHeardDone] = useState(false);
+  const [howHeardBusy, setHowHeardBusy] = useState(false);
   const qc = useQueryClient();
 
   const { data, isError } = useQuery({
@@ -114,6 +116,7 @@ export function OrderPage() {
       body: string | null;
       createdAt: string;
     }>;
+    customFields?: Record<string, unknown> | null;
     items: { id: string; title: string; quantity: number; totalAmount: number; productId?: string | null }[];
     digitalDownloads: Array<{
       id: string;
@@ -126,6 +129,10 @@ export function OrderPage() {
   };
 
   const paid = order.status === "PAID" || order.status === "FULFILLED";
+  const alreadyHeard =
+    howHeardDone ||
+    (typeof order.customFields?.howDidYouHear === "string" &&
+      !!order.customFields.howDidYouHear.trim());
   const isPickup = (order.fulfillmentMethod ?? "SHIP").toUpperCase() === "PICKUP";
   const shipments = order.fulfillmentShipments ?? [];
   const awaitingFinik =
@@ -213,6 +220,31 @@ export function OrderPage() {
       )}
       <h1 className="mt-8 text-3xl font-bold">Order #{order.orderNumber}</h1>
       <p className="mt-1 text-sm text-zinc-500 capitalize">{order.status.toLowerCase()}</p>
+      {paid && !alreadyHeard ? (
+        <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-4">
+          <p className="text-sm font-medium text-zinc-800">How did you hear about us?</p>
+          <p className="mt-1 text-xs text-zinc-500">Helps us understand which ads work.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {["Instagram", "TikTok", "Google", "Friend", "Other"].map((answer) => (
+              <button
+                key={answer}
+                type="button"
+                disabled={howHeardBusy}
+                className="rounded-full border border-zinc-200 px-3 py-1.5 text-sm hover:border-[var(--store-primary)] hover:text-[var(--store-primary)] disabled:opacity-50"
+                onClick={() => {
+                  setHowHeardBusy(true);
+                  void storeApi
+                    .submitHowHeard(tenant, id!, answer, token)
+                    .then(() => setHowHeardDone(true))
+                    .finally(() => setHowHeardBusy(false));
+                }}
+              >
+                {answer}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
       {order.buyerProtection &&
       !order.buyerReceivedAt &&
       (order.status === "PAID" || order.status === "FULFILLED") ? (

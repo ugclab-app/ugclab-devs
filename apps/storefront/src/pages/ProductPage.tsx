@@ -21,6 +21,9 @@ import { StoreTrustStrip } from "@/components/store-trust-strip";
 import { QuantityOffers } from "@/components/quantity-offers";
 import { StoreBlockRenderer } from "@/components/store-block-renderer";
 import { IconAccordionSection, PickupSection } from "@/components/sales-blocks";
+import { DeliveryEtaBadge } from "@/components/delivery-eta-badge";
+import { RecentPurchaseToast } from "@/components/recent-purchase-toast";
+import { UgcPhotoGallery } from "@/components/ugc-photo-gallery";
 import type { HomeBlock } from "@ugclab/tenant/store-theme";
 import { buildStoreTitle, useDocumentSeo } from "@/hooks/use-document-seo";
 
@@ -190,6 +193,11 @@ export function ProductPage() {
               </span>
             </div>
           ) : null}
+          <DeliveryEtaBadge
+            productType={product.type}
+            locale={locale}
+            className="mt-3"
+          />
           {product.description ? (
             <div
               className="product-description prose prose-zinc mt-6 max-w-none text-zinc-600 leading-relaxed"
@@ -260,6 +268,14 @@ export function ProductPage() {
           />
         </div>
       ) : null}
+      <UgcPhotoGallery
+        photos={ugcPhotosFromReviews(
+          data.reviews as Array<{
+            authorName?: string;
+            photoUrls?: string[];
+          }>
+        )}
+      />
       <ProductReviews productId={product.id} reviews={data.reviews} />
       <ProductQuestions
         productId={product.id}
@@ -277,8 +293,24 @@ export function ProductPage() {
         <StoreTrustStrip />
       </div>
       <RecentlyViewedSection excludeId={product.id} />
+      {slug ? <RecentPurchaseToast productSlug={slug} /> : null}
     </>
   );
+}
+
+function ugcPhotosFromReviews(
+  reviews: Array<{ authorName?: string; photoUrls?: string[] }>
+): { url: string; author?: string | null }[] {
+  const out: { url: string; author?: string | null }[] = [];
+  const seen = new Set<string>();
+  for (const r of reviews) {
+    for (const url of r.photoUrls ?? []) {
+      if (!url || seen.has(url)) continue;
+      seen.add(url);
+      out.push({ url, author: r.authorName ?? null });
+    }
+  }
+  return out;
 }
 
 function QuantityOfferBlock({

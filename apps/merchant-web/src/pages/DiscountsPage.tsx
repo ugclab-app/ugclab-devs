@@ -122,6 +122,71 @@ export default function DiscountsPage() {
         </div>
       )}
 
+      <form
+        className="admin-card max-w-lg space-y-4 p-6"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setPending(true);
+          const fd = new FormData(e.currentTarget);
+          try {
+            const r = await api.batchDiscounts({
+              count: Number(fd.get("count") || 0),
+              prefix: fd.get("prefix") || "CODE",
+              type: fd.get("type"),
+              value:
+                fd.get("type") === "PERCENT"
+                  ? Number(fd.get("value"))
+                  : Math.round(Number(fd.get("value")) * 100),
+              maxUses: 1,
+              startsAt: fd.get("startsAt") || null,
+              expiresAt: fd.get("expiresAt") || null,
+            });
+            setAlert({
+              ok: true,
+              message: `Created ${r.count} one-time codes (${r.batchId}). First: ${r.codes.slice(0, 3).join(", ")}…`,
+            });
+            const blob = new Blob([r.codes.join("\n")], { type: "text/csv" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `${r.batchId}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+            await queryClient.invalidateQueries({ queryKey: ["discounts"] });
+          } catch (err) {
+            setAlert({
+              ok: false,
+              message: err instanceof Error ? err.message : "Batch failed",
+            });
+          } finally {
+            setPending(false);
+          }
+        }}
+      >
+        <h2 className="font-semibold">Batch one-time codes</h2>
+        <p className="text-xs text-zinc-500">
+          Generate unique single-use codes for email blasts (downloads CSV).
+        </p>
+        <input name="prefix" placeholder="VIP" defaultValue="VIP" className="ugclab-input font-mono uppercase" />
+        <input name="count" type="number" min={1} max={1000} defaultValue={50} required className="ugclab-input" />
+        <select name="type" className="ugclab-select">
+          <option value="PERCENT">Percent off</option>
+          <option value="FIXED">Fixed amount off</option>
+        </select>
+        <input name="value" type="number" step="0.01" placeholder="10 or 5.00" required className="ugclab-input" />
+        <label className="block text-sm">
+          Starts
+          <input name="startsAt" type="datetime-local" className="ugclab-input mt-1.5" />
+        </label>
+        <label className="block text-sm">
+          Ends
+          <input name="expiresAt" type="datetime-local" className="ugclab-input mt-1.5" />
+        </label>
+        <button type="submit" disabled={pending} className="ugclab-btn ugclab-btn-primary">
+          Generate batch
+        </button>
+      </form>
+
       <form onSubmit={onCreate} className="admin-card max-w-lg space-y-4 p-6">
         <h2 className="font-semibold">New code</h2>
         <input name="code" placeholder="SAVE10" required className="ugclab-input font-mono uppercase" />

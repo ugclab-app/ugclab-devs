@@ -670,6 +670,8 @@ export const adminMessagesEn = {
     kycMissing: "Payout opens after Tescommerce approves your passport. The form is on this page.",
     kycPending: "Passport check is in review. Payout opens after approval.",
     kycRejected: "Passport check was rejected. Submit it again on this page. Payout stays closed until approval.",
+    firstPayoutHold:
+      "First payout is held until {{date}} ({{days}}-day new-store risk hold).",
     exportCsv: "Export payouts CSV",
     creatorsHint: "Pay creators yourself, then mark paid in Growth.",
     colDate: "Date",

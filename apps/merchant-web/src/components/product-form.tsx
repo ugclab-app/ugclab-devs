@@ -151,6 +151,8 @@ export function ProductForm({
   const formRef = useRef<HTMLFormElement>(null);
   const [alert, setAlert] = useState<{ ok?: boolean; message?: string }>({});
   const [type, setType] = useState<ProductType>(initial.type);
+  const [descriptionDraft, setDescriptionDraft] = useState(initial.description);
+  const [descriptionKey, setDescriptionKey] = useState(0);
   const [pending, setPending] = useState(false);
   const [title, setTitle] = useState(initial.title);
   const [slug, setSlug] = useState(initial.slug);
@@ -289,11 +291,24 @@ export function ProductForm({
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium">Description</label>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <label className="block text-sm font-medium">Description</label>
+                  {productId ? (
+                    <AiCopyButtons
+                      productId={productId}
+                      title={title}
+                      onDescription={(html) => {
+                        setDescriptionDraft(html);
+                        setDescriptionKey((k) => k + 1);
+                      }}
+                    />
+                  ) : null}
+                </div>
                 <div className="mt-1.5">
                   <RichTextEditor
+                    key={descriptionKey}
                     name="description"
-                    defaultValue={initial.description}
+                    defaultValue={descriptionDraft}
                     placeholder="Tell customers about this product…"
                   />
                 </div>
@@ -503,6 +518,78 @@ export function ProductForm({
                 <p className="mt-1 text-xs text-zinc-500">
                   Future date keeps product as draft until then.
                 </p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600">
+                    Min quantity
+                  </label>
+                  <input
+                    name="minQuantity"
+                    type="number"
+                    min={1}
+                    defaultValue={(initial as { minQuantity?: number }).minQuantity ?? 1}
+                    className="ugclab-input mt-1 w-full"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600">
+                    Max quantity
+                  </label>
+                  <input
+                    name="maxQuantity"
+                    type="number"
+                    min={1}
+                    defaultValue={(initial as { maxQuantity?: number | null }).maxQuantity ?? ""}
+                    placeholder="No limit"
+                    className="ugclab-input mt-1 w-full"
+                  />
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600">
+                    Scheduled price ({currency})
+                  </label>
+                  <input
+                    name="scheduledPrice"
+                    type="number"
+                    step="0.01"
+                    min={0}
+                    defaultValue={
+                      (initial as { scheduledPrice?: string }).scheduledPrice ?? ""
+                    }
+                    className="ugclab-input mt-1 w-full"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600">
+                    Scheduled compare
+                  </label>
+                  <input
+                    name="scheduledCompareAt"
+                    type="number"
+                    step="0.01"
+                    min={0}
+                    defaultValue={
+                      (initial as { scheduledCompareAt?: string }).scheduledCompareAt ?? ""
+                    }
+                    className="ugclab-input mt-1 w-full"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600">
+                    Apply at
+                  </label>
+                  <input
+                    name="scheduledPriceAt"
+                    type="datetime-local"
+                    defaultValue={
+                      (initial as { scheduledPriceAt?: string }).scheduledPriceAt ?? ""
+                    }
+                    className="ugclab-input mt-1 w-full"
+                  />
+                </div>
               </div>
               <QuantityOffersFields initial={initial.quantityOffers} currency={currency} />
             </section>
@@ -894,6 +981,66 @@ export function ProductForm({
 
         <StickyFormBar discardTo="/products" submitLabel={submitLabel} pending={pending} />
       </form>
+    </div>
+  );
+}
+
+function AiCopyButtons({
+  productId,
+  title,
+  onDescription,
+}: {
+  productId: string;
+  title: string;
+  onDescription: (html: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  async function run(action: "describe" | "translate") {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await api.productAiCopy(productId, {
+        action,
+        locale: action === "translate" ? "ru" : "en",
+        hints: title,
+      });
+      if (action === "describe" && res.description) {
+        onDescription(res.description);
+        setMsg("AI description filled — review and save.");
+      } else if (action === "translate" && res.title && res.description) {
+        onDescription(res.description);
+        setMsg(`Translated title suggestion: ${res.title} (description filled — save to keep).`);
+      } else {
+        setMsg("No content returned.");
+      }
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "AI unavailable");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        disabled={busy}
+        className="text-xs font-medium text-violet-700 hover:underline"
+        onClick={() => void run("describe")}
+      >
+        {busy ? "AI…" : "AI describe"}
+      </button>
+      <button
+        type="button"
+        disabled={busy}
+        className="text-xs font-medium text-violet-700 hover:underline"
+        onClick={() => void run("translate")}
+      >
+        AI → RU
+      </button>
+      {msg ? <span className="text-xs text-zinc-500">{msg}</span> : null}
     </div>
   );
 }

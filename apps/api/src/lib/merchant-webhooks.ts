@@ -10,13 +10,22 @@ import {
 
 export type MerchantWebhookEvent =
   | "order.paid"
+  | "order.created"
+  | "order.fulfilled"
   | "product.updated"
-  | "order.created";
+  | "product.created"
+  | "customer.created"
+  | "subscription.updated";
 
+/** Events Zapier / Make can subscribe to via Growth → Webhooks. */
 export const MERCHANT_WEBHOOK_EVENTS: MerchantWebhookEvent[] = [
   "order.paid",
-  "product.updated",
   "order.created",
+  "order.fulfilled",
+  "product.updated",
+  "product.created",
+  "customer.created",
+  "subscription.updated",
 ];
 
 /**

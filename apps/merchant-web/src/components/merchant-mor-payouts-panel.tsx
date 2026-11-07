@@ -130,6 +130,14 @@ export function MerchantMorPayoutsPanel() {
         </p>
       ) : null}
 
+      {data.firstPayoutHeld && data.firstPayoutHoldUntil ? (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+          {ta("morPayouts.firstPayoutHold")
+            .replace("{{date}}", data.firstPayoutHoldUntil.slice(0, 10))
+            .replace("{{days}}", String(data.firstPayoutHoldDays ?? 14))}
+        </p>
+      ) : null}
+
       <FormAlert ok={alert.ok} message={alert.message} />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
@@ -204,6 +212,7 @@ export function MerchantMorPayoutsPanel() {
           disabled={
             pending ||
             !kycApproved ||
+            Boolean(data.firstPayoutHeld) ||
             data.availableCents <= 0 ||
             (data.payoutMinCents != null && data.availableCents < data.payoutMinCents)
           }

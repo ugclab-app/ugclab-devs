@@ -268,7 +268,7 @@ const PRICING_TIERS = [
   {
     name: "Pro",
     price: "$79",
-    fee: "3% platform fee",
+    fee: "4% platform fee",
     highlight: false,
     features: [
       "Everything in Growth",

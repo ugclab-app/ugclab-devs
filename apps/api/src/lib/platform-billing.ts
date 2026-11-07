@@ -101,6 +101,7 @@ export async function syncTenantSubscription(
       })
     : null;
 
+  const restored = status === "active" || status === "trialing";
   await prisma.tenant.update({
     where: { id: tenantId },
     data: {
@@ -108,8 +109,8 @@ export async function syncTenantSubscription(
       subscriptionStatus: status,
       trialEndsAt: trialEnd,
       ...(planId ? { subscriptionPlanId: planId } : {}),
-      ...(status === "active" || status === "trialing"
-        ? { status: TenantStatus.ACTIVE }
+      ...(restored
+        ? { status: TenantStatus.ACTIVE, dunningStep: 0, lastDunningAt: null }
         : status === "past_due" || status === "unpaid"
           ? { status: TenantStatus.SUSPENDED }
           : {}),

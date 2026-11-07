@@ -672,6 +672,59 @@ p6.get("/growth/seo/products", async (c) => {
   });
 });
 
+p6.get("/growth/seo/audit", async (c) => {
+  const { tenant, access } = await actor(c);
+  if (!requireGrowth(access)) return c.json({ error: "Forbidden" }, 403);
+  const { auditStoreSeo } = await import("../lib/seo-audit.js");
+
+  const [settings, products, collectionsTotal, domains, blogPosts] = await Promise.all([
+    prisma.storeSettings.findUnique({
+      where: { tenantId: tenant.id },
+      select: { seoTitle: true, seoDescription: true, seoOgImageUrl: true, theme: true },
+    }),
+    prisma.product.findMany({
+      where: { tenantId: tenant.id, status: ProductStatus.ACTIVE },
+      select: { translations: true },
+      take: 500,
+    }),
+    prisma.collection.count({ where: { tenantId: tenant.id } }),
+    prisma.customDomain.count({ where: { tenantId: tenant.id, verified: true } }),
+    prisma.storePage.count({
+      where: { tenantId: tenant.id, pageType: "BLOG", published: true },
+    }),
+  ]);
+
+  let missingTitle = 0;
+  let missingDesc = 0;
+  for (const p of products) {
+    const seo = extractSeoFromTranslations(p.translations);
+    if (!seo.seoTitle?.trim()) missingTitle += 1;
+    if (!seo.seoDescription?.trim()) missingDesc += 1;
+  }
+
+  const theme = (settings?.theme ?? {}) as {
+    collectionSeo?: Record<string, { title?: string; description?: string }>;
+  };
+  const collectionSeoMap = theme.collectionSeo ?? {};
+  const collectionsWithSeo = Object.values(collectionSeoMap).filter(
+    (s) => Boolean(s?.title?.trim() || s?.description?.trim())
+  ).length;
+
+  const audit = auditStoreSeo({
+    seoTitle: settings?.seoTitle,
+    seoDescription: settings?.seoDescription,
+    seoOgImageUrl: settings?.seoOgImageUrl,
+    activeProducts: products.length,
+    productsMissingSeoTitle: missingTitle,
+    productsMissingSeoDescription: missingDesc,
+    collectionsWithSeo,
+    collectionsTotal,
+    hasCustomDomain: domains > 0,
+    blogPosts,
+  });
+  return c.json(audit);
+});
+
 p6.patch("/growth/seo/bulk", async (c) => {
   const { tenant, access } = await actor(c);
   if (!requireGrowth(access)) return c.json({ error: "Forbidden" }, 403);
@@ -725,6 +778,50 @@ p6.patch("/growth/products/:id/subscription", async (c) => {
   });
   if (!product.count) return c.json({ error: "Not found" }, 404);
   return c.json({ ok: true });
+});
+
+p6.post("/products/:id/ai-copy", async (c) => {
+  const { tenant, access } = await actor(c);
+  if (!hasPermission(access.permissions, "products")) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+  const {
+    isAiCopyConfigured,
+    generateProductDescription,
+    translateProductFields,
+  } = await import("../lib/ai-product-copy.js");
+  if (!isAiCopyConfigured()) {
+    return c.json({ error: "OPENAI_API_KEY is not configured on the API" }, 503);
+  }
+  const product = await prisma.product.findFirst({
+    where: { id: c.req.param("id"), tenantId: tenant.id },
+  });
+  if (!product) return c.json({ error: "Not found" }, 404);
+  const body = await c.req.json<{
+    action?: "describe" | "translate";
+    locale?: string;
+    hints?: string;
+  }>();
+  const action = body.action === "translate" ? "translate" : "describe";
+  try {
+    if (action === "describe") {
+      const description = await generateProductDescription({
+        title: product.title,
+        hints: body.hints,
+        locale: body.locale ?? "en",
+      });
+      return c.json({ description });
+    }
+    const locale = (body.locale ?? "ru").slice(0, 8);
+    const translated = await translateProductFields({
+      title: product.title,
+      description: product.description ?? "",
+      targetLocale: locale,
+    });
+    return c.json({ locale, ...translated });
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : "AI failed" }, 400);
+  }
 });
 
 export { p6 };

@@ -875,6 +875,23 @@ export function parseStoreTheme(raw: unknown): StoreTheme {
   };
 }
 
+/** WCAG-ish: white on primary if AA, else near-black (keep in sync with storefront color-contrast). */
+function onPrimaryFor(primary: string): string {
+  const hex = primary.trim();
+  const m = hex.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (!m) return "#ffffff";
+  let h = m[1]!;
+  if (h.length === 3) h = h.split("").map((ch) => ch + ch).join("");
+  const r = parseInt(h.slice(0, 2), 16) / 255;
+  const g = parseInt(h.slice(2, 4), 16) / 255;
+  const b = parseInt(h.slice(4, 6), 16) / 255;
+  const lin = (c: number) =>
+    c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  const L = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  // Contrast of white vs bg: (1.05)/(L+0.05); need >= 4.5 → L <= 0.183
+  return L <= 0.183 ? "#ffffff" : "#18181b";
+}
+
 export function storeThemeCssVars(
   theme: StoreTheme,
   primaryColor: string
@@ -883,6 +900,7 @@ export function storeThemeCssVars(
   return {
     "--store-primary": primaryColor,
     "--store-primary-hover": secondary,
+    "--store-on-primary": onPrimaryFor(primaryColor),
     "--store-secondary": secondary,
     "--store-container-max": `${theme.containerMaxPx ?? DEFAULT_STORE_THEME.containerMaxPx}px`,
     fontFamily: theme.fontFamily ?? DEFAULT_STORE_THEME.fontFamily,

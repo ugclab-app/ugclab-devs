@@ -15,6 +15,7 @@ import { useAdminT } from "@/hooks/use-admin-t";
 import { FormAlert } from "@/components/form-alert";
 import { CsvImportPanel } from "@/components/csv-import-panel";
 import { StoreImportPanel } from "@/components/store-import-panel";
+import { SavedFiltersBar } from "@/components/saved-filters-bar";
 
 const CSV_TEMPLATE =
   "id,title,slug,type,status,price_cents,inventory,tags,weight_grams,barcode\n" +
@@ -137,6 +138,17 @@ export default function ProductsPage() {
         />
       ) : null}
       <ProductFilterChips />
+      <div className="mb-4">
+        <SavedFiltersBar scope="PRODUCTS" />
+      </div>
+      {params.get("trash") === "1" ? (
+        <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">
+          Trash — soft-deleted products (restorable for 30 days).{" "}
+          <Link to="/products" className="font-medium underline">
+            Back to catalog
+          </Link>
+        </p>
+      ) : null}
       {lowStockFilter ? (
         <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-900">
           Showing physical products with 5 or fewer units in stock.{" "}
@@ -160,6 +172,18 @@ export default function ProductsPage() {
           placeholder="Search by title or slug…"
         />
         <div className="flex flex-wrap gap-2">
+          <Link
+            to="/products/bulk-edit"
+            className="ugclab-btn border border-zinc-200 bg-white text-sm"
+          >
+            Bulk edit
+          </Link>
+          <Link
+            to="/products?trash=1"
+            className="ugclab-btn border border-zinc-200 bg-white text-sm"
+          >
+            Trash
+          </Link>
           <button
             type="button"
             onClick={() => downloadTemplate()}
@@ -212,11 +236,38 @@ export default function ProductsPage() {
             {total} product{total === 1 ? "" : "s"}
             {totalPages > 1 ? ` · page ${page} of ${totalPages}` : ""}
           </p>
-          <ProductsTable
-            products={rows}
-            storefrontBase={storefrontBase}
-            collections={collections}
-          />
+          {params.get("trash") === "1" ? (
+            <ul className="admin-card divide-y">
+              {rows.map((r) => (
+                <li
+                  key={r.id}
+                  className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm"
+                >
+                  <div>
+                    <p className="font-medium">{r.title}</p>
+                    <p className="text-xs text-zinc-500">{r.slug}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="ugclab-btn ugclab-btn-secondary text-sm"
+                    onClick={async () => {
+                      await api.restoreProduct(r.id);
+                      setImportAlert({ ok: true, message: `Restored ${r.title}` });
+                      window.location.reload();
+                    }}
+                  >
+                    Restore
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <ProductsTable
+              products={rows}
+              storefrontBase={storefrontBase}
+              collections={collections}
+            />
+          )}
           {totalPages > 1 ? (
             <div className="mt-6 flex justify-center gap-2">
               <button

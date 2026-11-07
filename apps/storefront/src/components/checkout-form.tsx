@@ -8,6 +8,7 @@ import { useStore } from "@/context/store";
 import { useStoreParams } from "@/hooks/use-store-params";
 import { storeHref } from "@/lib/store-href";
 import { ExpressPayHint } from "@/components/express-pay-hint";
+import { PickupMapEmbed } from "@/components/pickup-map";
 import { StoreTrustStrip } from "@/components/store-trust-strip";
 import { getStoredAttribution } from "@/hooks/use-live-presence";
 
@@ -260,7 +261,10 @@ export function CheckoutForm({
       className="mt-8 space-y-5"
     >
       {error ? (
-        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+        <p
+          role="alert"
+          className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
+        >
           {error}
         </p>
       ) : null}
@@ -313,37 +317,48 @@ export function CheckoutForm({
               No pickup locations available. Choose shipping instead.
             </p>
           ) : (
-            pickupLocations.map((loc) => (
-              <label key={loc.id} className="flex items-start gap-2 text-sm">
-                <input
-                  type="radio"
-                  name="pickupWarehouse"
-                  checked={pickupWarehouseId === loc.id}
-                  onChange={() => setPickupWarehouseId(loc.id)}
-                  className="mt-1"
+            <>
+              {pickupLocations.map((loc) => (
+                <label key={loc.id} className="flex items-start gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="pickupWarehouse"
+                    checked={pickupWarehouseId === loc.id}
+                    onChange={() => setPickupWarehouseId(loc.id)}
+                    className="mt-1"
+                  />
+                  <span>
+                    <span className="font-medium">{loc.name}</span>
+                    {(loc.address1 || loc.city) && (
+                      <span className="mt-0.5 block text-zinc-500">
+                        {[loc.address1, loc.city, loc.postal, loc.country]
+                          .filter(Boolean)
+                          .join(", ")}
+                      </span>
+                    )}
+                    {loc.pickupInstructions ? (
+                      <span className="mt-0.5 block text-xs text-zinc-400">
+                        {loc.pickupInstructions}
+                      </span>
+                    ) : null}
+                    {loc.inStock === false ? (
+                      <span className="mt-0.5 block text-xs text-amber-700">
+                        Some items may be out of stock here
+                      </span>
+                    ) : null}
+                  </span>
+                </label>
+              ))}
+              {pickupWarehouseId || pickupLocations[0] ? (
+                <PickupMapEmbed
+                  className="mt-3"
+                  location={
+                    pickupLocations.find((l) => l.id === pickupWarehouseId) ??
+                    pickupLocations[0]!
+                  }
                 />
-                <span>
-                  <span className="font-medium">{loc.name}</span>
-                  {(loc.address1 || loc.city) && (
-                    <span className="mt-0.5 block text-zinc-500">
-                      {[loc.address1, loc.city, loc.postal, loc.country]
-                        .filter(Boolean)
-                        .join(", ")}
-                    </span>
-                  )}
-                  {loc.pickupInstructions ? (
-                    <span className="mt-0.5 block text-xs text-zinc-400">
-                      {loc.pickupInstructions}
-                    </span>
-                  ) : null}
-                  {loc.inStock === false ? (
-                    <span className="mt-0.5 block text-xs text-amber-700">
-                      Some items may be out of stock here
-                    </span>
-                  ) : null}
-                </span>
-              </label>
-            ))
+              ) : null}
+            </>
           )}
         </fieldset>
       ) : (

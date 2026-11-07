@@ -25,7 +25,10 @@ function resolvePriorityHeaders(priority?: "high" | "normal") {
   return highPriorityEmailHeaders();
 }
 
-export async function sendEmail({
+type EmailPayload = SendEmailParams & { template?: string };
+
+/** Immediate provider send — used by the job worker. Throws on provider errors. */
+export async function sendEmailDirect({
   to,
   subject,
   html,
@@ -35,7 +38,7 @@ export async function sendEmail({
   headers,
   template,
   priority = "normal",
-}: SendEmailParams & { template?: string }): Promise<{ id: string | null }> {
+}: EmailPayload): Promise<{ id: string | null }> {
   const resendKey = process.env.RESEND_API_KEY;
   const sendgridKey = process.env.SENDGRID_API_KEY;
   const fromHeader =
@@ -108,4 +111,19 @@ export async function sendEmail({
   const { logPlatformEmail } = await import("./email-log.js");
   await logPlatformEmail({ to, subject, template, status: "skipped" });
   return { id: null };
+}
+
+/**
+ * Queue email on the durable outbox, then try once immediately.
+ * Cron retries FAILED jobs so Vercel freezes / Resend blips don't drop mail.
+ * Set EMAIL_SYNC=1 to skip the queue (tests / local debugging).
+ */
+export async function sendEmail(params: EmailPayload): Promise<{ id: string | null }> {
+  if (process.env.EMAIL_SYNC === "1") {
+    return sendEmailDirect(params);
+  }
+  const { enqueueJob, processJobById } = await import("./job-queue.js");
+  const job = await enqueueJob("email.send", params as unknown as Record<string, unknown>);
+  void processJobById(job.id).catch((e) => console.error("[email] immediate send", e));
+  return { id: job.id };
 }

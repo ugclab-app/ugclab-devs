@@ -255,6 +255,14 @@ export function StoreFooter() {
                 </Link>
               </li>
             ) : null}
+            <li>
+              <Link
+                to={storeHref("/track", nav)}
+                className="text-zinc-700 hover:text-violet-700"
+              >
+                Track order
+              </Link>
+            </li>
           </ul>
         </div>
       </div>

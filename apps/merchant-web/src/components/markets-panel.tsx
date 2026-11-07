@@ -58,6 +58,7 @@ export function MarketsPanel() {
         enabledLocales?: string[];
         defaultLocale?: string;
         currency?: string;
+        fxRounding?: { mode?: string; step?: number } | null;
       }
     | undefined;
 
@@ -77,6 +78,8 @@ export function MarketsPanel() {
     return next;
   });
   const [markets, setMarkets] = useState<MarketRow[]>(() => parseMarkets(s?.markets));
+  const [fxMode, setFxMode] = useState(s?.fxRounding?.mode ?? "round");
+  const [fxStep, setFxStep] = useState(String(s?.fxRounding?.step ?? 1));
   const { data: fx } = useQuery({ queryKey: ["fx-rates"], queryFn: () => api.fxRates() });
   const [pending, setPending] = useState(false);
   const [alert, setAlert] = useState<{ ok?: boolean; message?: string }>({});
@@ -116,6 +119,10 @@ export function MarketsPanel() {
         settingsPatchFromTenant(tenant, {
           localeCurrencies,
           markets: marketsPayload,
+          fxRounding: {
+            mode: fxMode,
+            step: Math.max(1, parseInt(fxStep, 10) || 1),
+          },
         })
       );
       await refresh();
@@ -154,6 +161,38 @@ export function MarketsPanel() {
               />
             </label>
           ))}
+        </div>
+      </SettingsPanelShell>
+
+      <SettingsPanelShell
+        title="FX price rounding"
+        description="How converted catalog prices are rounded (e.g. nearest 5 → 99 instead of 97)."
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block text-sm">
+            <span className="mb-1 block text-zinc-600">Mode</span>
+            <select
+              className="ugclab-select w-full"
+              value={fxMode}
+              onChange={(e) => setFxMode(e.target.value)}
+            >
+              <option value="round">Round (default)</option>
+              <option value="floor">Floor</option>
+              <option value="ceil">Ceil</option>
+              <option value="nearest">Nearest step</option>
+            </select>
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block text-zinc-600">Step (minor units)</span>
+            <input
+              className="ugclab-input w-full"
+              type="number"
+              min={1}
+              value={fxStep}
+              onChange={(e) => setFxStep(e.target.value)}
+              disabled={fxMode !== "nearest"}
+            />
+          </label>
         </div>
       </SettingsPanelShell>
 

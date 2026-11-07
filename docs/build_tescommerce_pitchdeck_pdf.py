@@ -111,7 +111,7 @@ def build_deck() -> None:
             "Subscription + platform fees with clear upgrade path.",
             [
                 "Starter: Free, up to 50 products, 5% platform fee.",
-                "Growth: $29/month, unlimited products, 0% platform fee.",
+                "Growth: $29/month, unlimited products, 4% platform fee.",
                 "Pro: $79/month with staff accounts, API access, advanced analytics.",
             ],
         ),

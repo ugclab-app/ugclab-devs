@@ -277,6 +277,26 @@ export const api = {
       }
     ),
   revenue: () => request<{ months: unknown[]; planBreakdown: unknown[]; totalMrrCents: number }>("/platform/revenue"),
+  profitability: (days = 30) =>
+    request<{
+      days: number;
+      losingCount: number;
+      rows: {
+        id: string;
+        name: string;
+        slug: string;
+        ownerEmail: string;
+        plan: string | null;
+        planMrrCents: number;
+        gmvCents: number;
+        feeCents: number;
+        payoutCents: number;
+        partnerCommissionCents: number;
+        contributionCents: number;
+        orders: number;
+        losingMoney: boolean;
+      }[];
+    }>(`/platform/profitability?days=${days}`),
   billingHealth: () => request<Record<string, unknown[]>>("/platform/billing-health"),
   disputes: () => request<{ disputes: unknown[] }>("/platform/disputes"),
   submitDisputeEvidence: (

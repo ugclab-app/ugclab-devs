@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api, deleteProduct } from "@/api/client";
 import { ProductForm } from "@/components/product-form";
 import { ProductMetafieldsEditor } from "@/components/product-metafields-editor";
+import { ProductRevisionsPanel } from "@/components/product-revisions-panel";
 import { ProductSellingOptions } from "@/components/product-selling-options";
 import { useAuth } from "@/context/auth";
 import type { ProductTranslations } from "@/components/product-translations-fields";
@@ -55,6 +56,11 @@ export default function ProductEditPage() {
     } | null;
     payWhatYouWant?: boolean;
     minPriceAmount?: number | null;
+    minQuantity?: number;
+    maxQuantity?: number | null;
+    scheduledPriceAmount?: number | null;
+    scheduledCompareAt?: number | null;
+    scheduledPriceAt?: string | null;
     variants?: {
       title: string;
       sku: string | null;
@@ -133,6 +139,19 @@ export default function ProductEditPage() {
           payWhatYouWant: p.payWhatYouWant ?? false,
           minPrice:
             p.minPriceAmount != null ? (p.minPriceAmount / 100).toFixed(2) : "",
+          minQuantity: p.minQuantity ?? 1,
+          maxQuantity: p.maxQuantity ?? null,
+          scheduledPrice:
+            p.scheduledPriceAmount != null
+              ? (p.scheduledPriceAmount / 100).toFixed(2)
+              : "",
+          scheduledCompareAt:
+            p.scheduledCompareAt != null
+              ? (p.scheduledCompareAt / 100).toFixed(2)
+              : "",
+          scheduledPriceAt: p.scheduledPriceAt
+            ? new Date(p.scheduledPriceAt).toISOString().slice(0, 16)
+            : "",
           variants: (p.variants ?? []).map((v) => ({
             title: v.title,
             sku: v.sku ?? "",
@@ -163,6 +182,7 @@ export default function ProductEditPage() {
         }}
       />
       <div className="mx-auto max-w-6xl">
+        <ProductRevisionsPanel productId={p.id} />
         <ProductMetafieldsEditor productId={p.id} />
       </div>
       <div className="mx-auto max-w-6xl pb-8">

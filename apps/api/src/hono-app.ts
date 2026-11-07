@@ -15,6 +15,7 @@ import { p6 } from "./routes/merchant-p6.js";
 import { p7 } from "./routes/merchant-p7.js";
 import { p17 } from "./routes/merchant-p17.js";
 import { p18 } from "./routes/merchant-p18.js";
+import { p19 } from "./routes/merchant-p19.js";
 import { marketing } from "./routes/merchant-marketing.js";
 import { marketingPublic } from "./routes/marketing-public.js";
 import { platform } from "./routes/platform.js";
@@ -33,9 +34,12 @@ import { merchantSuppliers } from "./routes/merchant-suppliers.js";
 import { marketplace } from "./routes/merchant-marketplace.js";
 import { MERCHANT_WEB_URL, PLATFORM_ADMIN_URL, PLATFORM_URL } from "./env.js";
 import { merchantMaintenanceGuard } from "./middleware/maintenance.js";
+import { reportError } from "./lib/error-report.js";
+import { initSentry } from "./lib/sentry.js";
 
 /** API-only Hono app (no static landing). Not named app.ts — Vercel auto-detects src/app.ts. */
 export function createApiApp() {
+  void initSentry();
   const app = new Hono();
 
   app.use(
@@ -127,6 +131,7 @@ export function createApiApp() {
   app.route("/api/merchant", p7);
   app.route("/api/merchant", p17);
   app.route("/api/merchant", p18);
+  app.route("/api/merchant", p19);
   app.route("/api/merchant", marketing);
   app.route("/api/merchant", merchantDisputes);
   app.route("/api/merchant", merchantKyc);
@@ -137,6 +142,14 @@ export function createApiApp() {
   app.route("/api/files", files);
   app.route("/api/store", store);
   app.route("/api/v1", merchantApiV1);
+
+  app.onError((err, c) => {
+    reportError(err, {
+      path: c.req.path,
+      method: c.req.method,
+    });
+    return c.json({ error: "Internal Server Error" }, 500);
+  });
 
   return app;
 }

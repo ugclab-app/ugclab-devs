@@ -6,6 +6,7 @@ import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import DashboardPage from "@/pages/DashboardPage";
 import ProductsPage from "@/pages/ProductsPage";
+import ProductsBulkEditPage from "@/pages/ProductsBulkEditPage";
 import ProductNewPage from "@/pages/ProductNewPage";
 import ProductEditPage from "@/pages/ProductEditPage";
 import OrdersPage from "@/pages/OrdersPage";
@@ -119,6 +120,7 @@ export default function App() {
           }
         />
         <Route path="products" element={<ProductsPage />} />
+        <Route path="products/bulk-edit" element={<ProductsBulkEditPage />} />
         <Route path="products/new" element={<ProductNewPage />} />
         <Route path="products/:id/edit" element={<ProductEditPage />} />
         <Route path="orders" element={<OrdersPage />} />

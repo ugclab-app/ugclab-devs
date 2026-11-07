@@ -672,6 +672,8 @@ export const adminMessagesTr: AdminMessages = {
     kycMissing: "Ödeme, Tescommerce pasaportunuzu onayladıktan sonra açılır. Form bu sayfada.",
     kycPending: "Pasaport kontrolü inceleniyor. Ödeme onaydan sonra açılır.",
     kycRejected: "Pasaport kontrolü reddedildi. Bu sayfadan yeniden gönderin. Onaylanana kadar ödeme kapalı kalır.",
+    firstPayoutHold:
+      "İlk ödeme {{date}} tarihine kadar bekletilir (yeni mağaza için {{days}} günlük risk tutma).",
     exportCsv: "Ödemeleri CSV olarak dışa aktar",
     creatorsHint: "İçerik üreticilere kendiniz ödeme yapın, ardından Büyüme bölümünde ödendi olarak işaretleyin.",
     colDate: "Tarih",

@@ -408,6 +408,118 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ ids, status }),
     }),
+  bulkProductPatch: (
+    rows: Array<{
+      id: string;
+      title?: string;
+      priceAmount?: number;
+      compareAt?: number | null;
+      inventory?: number | null;
+      sku?: string | null;
+      seoTitle?: string | null;
+      seoDescription?: string | null;
+      tags?: string[];
+      minQuantity?: number;
+      maxQuantity?: number | null;
+    }>
+  ) =>
+    request<{ ok: boolean; updated: number }>("/merchant/products/bulk-patch", {
+      method: "POST",
+      body: JSON.stringify({ rows }),
+    }),
+  productTrash: () =>
+    request<{
+      currency: string;
+      products: Array<{
+        id: string;
+        title: string;
+        slug: string;
+        status: string;
+        deletedAt: string | null;
+        priceAmount: number;
+      }>;
+    }>("/merchant/products/trash"),
+  restoreProduct: (id: string) =>
+    request<{ ok: boolean }>(`/merchant/products/${id}/restore`, { method: "POST" }),
+  productRevisions: (id: string) =>
+    request<{
+      revisions: Array<{
+        id: string;
+        summary: string | null;
+        authorEmail: string | null;
+        createdAt: string;
+        snapshot: Record<string, unknown>;
+      }>;
+    }>(`/merchant/products/${id}/revisions`),
+  restoreProductRevision: (productId: string, revisionId: string) =>
+    request<{ ok: boolean }>(
+      `/merchant/products/${productId}/revisions/${revisionId}/restore`,
+      { method: "POST" }
+    ),
+  savedFilters: (scope?: string) =>
+    request<{
+      filters: Array<{
+        id: string;
+        scope: string;
+        name: string;
+        query: Record<string, unknown>;
+      }>;
+    }>(`/merchant/saved-filters${scope ? `?scope=${encodeURIComponent(scope)}` : ""}`),
+  createSavedFilter: (body: {
+    scope: string;
+    name: string;
+    query: Record<string, unknown>;
+  }) =>
+    request("/merchant/saved-filters", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  deleteSavedFilter: (id: string) =>
+    request(`/merchant/saved-filters/${id}`, { method: "DELETE" }),
+  customerNotes: (id: string) =>
+    request<{
+      notes: Array<{
+        id: string;
+        body: string;
+        authorEmail: string | null;
+        createdAt: string;
+      }>;
+    }>(`/merchant/customers/${id}/notes`),
+  addCustomerNote: (id: string, body: string) =>
+    request(`/merchant/customers/${id}/notes`, {
+      method: "POST",
+      body: JSON.stringify({ body }),
+    }),
+  customerTimeline: (id: string) =>
+    request<{
+      items: Array<{
+        at: string;
+        kind: string;
+        title: string;
+        meta?: Record<string, unknown>;
+      }>;
+    }>(`/merchant/customers/${id}/timeline`),
+  mergeCustomers: (keepId: string, mergeId: string) =>
+    request<{ ok: boolean; keepId: string }>("/merchant/customers/merge", {
+      method: "POST",
+      body: JSON.stringify({ keepId, mergeId }),
+    }),
+  convertOrderToCustomer: (orderId: string) =>
+    request<{
+      ok: boolean;
+      customerId: string;
+      already?: boolean;
+      resetToken?: string;
+    }>(`/merchant/orders/${orderId}/convert-to-customer`, { method: "POST" }),
+  batchDiscounts: (body: Record<string, unknown>) =>
+    request<{ ok: boolean; batchId: string; count: number; codes: string[] }>(
+      "/merchant/discounts/batch",
+      { method: "POST", body: JSON.stringify(body) }
+    ),
+  howHeardAnalytics: () =>
+    request<{ rows: Array<{ source: string; count: number }>; total: number }>(
+      "/merchant/analytics/how-heard"
+    ),
   duplicateProduct: (id: string) =>
     request<{ product: unknown }>(`/merchant/products/${id}/duplicate`, {
       method: "POST",
@@ -827,6 +939,9 @@ export const api = {
       availableCents: number;
       payoutMinCents?: number;
       payoutSchedule?: string;
+      firstPayoutHeld?: boolean;
+      firstPayoutHoldUntil?: string | null;
+      firstPayoutHoldDays?: number;
       payouts: {
         id: string;
         amount: number;
@@ -898,6 +1013,15 @@ export const api = {
     }),
   billingPortal: () =>
     request<{ url: string }>("/merchant/stripe/billing/portal", { method: "POST" }),
+  billingCancelFeedback: (body: {
+    reason: string;
+    details?: string;
+    acceptOffer?: boolean;
+  }) =>
+    request<{ ok: boolean; url?: string | null; offer?: { code: string; message: string } }>(
+      "/merchant/stripe/billing/cancel-feedback",
+      { method: "POST", body: JSON.stringify(body) }
+    ),
   createShippingLabel: (orderId: string, from?: Record<string, string>) =>
     request<{ order: unknown; label: { trackingNumber: string; labelUrl: string; carrier: string } }>(
       `/merchant/orders/${orderId}/shipping-label`,
@@ -1800,11 +1924,28 @@ export const api = {
   growthSeoProducts: () =>
     request<{ products: unknown[] }>("/merchant/growth/seo/products"),
 
+  growthSeoAudit: () =>
+    request<{
+      score: number;
+      maxScore: number;
+      grade: string;
+      checks: { id: string; ok: boolean; weight: number; message: string }[];
+    }>("/merchant/growth/seo/audit"),
+
   bulkGrowthSeo: (items: { id: string; seoTitle?: string; seoDescription?: string }[]) =>
     request("/merchant/growth/seo/bulk", {
       method: "PATCH",
       body: JSON.stringify({ items }),
     }),
+
+  productAiCopy: (
+    id: string,
+    body: { action: "describe" | "translate"; locale?: string; hints?: string }
+  ) =>
+    request<{ description?: string; title?: string; locale?: string }>(
+      `/merchant/products/${id}/ai-copy`,
+      { method: "POST", body: JSON.stringify(body) }
+    ),
 
   patchProductSubscription: (
     id: string,

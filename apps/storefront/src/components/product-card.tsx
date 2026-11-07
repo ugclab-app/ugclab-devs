@@ -9,6 +9,7 @@ import { productImageUrl } from "@/lib/product-images";
 import { storeHref } from "@/lib/store-href";
 import type { ProductCardProduct } from "@/lib/product-card-types";
 import { ProductQuickView } from "@/components/product-quick-view";
+import { DeliveryEtaBadge } from "@/components/delivery-eta-badge";
 import { trackAddToCart } from "@/lib/pixel-track";
 
 export function ProductCard(props: ProductCardProduct) {
@@ -121,6 +122,12 @@ export function ProductCard(props: ProductCardProduct) {
               <span className="product-card-compare">{formatMoney(compareAt, currency)}</span>
             ) : null}
           </div>
+
+          <DeliveryEtaBadge
+            productType={type}
+            locale={locale}
+            className="product-card-eta mt-1 text-xs"
+          />
 
           <div className="product-card-actions">
             <button
