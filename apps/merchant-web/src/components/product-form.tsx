@@ -34,6 +34,11 @@ export type ProductFormValues = {
   price: string;
   compareAt: string;
   inventory: string;
+  minQuantity?: number;
+  maxQuantity?: number | null;
+  scheduledPrice?: string;
+  scheduledCompareAt?: string;
+  scheduledPriceAt?: string;
   sku?: string;
   tags?: string;
   weightGrams?: string;
@@ -528,7 +533,7 @@ export function ProductForm({
                     name="minQuantity"
                     type="number"
                     min={1}
-                    defaultValue={(initial as { minQuantity?: number }).minQuantity ?? 1}
+                    defaultValue={initial.minQuantity ?? 1}
                     className="ugclab-input mt-1 w-full"
                   />
                 </div>
@@ -540,7 +545,7 @@ export function ProductForm({
                     name="maxQuantity"
                     type="number"
                     min={1}
-                    defaultValue={(initial as { maxQuantity?: number | null }).maxQuantity ?? ""}
+                    defaultValue={initial.maxQuantity ?? ""}
                     placeholder="No limit"
                     className="ugclab-input mt-1 w-full"
                   />
@@ -557,7 +562,7 @@ export function ProductForm({
                     step="0.01"
                     min={0}
                     defaultValue={
-                      (initial as { scheduledPrice?: string }).scheduledPrice ?? ""
+                      initial.scheduledPrice ?? ""
                     }
                     className="ugclab-input mt-1 w-full"
                   />
@@ -572,7 +577,7 @@ export function ProductForm({
                     step="0.01"
                     min={0}
                     defaultValue={
-                      (initial as { scheduledCompareAt?: string }).scheduledCompareAt ?? ""
+                      initial.scheduledCompareAt ?? ""
                     }
                     className="ugclab-input mt-1 w-full"
                   />
@@ -585,7 +590,7 @@ export function ProductForm({
                     name="scheduledPriceAt"
                     type="datetime-local"
                     defaultValue={
-                      (initial as { scheduledPriceAt?: string }).scheduledPriceAt ?? ""
+                      initial.scheduledPriceAt ?? ""
                     }
                     className="ugclab-input mt-1 w-full"
                   />

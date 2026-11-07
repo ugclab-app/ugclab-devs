@@ -5,3 +5,10 @@ public/*
 .env.*
 ../../.env
 ../../.env.*
+../../launch-film
+../../.agents
+../../.cursor
+../../leads
+../../apps/data/uploads
+**/*.mp4
+**/*.mov

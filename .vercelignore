@@ -1,0 +1,12 @@
+launch-film
+.agents
+.cursor
+leads
+apps/data/uploads
+**/*.mp4
+**/*.mov
+node_modules
+.turbo
+coverage
+playwright-report
+test-results
